@@ -320,7 +320,7 @@ public class UserInfoActivity extends UniversalFragment implements NotificationC
     }
 
     private String serverLabel(int account) {
-        String name = org.telegram.owpengram.OwpengramServers.serverNameForAccount(account);
+        String name = org.telegram.thecat.TheCatServers.serverNameForAccount(account);
         return name != null ? name : getString(R.string.AppName);
     }
 
@@ -492,7 +492,7 @@ public class UserInfoActivity extends UniversalFragment implements NotificationC
         if (item.id == BUTTON_ADD_ACCOUNT) {
             // Any account (custom server) may use any free slot; the premium cap is
             // enforced per-server (Telegram only) in ServerSelectFragment.
-            int availableAccount = org.telegram.owpengram.OwpengramServers.firstFreeAccountSlot();
+            int availableAccount = org.telegram.thecat.TheCatServers.firstFreeAccountSlot();
             if (availableAccount >= 0) {
                 presentFragment(new ServerSelectFragment(availableAccount));
             } else {

@@ -1,6 +1,6 @@
 package org.telegram.messenger;
 
-import org.telegram.owpengram.OwpengramServers;
+import org.telegram.thecat.TheCatServers;
 import org.telegram.tgnet.TLObject;
 import org.telegram.tgnet.TLRPC;
 import org.telegram.ui.ActionBar.Theme;
@@ -463,7 +463,7 @@ public class ImageLocation {
     }
 
     /**
-     * OwpengramServers: scope the avatar/photo cache key per backend server. Unlike documents
+     * TheCatServers: scope the avatar/photo cache key per backend server. Unlike documents
      * (dc_id + id) or secure files (dc_id + id), a plain TLRPC.FileLocation (what user/chat photos
      * use, TL_fileLocationToBeDeprecated) carries only volume_id + local_id -- no dc_id, no secret.
      * Two independent self-hosted servers that both hand out low sequential ids (e.g. each
@@ -484,7 +484,7 @@ public class ImageLocation {
             String key = location.volume_id + "_" + location.local_id;
             if (currentAccount >= 0) {
                 try {
-                    String scope = OwpengramServers.serverScopeKeyForAccount(currentAccount);
+                    String scope = TheCatServers.serverScopeKeyForAccount(currentAccount);
                     if (!scope.isEmpty()) {
                         key += "_s" + Integer.toHexString(scope.hashCode());
                     }

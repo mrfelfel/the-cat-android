@@ -122,7 +122,7 @@ public class LogoutActivity extends BaseFragment {
             if (position == addAccountRow) {
                 // Any account (custom server) may use any free slot; the premium cap
                 // is enforced per-server (Telegram only) in ServerSelectFragment.
-                int availableAccount = org.telegram.owpengram.OwpengramServers.firstFreeAccountSlot();
+                int availableAccount = org.telegram.thecat.TheCatServers.firstFreeAccountSlot();
                 if (availableAccount >= 0) {
                     presentFragment(new ServerSelectFragment(availableAccount));
                 } else {

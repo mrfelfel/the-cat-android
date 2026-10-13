@@ -1,4 +1,4 @@
-package org.telegram.owpengram;
+package org.telegram.thecat;
 
 import java.util.HashMap;
 import java.util.Map;

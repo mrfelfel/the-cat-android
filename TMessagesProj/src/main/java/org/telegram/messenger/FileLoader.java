@@ -11,7 +11,7 @@ package org.telegram.messenger;
 import android.text.TextUtils;
 import android.util.SparseArray;
 
-import org.telegram.owpengram.OwpengramServers;
+import org.telegram.thecat.TheCatServers;
 import org.telegram.tgnet.ConnectionsManager;
 import org.telegram.tgnet.TLObject;
 import org.telegram.tgnet.TLRPC;
@@ -1640,7 +1640,7 @@ public class FileLoader extends BaseController {
     }
 
     /**
-     * OwpengramServers: server-scoped name for a plain avatar/photo TLRPC.FileLocation download
+     * TheCatServers: server-scoped name for a plain avatar/photo TLRPC.FileLocation download
      * (volume_id/local_id only, no dc_id -- see ImageLocation.getKey for why two independent
      * self-hosted servers can hand out colliding ids). MUST produce exactly the same string as
      * ImageLocation.getKey's location branch + extension: this fileName is what the actual
@@ -1653,7 +1653,7 @@ public class FileLoader extends BaseController {
         String name = getAttachFileName(location, ext);
         if (currentAccount >= 0 && !TextUtils.isEmpty(name)) {
             try {
-                String scope = OwpengramServers.serverScopeKeyForAccount(currentAccount);
+                String scope = TheCatServers.serverScopeKeyForAccount(currentAccount);
                 if (!scope.isEmpty()) {
                     int dot = name.lastIndexOf('.');
                     String base = dot >= 0 ? name.substring(0, dot) : name;

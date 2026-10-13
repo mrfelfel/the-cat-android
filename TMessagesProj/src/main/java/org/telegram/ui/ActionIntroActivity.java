@@ -38,7 +38,7 @@ import androidx.core.graphics.ColorUtils;
 
 import org.telegram.PhoneFormat.PhoneFormat;
 import org.telegram.messenger.AndroidUtilities;
-import org.telegram.owpengram.OwpengramServers;
+import org.telegram.thecat.TheCatServers;
 import org.telegram.ui.Components.AlertsCreator;
 import org.telegram.messenger.ApplicationLoader;
 import org.telegram.messenger.FileLog;
@@ -553,7 +553,7 @@ public class ActionIntroActivity extends BaseFragment implements LocationControl
                     break;
                 }
                 case ACTION_TYPE_CHANGE_PHONE_NUMBER: {
-                    if (OwpengramServers.serverHasEmailSignup(currentAccount)) {
+                    if (TheCatServers.serverHasEmailSignup(currentAccount)) {
                         // This server has no real SMS delivery and uses email as the
                         // account identity instead of a phone number (see
                         // account.sendChangePhoneCode's matching server-side block) —

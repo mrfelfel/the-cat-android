@@ -26,8 +26,8 @@ import org.telegram.messenger.AndroidUtilities;
 import org.telegram.messenger.ApplicationLoader;
 import org.telegram.messenger.FileLog;
 import org.telegram.messenger.R;
-import org.telegram.owpengram.OwpengramServer;
-import org.telegram.owpengram.OwpengramServers;
+import org.telegram.thecat.TheCatServer;
+import org.telegram.thecat.TheCatServers;
 import org.telegram.ui.ActionBar.ActionBar;
 import org.telegram.ui.ActionBar.BaseFragment;
 import org.telegram.ui.ActionBar.Theme;
@@ -39,15 +39,15 @@ import java.io.InputStream;
 public class AddServerFragment extends BaseFragment {
 
     public interface OnSavedListener {
-        void onSaved(OwpengramServer server);
+        void onSaved(TheCatServer server);
     }
 
-    private final OwpengramServer editingServer;
+    private final TheCatServer editingServer;
     private final OnSavedListener onSavedListener;
     // True only when editingServer is an actual saved server being edited (has
     // an id). A link-prefilled or otherwise id-less server still populates
     // editingServer (so the form is prefilled) but must go through the
-    // add-new path on save, since OwpengramServers.updateCustomServer() looks
+    // add-new path on save, since TheCatServers.updateCustomServer() looks
     // the row up by id and would NPE/no-op on an id-less server.
     private final boolean isExistingServer;
 
@@ -75,7 +75,7 @@ public class AddServerFragment extends BaseFragment {
     private org.telegram.ui.web.HttpGetTask currentInfoFetch;
     private org.telegram.ui.web.HttpGetBitmapTask currentIconFetch;
     // Set once a server icon has been chosen (manually, via pickIcon()) or
-    // auto-fetched and persisted locally (see OwpengramServers.saveFetchedIcon);
+    // auto-fetched and persisted locally (see TheCatServers.saveFetchedIcon);
     // applied to the server on save.
     private String fetchedLogoPath;
     private final Runnable fetchDebounceRunnable = this::fetchPublicKeyForAddress;
@@ -87,7 +87,7 @@ public class AddServerFragment extends BaseFragment {
 
     private static final int DEFAULT_SINGLE_MAIN_DC = 2;
 
-    public AddServerFragment(OwpengramServer existing, OnSavedListener listener) {
+    public AddServerFragment(TheCatServer existing, OnSavedListener listener) {
         this.editingServer    = existing;
         this.onSavedListener  = listener;
         this.isExistingServer = existing != null && existing.id != null && !existing.id.isEmpty();
@@ -161,7 +161,7 @@ public class AddServerFragment extends BaseFragment {
         content.addView(section2);
 
         // Section: advanced (collapsed by default -- only matters for servers
-        // that don't serve their key/DC over /owpengram/server-info, or to
+        // that don't serve their key/DC over /thecat/server-info, or to
         // override what auto-fetch filled in).
         advancedHeader = buildSectionHeader(context, "Advanced");
         advancedHeader.setOnClickListener(v -> toggleAdvanced());
@@ -216,11 +216,11 @@ public class AddServerFragment extends BaseFragment {
             // tap -- Advanced only collapses by default for the new-server,
             // auto-fetch-does-everything case.
             toggleAdvanced();
-            // An owpg://addserver link only has to carry host+port -- an
-            // OwpenGram server answers with its own name/description/key/DC
+            // An thecat://addserver link only has to carry host+port -- an
+            // The Cat server answers with its own name/description/key/DC
             // on request (the same discovery a hand-typed address triggers
             // via the TextWatcher below), so a link for one of our own
-            // servers can stay short. A non-OwpenGram/custom backend that
+            // servers can stay short. A non-The Cat/custom backend that
             // doesn't implement that endpoint needs the key spelled out in
             // the link itself instead -- rsaPublicKey is then already
             // non-empty here, so no fetch is triggered.
@@ -277,7 +277,7 @@ public class AddServerFragment extends BaseFragment {
             currentIconFetch = null;
         }
         addressSpinner.setVisibility(View.VISIBLE);
-        currentInfoFetch = OwpengramServers.fetchServerInfo(host, port, result -> {
+        currentInfoFetch = TheCatServers.fetchServerInfo(host, port, result -> {
             addressSpinner.setVisibility(View.GONE);
             if (result == null || !lastFetchedAddress.equals(address)) {
                 return;
@@ -297,7 +297,7 @@ public class AddServerFragment extends BaseFragment {
                 descField.setText(result.description);
             }
             if (result.hasIcon) {
-                currentIconFetch = OwpengramServers.fetchServerIcon(host, port, bitmap -> {
+                currentIconFetch = TheCatServers.fetchServerIcon(host, port, bitmap -> {
                     if (bitmap == null || !lastFetchedAddress.equals(address)) {
                         return;
                     }
@@ -355,7 +355,7 @@ public class AddServerFragment extends BaseFragment {
         if (square == null) {
             return;
         }
-        String path = OwpengramServers.saveFetchedIcon(square);
+        String path = TheCatServers.saveFetchedIcon(square);
         if (path == null) {
             return;
         }
@@ -402,7 +402,7 @@ public class AddServerFragment extends BaseFragment {
         // link-prefilled, id-less server -- addCustomServer() below mints the
         // id itself. Only an actual existing (has-id) server goes through
         // updateCustomServer().
-        OwpengramServer server = (editingServer != null) ? editingServer : new OwpengramServer();
+        TheCatServer server = (editingServer != null) ? editingServer : new TheCatServer();
         int mainDc;
         if (multiDcEnabled) {
             mainDc = 2; // Telegram-compatible servers always home on DC 2
@@ -427,9 +427,9 @@ public class AddServerFragment extends BaseFragment {
         }
 
         if (isExistingServer) {
-            OwpengramServers.updateCustomServer(server);
+            TheCatServers.updateCustomServer(server);
         } else {
-            OwpengramServers.addCustomServer(server);
+            TheCatServers.addCustomServer(server);
         }
 
         if (onSavedListener != null) onSavedListener.onSaved(server);

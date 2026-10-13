@@ -144,8 +144,8 @@ import org.telegram.messenger.SRPHelper;
 import org.telegram.messenger.SharedConfig;
 import org.telegram.messenger.UserConfig;
 import org.telegram.messenger.Utilities;
-import org.telegram.owpengram.EmailSignupPhone;
-import org.telegram.owpengram.OwpengramServers;
+import org.telegram.thecat.EmailSignupPhone;
+import org.telegram.thecat.TheCatServers;
 import org.telegram.tgnet.ConnectionsManager;
 import org.telegram.tgnet.RequestDelegate;
 import org.telegram.tgnet.SerializedData;
@@ -2788,7 +2788,7 @@ public class LoginActivity extends BaseFragment implements NotificationCenter.No
                     if (error == null) {
                         TLRPC.TL_help_countriesList help_countriesList = (TLRPC.TL_help_countriesList) response;
                         if (help_countriesList.countries.isEmpty()) {
-                            // Self-hosted servers (e.g. OwpenGram) may return an empty
+                            // Self-hosted servers (e.g. The Cat) may return an empty
                             // country list. Keep the bundled countries.txt so phone-code
                             // auto-detection still works instead of forcing the user to
                             // pick a country manually.
@@ -3261,7 +3261,7 @@ public class LoginActivity extends BaseFragment implements NotificationCenter.No
                             continue;
                         }
                         String userPhone = userConfig.getCurrentUser().phone;
-                        if (PhoneNumberUtils.compare(phone, userPhone) && ConnectionsManager.getInstance(a).isTestBackend() == testBackend && OwpengramServers.sameAccountServer(a, currentAccount)) {
+                        if (PhoneNumberUtils.compare(phone, userPhone) && ConnectionsManager.getInstance(a).isTestBackend() == testBackend && TheCatServers.sameAccountServer(a, currentAccount)) {
                             final int num = a;
                             AlertDialog.Builder builder = new AlertDialog.Builder(getParentActivity());
                             builder.setTitle(getString(R.string.AppName));
@@ -3639,7 +3639,7 @@ public class LoginActivity extends BaseFragment implements NotificationCenter.No
                         if (!userConfig.isClientActivated()) {
                             continue;
                         }
-                        if (userConfig.getClientUserId() == userId && ConnectionsManager.getInstance(a).isTestBackend() == testBackend && OwpengramServers.sameAccountServer(a, currentAccount)) {
+                        if (userConfig.getClientUserId() == userId && ConnectionsManager.getInstance(a).isTestBackend() == testBackend && TheCatServers.sameAccountServer(a, currentAccount)) {
                             if (UserConfig.selectedAccount != a) {
                                 ((LaunchActivity) getParentActivity()).switchToAccount(a, true);
                             }

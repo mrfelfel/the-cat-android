@@ -58,7 +58,7 @@ public:
     void cancelRequestsForGuid(int32_t guid);
     void bindRequestToGuid(int32_t requestToken, int32_t guid);
     void applyDatacenterAddress(uint32_t datacenterId, std::string ipAddress, uint32_t port);
-    // Atomically applies a selected server (mirrors desktop Owpengram::ApplyServerToDcOptions):
+    // Atomically applies a selected server (mirrors desktop TheCat::ApplyServerToDcOptions):
     //  - single-server (isTelegram=false): map DC 1..5 onto one host:port, lock options
     //  - Telegram (isTelegram=true): restore real Telegram DC 1..5, leave options unlocked
     // Sets the per-instance RSA key, switches the current DC, optionally resets auth keys,

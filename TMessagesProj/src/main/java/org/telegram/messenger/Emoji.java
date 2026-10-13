@@ -29,7 +29,7 @@ import android.view.View;
 import android.view.ViewGroup;
 import android.widget.TextView;
 
-import org.telegram.owpengram.OwpengramServers;
+import org.telegram.thecat.TheCatServers;
 import org.telegram.tgnet.TLRPC;
 import org.telegram.ui.Components.AnimatedEmojiDrawable;
 import org.telegram.ui.Components.AnimatedEmojiSpan;
@@ -68,8 +68,8 @@ public class Emoji {
     public final static ArrayList<String> recentEmoji = new ArrayList<>();
     public final static HashMap<String, String> emojiColor = new HashMap<>();
     private static boolean recentEmojiLoaded;
-    // OwpenGram: recent/frequently-used emoji — including custom "animated_<id>" entries — are
-    // scoped per backend server, not per device. See OwpengramServers.serverScopeKeyForAccount
+    // The Cat: recent/frequently-used emoji — including custom "animated_<id>" entries — are
+    // scoped per backend server, not per device. See TheCatServers.serverScopeKeyForAccount
     // for why device-wide sharing is wrong (a document id from one server's namespace can never
     // resolve on another). currentEmojiScopeKey names whichever scope is currently loaded into
     // emojiUseHistory/recentEmoji; recentByScope/historyByScope hold the in-memory state for
@@ -1030,7 +1030,7 @@ public class Emoji {
         preferences.edit().putString(scopedPrefKey("emojis2"), stringBuilder.toString()).commit();
     }
 
-    // OwpenGram: "" (default/Telegram scope) keeps the original, unsuffixed key so existing
+    // The Cat: "" (default/Telegram scope) keeps the original, unsuffixed key so existing
     // installs keep reading/writing the same preference they always have.
     private static String scopedPrefKey(String base) {
         if (currentEmojiScopeKey == null || currentEmojiScopeKey.isEmpty()) {
@@ -1051,13 +1051,13 @@ public class Emoji {
         loadRecentEmoji(UserConfig.selectedAccount);
     }
 
-    // OwpenGram: (re)loads the recent-emoji list scoped to whichever server `account` is
-    // currently connected to (see OwpengramServers.serverScopeKeyForAccount), swapping the
+    // The Cat: (re)loads the recent-emoji list scoped to whichever server `account` is
+    // currently connected to (see TheCatServers.serverScopeKeyForAccount), swapping the
     // previously-active scope's in-memory state into recentByScope/historyByScope first. A
     // cheap no-op if that scope is already the one loaded — mirrors the original
     // recentEmojiLoaded guard, just keyed per scope instead of only once per process.
     public static void loadRecentEmoji(int account) {
-        String scopeKey = OwpengramServers.serverScopeKeyForAccount(account);
+        String scopeKey = TheCatServers.serverScopeKeyForAccount(account);
         if (recentEmojiLoaded && Objects.equals(scopeKey, currentEmojiScopeKey)) {
             return;
         }

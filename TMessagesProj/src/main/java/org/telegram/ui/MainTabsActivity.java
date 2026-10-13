@@ -625,7 +625,7 @@ public class MainTabsActivity extends ViewPagerActivity implements NotificationC
             o.add(R.drawable.msg_addbot, getString(R.string.AddAccount), () -> {
                 // Any account (custom server) may use any free slot; the premium cap
                 // is enforced per-server (Telegram only) in ServerSelectFragment.
-                int availableAccount = org.telegram.owpengram.OwpengramServers.firstFreeAccountSlot();
+                int availableAccount = org.telegram.thecat.TheCatServers.firstFreeAccountSlot();
                 if (availableAccount >= 0) {
                     presentFragment(new ServerSelectFragment(availableAccount));
                 } else {
@@ -676,7 +676,7 @@ public class MainTabsActivity extends ViewPagerActivity implements NotificationC
     }
 
     private String serverLabel(int account) {
-        String name = org.telegram.owpengram.OwpengramServers.serverNameForAccount(account);
+        String name = org.telegram.thecat.TheCatServers.serverNameForAccount(account);
         return name != null ? name : getString(R.string.AppName);
     }
 

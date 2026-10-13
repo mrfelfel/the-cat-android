@@ -1,4 +1,4 @@
-package org.telegram.owpengram;
+package org.telegram.thecat;
 
 import android.content.Context;
 import android.content.SharedPreferences;
@@ -26,26 +26,23 @@ import java.util.List;
 import java.util.UUID;
 import java.util.concurrent.CopyOnWriteArrayList;
 
-public class OwpengramServers {
+public class TheCatServers {
 
-    private static final String PREFS_NAME = "owpengram_servers";
+    private static final String PREFS_NAME = "thecat_servers";
     private static final String KEY_CUSTOM_SERVERS = "custom_servers";
     private static final String KEY_ACCOUNT_SERVER = "account_server_";
     // Built-in servers are rebuilt from compile-time constants by
-    // owpengramServer()/telegramServer(), so unlike custom ones they have no
+    // thecatServer()/telegramServer(), so unlike custom ones they have no
     // KEY_CUSTOM_SERVERS entry to write a refreshed name/description/logo
     // back into. This holds those cosmetic overrides, keyed by server id.
     private static final String KEY_BUILTIN_IDENTITY = "builtin_identity";
 
-    public static final String ID_OWPENGRAM = "owpengram";
+    public static final String ID_THECAT = "thecat";
     public static final String ID_TELEGRAM  = "telegram";
-
-    /** Public repository of the OwpenGram server, opened from the settings entry. */
-    public static final String SERVER_REPO_URL = "https://github.com/owpengram/owpengram-server";
 
     // Fired whenever the stored custom-server list changes (add/update/remove,
     // from ANY code path -- including one triggered from outside the
-    // currently-visible UI, e.g. an owpg://addserver link opened while
+    // currently-visible UI, e.g. an thecat://addserver link opened while
     // ServerSelectFragment already happens to be showing). Any UI presenting
     // that list should register here instead of only refreshing from its own
     // local "just saved" callback, or it goes stale until the user leaves the
@@ -60,21 +57,21 @@ public class OwpengramServers {
         customServersChangedListeners.remove(listener);
     }
 
-    private static final String DEFAULT_HOST = "152.89.254.50";
-    private static final int    DEFAULT_PORT = 2398;
+    private static final String DEFAULT_HOST = "62.220.127.238";
+    private static final int    DEFAULT_PORT = 30001;
 
-    // OwpenGram's own production server RSA key.
-    static final String OWPENGRAM_RSA_KEY =
+    // The Cat's own production server RSA key.
+    static final String THECAT_RSA_KEY =
         "-----BEGIN RSA PUBLIC KEY-----\n" +
-        "MIIBCgKCAQEAxUi0fsjiop7kTI+c+ATHwIs+XPcircj9WL/tNASH45/phiIvxhPU\n" +
-        "z4T6OgUfDVpQEC8SWCuq77aZAhnpZ0rfQ+h6vEv7X970wIAPT/hbyzekyWEFmH5Q\n" +
-        "RxSPrOMKF/V0wuTOVJcoHZW5r5cK7xsVe/otdYdOgt67kITS7pqoO1BlstRuOEHL\n" +
-        "jhaJ/40dXocrWpDQlJP2TZFwk5JF1Pbx/2mLr/asQapc/qbQP82b+iDLW8QIBT0f\n" +
-        "+xi4Js4k7Qo9kZSuUHUCDzmJt6Z0USBxxp/tSZRVjWRaT9ORDrdyfb/mKFSt9BtC\n" +
-        "B5VRJ1e0q7P/9/w21T0p9uV3eNXhnPnLFQIDAQAB\n" +
+        "MIIBCgKCAQEA2LnOaBr+GoK84cDv4c0h3cLZ2EAJsnI+syy7L7VdFV9JkHQ3ODA8\n" +
+        "ydSND5DfmDp7ZMG5AQWu+ca9jrRNqgiHtmTdLcZfLM/2XXEqYznNfikpmelv0qA3\n" +
+        "UvNdDTD24PVwXpMwe86j+On45NgZcvS464DUGcM2wPDY0zOIFInVL+R3u+XmIJ8E\n" +
+        "FxdZxR+4ktDx6Pb+OoxmpH4Y9KHbLNwQ7MmFSW9Luw7z02D2ySD3edQIrdeXI6pW\n" +
+        "aNOZhRIKfL94qJbdG0+7fUp0M7d2WjKKoyZ2Vb1Yt6BDUqr+pG/6/lJOL4p4EKEg\n" +
+        "MwitjfUc+a9fPtKx25osD33c0L5889yVkQIDAQAB\n" +
         "-----END RSA PUBLIC KEY-----";
     // fingerprint == 0 -> native layer derives it from the PEM (see ConnectionsManager::applyServerConfig).
-    static final long OWPENGRAM_RSA_FINGERPRINT = 0;
+    static final long THECAT_RSA_FINGERPRINT = 0;
 
     // Official Telegram production RSA key (restored from original Android source)
     static final String TELEGRAM_RSA_KEY =
@@ -90,19 +87,19 @@ public class OwpengramServers {
 
     // --- Built-in servers ---
 
-    public static OwpengramServer owpengramServer() {
-        OwpengramServer s = new OwpengramServer();
-        s.id                 = ID_OWPENGRAM;
-        s.name               = "OwpenGram";
-        s.description        = "This is a test OwpenGram server.";
+    public static TheCatServer thecatServer() {
+        TheCatServer s = new TheCatServer();
+        s.id                 = ID_THECAT;
+        s.name               = "The Cat";
+        s.description        = "The Cat default server.";
         s.host               = DEFAULT_HOST;
         s.port               = DEFAULT_PORT;
         s.isOfficial         = true;
         s.isTelegram         = false;
         s.multiDc            = false;
-        s.mainDcId           = 1;
-        s.rsaPublicKey       = OWPENGRAM_RSA_KEY;
-        s.rsaKeyFingerprint  = OWPENGRAM_RSA_FINGERPRINT;
+        s.mainDcId           = 2;
+        s.rsaPublicKey       = THECAT_RSA_KEY;
+        s.rsaKeyFingerprint  = THECAT_RSA_FINGERPRINT;
         // Whatever the operator has since set on the server itself wins over
         // the shipped defaults -- see refreshServersInfo(). Only name,
         // description and logo: host/port/key above stay compiled-in.
@@ -110,8 +107,8 @@ public class OwpengramServers {
         return s;
     }
 
-    public static OwpengramServer telegramServer() {
-        OwpengramServer s = new OwpengramServer();
+    public static TheCatServer telegramServer() {
+        TheCatServer s = new TheCatServer();
         s.id                 = ID_TELEGRAM;
         s.name               = "Telegram";
         s.description        = "Official Telegram cloud. Sign in with your Telegram account.";
@@ -128,17 +125,17 @@ public class OwpengramServers {
 
     // --- Server list ---
 
-    public static List<OwpengramServer> listServers() {
-        List<OwpengramServer> result = new ArrayList<>();
+    public static List<TheCatServer> listServers() {
+        List<TheCatServer> result = new ArrayList<>();
         result.add(telegramServer());
-        result.add(owpengramServer());
+        result.add(thecatServer());
         result.addAll(loadCustomServers());
         return result;
     }
 
-    public static OwpengramServer getServerById(String id) {
+    public static TheCatServer getServerById(String id) {
         if (id == null) return null;
-        for (OwpengramServer s : listServers()) {
+        for (TheCatServer s : listServers()) {
             if (id.equals(s.id)) return s;
         }
         return null;
@@ -146,13 +143,13 @@ public class OwpengramServers {
 
     // --- Custom server persistence ---
 
-    public static List<OwpengramServer> loadCustomServers() {
-        List<OwpengramServer> result = new ArrayList<>();
+    public static List<TheCatServer> loadCustomServers() {
+        List<TheCatServer> result = new ArrayList<>();
         try {
             String json = getPrefs().getString(KEY_CUSTOM_SERVERS, "[]");
             JSONArray array = new JSONArray(json);
             for (int i = 0; i < array.length(); i++) {
-                result.add(OwpengramServer.fromJson(array.getJSONObject(i)));
+                result.add(TheCatServer.fromJson(array.getJSONObject(i)));
             }
         } catch (Exception e) {
             FileLog.e(e);
@@ -160,10 +157,10 @@ public class OwpengramServers {
         return result;
     }
 
-    private static void saveCustomServers(List<OwpengramServer> customs) {
+    private static void saveCustomServers(List<TheCatServer> customs) {
         try {
             JSONArray array = new JSONArray();
-            for (OwpengramServer s : customs) {
+            for (TheCatServer s : customs) {
                 array.put(s.toJson());
             }
             getPrefs().edit().putString(KEY_CUSTOM_SERVERS, array.toString()).apply();
@@ -182,18 +179,18 @@ public class OwpengramServers {
         });
     }
 
-    public static void addCustomServer(OwpengramServer server) {
+    public static void addCustomServer(TheCatServer server) {
         if (server.id == null || server.id.isEmpty()) {
             server.id = UUID.randomUUID().toString();
         }
         server.isOfficial = false;
-        List<OwpengramServer> customs = loadCustomServers();
+        List<TheCatServer> customs = loadCustomServers();
         customs.add(server);
         saveCustomServers(customs);
     }
 
-    public static void updateCustomServer(OwpengramServer updated) {
-        List<OwpengramServer> customs = loadCustomServers();
+    public static void updateCustomServer(TheCatServer updated) {
+        List<TheCatServer> customs = loadCustomServers();
         for (int i = 0; i < customs.size(); i++) {
             if (updated.id.equals(customs.get(i).id)) {
                 customs.set(i, updated);
@@ -204,7 +201,7 @@ public class OwpengramServers {
     }
 
     public static void removeCustomServer(String id) {
-        List<OwpengramServer> customs = loadCustomServers();
+        List<TheCatServer> customs = loadCustomServers();
         for (int i = 0; i < customs.size(); i++) {
             if (id.equals(customs.get(i).id)) {
                 customs.remove(i);
@@ -224,7 +221,7 @@ public class OwpengramServers {
         getPrefs().edit().putString(KEY_ACCOUNT_SERVER + accountNum, serverId).apply();
     }
 
-    public static OwpengramServer getServerForAccount(int accountNum) {
+    public static TheCatServer getServerForAccount(int accountNum) {
         return getServerById(getServerIdForAccount(accountNum));
     }
 
@@ -260,7 +257,7 @@ public class OwpengramServers {
      * still share one scope.
      */
     public static String serverScopeKeyForAccount(int accountNum) {
-        OwpengramServer s = getServerForAccount(accountNum);
+        TheCatServer s = getServerForAccount(accountNum);
         if (s == null || s.isTelegram || TextUtils.isEmpty(s.host)) {
             return "";
         }
@@ -276,11 +273,11 @@ public class OwpengramServers {
      * fetch) — the same signal the desktop client relies on via session->premiumPossible(),
      * which has no separate per-server allowlist. A server that doesn't implement these
      * features server-side is expected to send the blocked flags (as the old
-     * owpengram-server did); one that does (gramsrv) is not unconditionally hidden here
+     * thecat-server did); one that does (gramsrv) is not unconditionally hidden here
      * just for not being a hardcoded preset.
      */
     public static boolean serverSupportsPremium(int accountNum) {
-        OwpengramServer s = getServerForAccount(accountNum);
+        TheCatServer s = getServerForAccount(accountNum);
         if (s == null) {
             return false;
         }
@@ -294,10 +291,10 @@ public class OwpengramServers {
     /**
      * Whether the account's current server is the official Telegram network.
      * Used to hide Telegram-specific help entries (Ask a Question, Telegram FAQ /
-     * Features, Privacy Policy) on OwpenGram and other servers, where they don't apply.
+     * Features, Privacy Policy) on The Cat and other servers, where they don't apply.
      */
     public static boolean serverIsOfficialTelegram(int accountNum) {
-        OwpengramServer s = getServerForAccount(accountNum);
+        TheCatServer s = getServerForAccount(accountNum);
         return s != null && s.isTelegram;
     }
 
@@ -327,8 +324,8 @@ public class OwpengramServers {
         if (java.util.Objects.equals(idA, idB)) {
             return true;
         }
-        OwpengramServer sa = getServerById(idA);
-        OwpengramServer sb = getServerById(idB);
+        TheCatServer sa = getServerById(idA);
+        TheCatServer sb = getServerById(idB);
         if (sa == null || sb == null) {
             return false;
         }
@@ -348,11 +345,11 @@ public class OwpengramServers {
      * resetKeys=true clears auth keys (user picked a NEW server -> force re-handshake);
      * resetKeys=false keeps them (startup restore -> reuse the existing session).
      */
-    public static void applyServerToAccount(OwpengramServer server, int accountNum) {
+    public static void applyServerToAccount(TheCatServer server, int accountNum) {
         applyServerToAccount(server, accountNum, true);
     }
 
-    public static void applyServerToAccount(OwpengramServer server, int accountNum, boolean resetKeys) {
+    public static void applyServerToAccount(TheCatServer server, int accountNum, boolean resetKeys) {
         if (server == null) return;
         final String key;
         final long fingerprint;
@@ -365,9 +362,9 @@ public class OwpengramServers {
             key = server.rsaPublicKey;
             fingerprint = (server.rsaKeyFingerprint != 0) ? server.rsaKeyFingerprint : 0;
         } else {
-            // No key provided -> shared default owpengram key (fingerprint known).
-            key = OWPENGRAM_RSA_KEY;
-            fingerprint = OWPENGRAM_RSA_FINGERPRINT;
+            // No key provided -> shared default thecat key (fingerprint known).
+            key = THECAT_RSA_KEY;
+            fingerprint = THECAT_RSA_FINGERPRINT;
         }
         int mainDc = server.mainDcId > 0
                 ? server.mainDcId
@@ -389,7 +386,7 @@ public class OwpengramServers {
      * reset auth keys so an already-authorized session keeps working.
      */
     public static void applyStoredServerToAccount(int accountNum) {
-        OwpengramServer server = getServerForAccount(accountNum);
+        TheCatServer server = getServerForAccount(accountNum);
         if (server != null) {
             applyServerToAccount(server, accountNum, false);
         }
@@ -427,7 +424,7 @@ public class OwpengramServers {
     public static boolean anyAccountIsTelegram() {
         for (int a = 0; a < UserConfig.MAX_ACCOUNT_COUNT; a++) {
             if (UserConfig.getInstance(a).isClientActivated()) {
-                OwpengramServer s = getServerForAccount(a);
+                TheCatServer s = getServerForAccount(a);
                 if (s != null && s.isTelegram) return true;
             }
         }
@@ -435,15 +432,15 @@ public class OwpengramServers {
     }
 
     /**
-     * Self-hosted invite/username link routing (owpg scheme). Finds an activated
+     * Self-hosted invite/username link routing (thecat scheme). Finds an activated
      * account that owns the given link host, i.e. whose me_url_prefix host
      * (MessagesController.linkPrefix) equals {@code host} AND whose server explicitly
-     * advertises owpengram=true in help.getAppConfig (so the official Telegram network
+     * advertises thecat=true in help.getAppConfig (so the official Telegram network
      * and other forks on a shared host are excluded). Prefers the currently
      * selected account when it matches. Returns the account index, or -1 if none.
-     * Mirrors the desktop OwpengramHostForUrl / OwpengramAccountHost.
+     * Mirrors the desktop TheCatHostForUrl / TheCatAccountHost.
      */
-    public static int findOwpengramAccountForHost(String host) {
+    public static int findTheCatAccountForHost(String host) {
         if (TextUtils.isEmpty(host)) {
             return -1;
         }
@@ -465,7 +462,7 @@ public class OwpengramServers {
         if (!UserConfig.getInstance(accountNum).isClientActivated()) {
             return false;
         }
-        // owpg links never target the official Telegram network (t.me handling applies there).
+        // thecat links never target the official Telegram network (t.me handling applies there).
         if (serverIsOfficialTelegram(accountNum)) {
             return false;
         }
@@ -476,9 +473,9 @@ public class OwpengramServers {
             return true;
         }
         // Fallback: the host matches the account's actual server endpoint host. Covers
-        // owpg://<server-ip-or-domain>/... even before me_url_prefix / the appConfig
-        // owpengram marker have been refetched (e.g. after the admin changed the prefix).
-        OwpengramServer server = getServerForAccount(accountNum);
+        // thecat://<server-ip-or-domain>/... even before me_url_prefix / the appConfig
+        // thecat marker have been refetched (e.g. after the admin changed the prefix).
+        TheCatServer server = getServerForAccount(accountNum);
         if (server != null && server.host != null && host.equalsIgnoreCase(server.host)) {
             return true;
         }
@@ -489,7 +486,7 @@ public class OwpengramServers {
     public static int firstTelegramAccount() {
         for (int a = 0; a < UserConfig.MAX_ACCOUNT_COUNT; a++) {
             if (UserConfig.getInstance(a).isClientActivated()) {
-                OwpengramServer s = getServerForAccount(a);
+                TheCatServer s = getServerForAccount(a);
                 if (s != null && s.isTelegram) return a;
             }
         }
@@ -501,7 +498,7 @@ public class OwpengramServers {
      * the main app header so it shows the current server instead of "Telegram".
      */
     public static String serverNameForAccount(int accountNum) {
-        OwpengramServer s = getServerForAccount(accountNum);
+        TheCatServer s = getServerForAccount(accountNum);
         return (s != null) ? s.name : null;
     }
 
@@ -522,7 +519,7 @@ public class OwpengramServers {
         int n = 0;
         for (int a = 0; a < UserConfig.MAX_ACCOUNT_COUNT; a++) {
             if (UserConfig.getInstance(a).isClientActivated()) {
-                OwpengramServer s = getServerForAccount(a);
+                TheCatServer s = getServerForAccount(a);
                 if (s != null && s.isTelegram) n++;
             }
         }
@@ -573,7 +570,7 @@ public class OwpengramServers {
     /**
      * Fetches a server's RSA public key, home DC id, and identity
      * (name/description/icon presence) from its well-known same-port HTTP
-     * endpoint (GET host:port/owpengram/server-info), so "Add Server" can be
+     * endpoint (GET host:port/thecat/server-info), so "Add Server" can be
      * filled in from just host:port instead of manual PEM copy-paste +
      * guessing the DC id. callback receives the result on success, or null
      * on any failure (offline, unsupported server, malformed response) --
@@ -584,7 +581,7 @@ public class OwpengramServers {
             callback.run(null);
             return null;
         }
-        String url = "http://" + host + ":" + port + "/owpengram/server-info";
+        String url = "http://" + host + ":" + port + "/thecat/server-info";
         org.telegram.ui.web.HttpGetTask task = new org.telegram.ui.web.HttpGetTask(body -> {
             if (body == null) {
                 callback.run(null);
@@ -611,10 +608,10 @@ public class OwpengramServers {
         return task;
     }
 
-    private static final String SERVER_LOGOS_DIR = "owpengram_server_logos";
+    private static final String SERVER_LOGOS_DIR = "thecat_server_logos";
 
     /**
-     * Fetches a server's icon (GET host:port/owpengram/server-icon) -- only
+     * Fetches a server's icon (GET host:port/thecat/server-icon) -- only
      * worth calling when a prior fetchServerInfo answered with hasIcon=true.
      * callback receives the decoded bitmap on success, or null on any
      * failure -- always on the UI thread (AsyncTask#onPostExecute).
@@ -624,7 +621,7 @@ public class OwpengramServers {
             callback.run(null);
             return null;
         }
-        String url = "http://" + host + ":" + port + "/owpengram/server-icon";
+        String url = "http://" + host + ":" + port + "/thecat/server-icon";
         org.telegram.ui.web.HttpGetBitmapTask task = new org.telegram.ui.web.HttpGetBitmapTask(callback::run);
         task.executeOnExecutor(android.os.AsyncTask.THREAD_POOL_EXECUTOR, url);
         return task;
@@ -634,8 +631,8 @@ public class OwpengramServers {
      * Persists a server icon bitmap -- auto-fetched from the server or
      * picked locally by the user (see AddServerFragment.pickIcon /
      * applyIconBitmap) -- under the app's own files directory (mirrors the
-     * desktop client's owpengram_server_logos/ convention) and returns the
-     * absolute path to store as OwpengramServer.logoPath. Unlike a cache-dir
+     * desktop client's thecat_server_logos/ convention) and returns the
+     * absolute path to store as TheCatServer.logoPath. Unlike a cache-dir
      * temp file, this survives Android reclaiming cache space, since it's
      * the server's permanent logo once saved.
      */
@@ -645,7 +642,7 @@ public class OwpengramServers {
         }
         File dir = new File(ApplicationLoader.applicationContext.getFilesDir(), SERVER_LOGOS_DIR);
         if (!dir.exists() && !dir.mkdirs()) {
-            FileLog.e("OwpengramServers: failed to create " + dir);
+            FileLog.e("TheCatServers: failed to create " + dir);
             return null;
         }
         File file = new File(dir, "fetched_" + System.currentTimeMillis() + ".png");
@@ -668,7 +665,7 @@ public class OwpengramServers {
 
     /**
      * Re-reads the admin-edited identity (name/description/icon) of every
-     * server that serves /owpengram/server-info and stores it, so a logo or
+     * server that serves /thecat/server-info and stores it, so a logo or
      * title the operator changed shows up without the user having to open
      * Edit Server and re-fetch by hand. Call it when a server list becomes
      * visible.
@@ -679,7 +676,7 @@ public class OwpengramServers {
      * handshake is verified against; a wrong name or icon is merely wrong,
      * not dangerous.
      *
-     * The Telegram server is skipped -- it is not an OwpenGram backend and
+     * The Telegram server is skipped -- it is not an The Cat backend and
      * has no such endpoint. Fire-and-forget: one round at a time, and any
      * failure silently keeps the stored values.
      */
@@ -687,8 +684,8 @@ public class OwpengramServers {
         if (refreshRunning) {
             return;
         }
-        List<OwpengramServer> targets = new ArrayList<>();
-        for (OwpengramServer s : listServers()) {
+        List<TheCatServer> targets = new ArrayList<>();
+        for (TheCatServer s : listServers()) {
             if (s.isTelegram || TextUtils.isEmpty(s.host) || s.port <= 0) {
                 continue;
             }
@@ -699,8 +696,8 @@ public class OwpengramServers {
         }
         refreshRunning = true;
         refreshRemaining = targets.size();
-        for (OwpengramServer target : targets) {
-            final OwpengramServer server = target;
+        for (TheCatServer target : targets) {
+            final TheCatServer server = target;
             fetchServerInfo(server.host, server.port, result -> {
                 if (result == null) {
                     refreshFinished();
@@ -752,7 +749,7 @@ public class OwpengramServers {
      * write would repaint the screen on every single refresh.
      */
     private static void applyFetchedIdentity(
-            OwpengramServer server,
+            TheCatServer server,
             String name,
             String description,
             String logoPath,
@@ -783,7 +780,7 @@ public class OwpengramServers {
                 }
             } else if (!hasIcon && isFetchedServerLogo(server.id, currentLogo)) {
                 // Emptied here means the key is dropped on write, so
-                // owpengramServer() falls back to its compiled-in logo.
+                // thecatServer() falls back to its compiled-in logo.
                 // Gated on !hasIcon because an empty path also happens when
                 // the server HAS an icon but this round failed to fetch it.
                 nextLogo = "";
@@ -905,7 +902,7 @@ public class OwpengramServers {
 
     // Overlays the stored identity onto a freshly built built-in server.
     // Empty/missing fields leave the compiled-in defaults in place.
-    static void applyBuiltinIdentity(OwpengramServer s) {
+    static void applyBuiltinIdentity(TheCatServer s) {
         JSONObject object = readBuiltinIdentityRoot().optJSONObject(s.id);
         if (object == null) {
             return;
@@ -949,7 +946,7 @@ public class OwpengramServers {
             }
             File dir = new File(ApplicationLoader.applicationContext.getFilesDir(), SERVER_LOGOS_DIR);
             if (!dir.exists() && !dir.mkdirs()) {
-                FileLog.e("OwpengramServers: failed to create " + dir);
+                FileLog.e("TheCatServers: failed to create " + dir);
                 return null;
             }
             File file = new File(dir, serverId + "_" + digest + ".png");

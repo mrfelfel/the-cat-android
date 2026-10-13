@@ -716,9 +716,9 @@ public class SettingsActivity extends BaseFragment implements NotificationCenter
         items.add(UItem.asShadow(null));
 
         // Only show the Premium section (Premium/Stars/TON/Business/Gift) for servers
-        // that implement these features (Telegram). OwpenGram and custom
+        // that implement these features (Telegram). The Cat and custom
         // single-servers don't, so hide the whole block there.
-        boolean serverPremium = org.telegram.owpengram.OwpengramServers.serverSupportsPremium(currentAccount);
+        boolean serverPremium = org.telegram.thecat.TheCatServers.serverSupportsPremium(currentAccount);
         if (serverPremium && !getMessagesController().premiumFeaturesBlocked()) {
             items.add(SettingCell.Factory.of(11, 0xFFB659FF, 0xFF617CFF, R.drawable.settings_premium, getString(R.string.TelegramPremium)));
         }
@@ -759,15 +759,14 @@ public class SettingsActivity extends BaseFragment implements NotificationCenter
         items.add(UItem.asHeader(getString(R.string.SettingsHelp)));
         // Ask a Question / Telegram FAQ / Telegram Features / Privacy Policy are
         // Telegram-specific. Show them only when the active account is on the
-        // official Telegram network; hide them on OwpenGram and other servers.
-        boolean officialTelegram = org.telegram.owpengram.OwpengramServers.serverIsOfficialTelegram(currentAccount);
+        // official Telegram network; hide them on The Cat and other servers.
+        boolean officialTelegram = org.telegram.thecat.TheCatServers.serverIsOfficialTelegram(currentAccount);
         if (officialTelegram) {
             items.add(SettingCell.Factory.of(17, 0xFFF09F1B, 0xFFE18A11, R.drawable.settings_ask, getString(R.string.AskAQuestion)));
             items.add(SettingCell.Factory.of(18, 0xFF1BA4ED, 0xFF1488E1, R.drawable.settings_faq, getString(R.string.TelegramFAQ)));
             items.add(SettingCell.Factory.of(23, 0xFFC46EF4, 0xFF9F55DF, R.drawable.settings_features, getString(R.string.TelegramFeatures)));
             items.add(SettingCell.Factory.of(19, 0xFF55CA47, 0xFF27B434, R.drawable.settings_policy, getString(R.string.PrivacyPolicy)));
         }
-        items.add(SettingCell.Factory.of(30, 0xFF6E7B86, 0xFF55606A, R.drawable.github_logo, "OwpenGram"));
 
         if (BuildVars.LOGS_ENABLED || BuildVars.DEBUG_PRIVATE_VERSION) {
             items.add(UItem.asShadow(null));
@@ -889,9 +888,6 @@ public class SettingsActivity extends BaseFragment implements NotificationCenter
             case 19:
                 Browser.openUrl(getParentActivity(), LocaleController.getString(R.string.PrivacyPolicyUrl));
                 break;
-            case 30:
-                Browser.openUrl(getParentActivity(), org.telegram.owpengram.OwpengramServers.SERVER_REPO_URL);
-                break;
 
             case 20:
                 ProfileActivity.sendLogs(getParentActivity(), false);
@@ -914,7 +910,7 @@ public class SettingsActivity extends BaseFragment implements NotificationCenter
     }
 
     private String serverLabel(int account) {
-        String name = org.telegram.owpengram.OwpengramServers.serverNameForAccount(account);
+        String name = org.telegram.thecat.TheCatServers.serverNameForAccount(account);
         return name != null ? name : getString(R.string.AppName);
     }
 
@@ -972,7 +968,7 @@ public class SettingsActivity extends BaseFragment implements NotificationCenter
             //APP VERSION HERE
             versionName += "_O7";
 
-            return "OwpenGram " + String.format(Locale.US, "v%s (%d)\n%s", versionName, code, abi);
+            return "The Cat " + String.format(Locale.US, "v%s (%d)\n%s", versionName, code, abi);
         } catch (Exception e) {
             FileLog.e(e);
         }

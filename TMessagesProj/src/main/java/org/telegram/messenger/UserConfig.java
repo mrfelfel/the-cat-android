@@ -24,7 +24,7 @@ import java.util.Arrays;
 public class UserConfig extends BaseController {
 
     public static int selectedAccount;
-    // Telegram-official free account cap (premium raises it; see OwpengramServers).
+    // Telegram-official free account cap (premium raises it; see TheCatServers).
     public final static int MAX_ACCOUNT_DEFAULT_COUNT = 3;
     // Total account slots across all servers -- not a business rule like
     // MAX_ACCOUNT_DEFAULT_COUNT, just a defensive upper bound. This sizes a

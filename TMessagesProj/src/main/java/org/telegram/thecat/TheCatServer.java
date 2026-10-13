@@ -1,9 +1,9 @@
-package org.telegram.owpengram;
+package org.telegram.thecat;
 
 import org.json.JSONException;
 import org.json.JSONObject;
 
-public class OwpengramServer {
+public class TheCatServer {
     public String id;
     public String name;
     public String host;
@@ -36,8 +36,8 @@ public class OwpengramServer {
         return obj;
     }
 
-    public static OwpengramServer fromJson(JSONObject obj) throws JSONException {
-        OwpengramServer s = new OwpengramServer();
+    public static TheCatServer fromJson(JSONObject obj) throws JSONException {
+        TheCatServer s = new TheCatServer();
         s.id = obj.getString("id");
         s.name = obj.getString("name");
         s.host = obj.getString("host");

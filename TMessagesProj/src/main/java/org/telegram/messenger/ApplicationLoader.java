@@ -37,7 +37,7 @@ import com.google.android.gms.common.GooglePlayServicesUtil;
 
 import org.json.JSONObject;
 import org.telegram.messenger.voip.VideoCapturerDevice;
-import org.telegram.owpengram.OwpengramServers;
+import org.telegram.thecat.TheCatServers;
 import org.telegram.tgnet.ConnectionsManager;
 import org.telegram.tgnet.TLRPC;
 import org.telegram.ui.ActionBar.BaseFragment;
@@ -254,7 +254,7 @@ public class ApplicationLoader extends Application {
             } else {
                 ConnectionsManager.getInstance(a);
             }
-            OwpengramServers.applyStoredServerToAccount(a);
+            TheCatServers.applyStoredServerToAccount(a);
             TLRPC.User user = UserConfig.getInstance(a).getCurrentUser();
             if (user != null) {
                 MessagesController.getInstance(a).putUser(user, true);
@@ -361,7 +361,7 @@ public class ApplicationLoader extends Application {
         ProxyRotationController.init();
     }
 
-    private static final String BACKGROUND_MIGRATION_KEY = "owpengramBackgroundV1";
+    private static final String BACKGROUND_MIGRATION_KEY = "thecatBackgroundV1";
 
     public static boolean isPushServiceEnabled() {
         SharedPreferences preferences = MessagesController.getGlobalNotificationsSettings();

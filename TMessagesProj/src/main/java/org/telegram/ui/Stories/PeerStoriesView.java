@@ -7095,7 +7095,7 @@ public class PeerStoriesView extends SizeNotifierFrameLayout implements Notifica
                 return null;
             }
             // linkPrefix is this account's own server domain (me_url_prefix, e.g.
-            // "me.owpengram.org" for self-hosted accounts, "t.me" for real Telegram) -
+            // "me.thecat.org" for self-hosted accounts, "t.me" for real Telegram) -
             // must not be hardcoded to t.me, or self-hosted story links point at the
             // official Telegram domain instead of this server.
             final String linkPrefix = MessagesController.getInstance(currentAccount).linkPrefix;

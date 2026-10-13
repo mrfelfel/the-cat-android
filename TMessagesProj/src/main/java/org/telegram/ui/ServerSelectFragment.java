@@ -24,8 +24,8 @@ import androidx.recyclerview.widget.RecyclerView;
 
 import org.telegram.messenger.AndroidUtilities;
 import org.telegram.messenger.UserConfig;
-import org.telegram.owpengram.OwpengramServer;
-import org.telegram.owpengram.OwpengramServers;
+import org.telegram.thecat.TheCatServer;
+import org.telegram.thecat.TheCatServers;
 import org.telegram.tgnet.ConnectionsManager;
 import org.telegram.tgnet.TLRPC;
 import org.telegram.ui.ActionBar.ActionBar;
@@ -89,7 +89,7 @@ public class ServerSelectFragment extends BaseFragment {
     private RecyclerListView listView;
     private ListAdapter adapter;
 
-    private final List<OwpengramServer> servers = new ArrayList<>();
+    private final List<TheCatServer> servers = new ArrayList<>();
 
     private final ExecutorService pingPool = Executors.newCachedThreadPool();
     private final Handler uiHandler = new Handler(Looper.getMainLooper());
@@ -99,7 +99,7 @@ public class ServerSelectFragment extends BaseFragment {
     private boolean destroyed;
 
     // Refreshes this screen's list when the custom-server list changes from
-    // outside it -- e.g. an owpg://addserver link opened from a browser
+    // outside it -- e.g. an thecat://addserver link opened from a browser
     // while this fragment already happens to be on screen. Without this,
     // a just-added server only shows up after leaving and re-entering the
     // screen (which re-triggers onFragmentCreate -> reloadServers()).
@@ -111,7 +111,7 @@ public class ServerSelectFragment extends BaseFragment {
     public boolean onFragmentCreate() {
         reloadServers();
         pingAll();
-        OwpengramServers.addCustomServersChangedListener(customServersChangedListener);
+        TheCatServers.addCustomServersChangedListener(customServersChangedListener);
         // Pull each server's current name/description/icon. Without this the
         // list keeps showing whatever identity was captured when the server
         // was added, so an operator changing the logo or title only reached
@@ -122,7 +122,7 @@ public class ServerSelectFragment extends BaseFragment {
         // themselves once the replies land. Nothing changed means no
         // notification and no rebuild -- which is also why this is called
         // here and never from reloadServers().
-        OwpengramServers.refreshServersInfo();
+        TheCatServers.refreshServersInfo();
         return true;
     }
 
@@ -158,7 +158,7 @@ public class ServerSelectFragment extends BaseFragment {
         destroyed = true;
         if (connectPoll != null) uiHandler.removeCallbacks(connectPoll);
         pingPool.shutdownNow();
-        OwpengramServers.removeCustomServersChangedListener(customServersChangedListener);
+        TheCatServers.removeCustomServersChangedListener(customServersChangedListener);
         super.onFragmentDestroy();
     }
 
@@ -166,19 +166,19 @@ public class ServerSelectFragment extends BaseFragment {
 
     private void reloadServers() {
         servers.clear();
-        servers.addAll(OwpengramServers.listServers());
+        servers.addAll(TheCatServers.listServers());
         if (adapter != null) adapter.notifyDataSetChanged();
     }
 
     // --- Ping ---
 
     private void pingAll() {
-        for (OwpengramServer s : servers) {
+        for (TheCatServer s : servers) {
             pingServer(s);
         }
     }
 
-    private void pingServer(OwpengramServer s) {
+    private void pingServer(TheCatServer s) {
         final String id   = s.id;
         final String host = s.host;
         final int port    = s.port;
@@ -209,7 +209,7 @@ public class ServerSelectFragment extends BaseFragment {
         List<Object> rows = buildRows();
         for (int i = 0; i < rows.size(); i++) {
             Object o = rows.get(i);
-            if (o instanceof OwpengramServer && serverId.equals(((OwpengramServer) o).id)) {
+            if (o instanceof TheCatServer && serverId.equals(((TheCatServer) o).id)) {
                 adapter.notifyItemChanged(i);
                 return;
             }
@@ -220,9 +220,9 @@ public class ServerSelectFragment extends BaseFragment {
 
     private List<Object> buildRows() {
         List<Object> rows = new ArrayList<>();
-        List<OwpengramServer> official = new ArrayList<>();
-        List<OwpengramServer> custom   = new ArrayList<>();
-        for (OwpengramServer s : servers) {
+        List<TheCatServer> official = new ArrayList<>();
+        List<TheCatServer> custom   = new ArrayList<>();
+        for (TheCatServer s : servers) {
             if (s.isOfficial) official.add(s); else custom.add(s);
         }
 
@@ -243,8 +243,8 @@ public class ServerSelectFragment extends BaseFragment {
         List<Object> rows = buildRows();
         if (position < 0 || position >= rows.size()) return;
         Object o = rows.get(position);
-        if (o instanceof OwpengramServer) {
-            presentFragment(new ServerInfoFragment((OwpengramServer) o, this::reloadServers));
+        if (o instanceof TheCatServer) {
+            presentFragment(new ServerInfoFragment((TheCatServer) o, this::reloadServers));
         } else if ("add".equals(o)) {
             presentFragment(new AddServerFragment(null, saved -> {
                 reloadServers();
@@ -255,7 +255,7 @@ public class ServerSelectFragment extends BaseFragment {
 
     // --- Join / connect flow (desktop parity) ---
 
-    private void joinServer(OwpengramServer server) {
+    private void joinServer(TheCatServer server) {
         if (server == null) return;
         // The premium account-count limit applies only to Telegram accounts
         // (custom servers are limited solely by the total free slots). Enforce it
@@ -263,7 +263,7 @@ public class ServerSelectFragment extends BaseFragment {
         int targetAccount = (loginAccount >= 0) ? loginAccount : currentAccount;
         if (server.isTelegram
                 && !UserConfig.getInstance(targetAccount).isClientActivated()
-                && !OwpengramServers.canAddTelegramAccount()
+                && !TheCatServers.canAddTelegramAccount()
                 && getParentActivity() != null) {
             showDialog(new LimitReachedBottomSheet(this, getContext(),
                     LimitReachedBottomSheet.TYPE_ACCOUNTS, currentAccount, null));
@@ -290,12 +290,12 @@ public class ServerSelectFragment extends BaseFragment {
         });
     }
 
-    private void proceedJoin(OwpengramServer server) {
+    private void proceedJoin(TheCatServer server) {
         if (getParentActivity() == null) return;
         final int targetAccount = (loginAccount >= 0) ? loginAccount : currentAccount;
 
-        OwpengramServers.setServerForAccount(server.id, targetAccount);
-        OwpengramServers.applyServerToAccount(server, targetAccount); // resetKeys=true
+        TheCatServers.setServerForAccount(server.id, targetAccount);
+        TheCatServers.applyServerToAccount(server, targetAccount); // resetKeys=true
         ConnectionsManager.getInstance(targetAccount).resumeNetworkMaybe();
 
         AlertDialog progress = new AlertDialog(getParentActivity(), AlertDialog.ALERT_TYPE_SPINNER);
@@ -305,7 +305,7 @@ public class ServerSelectFragment extends BaseFragment {
         waitForConnection(targetAccount, server, progress);
     }
 
-    private void waitForConnection(int account, OwpengramServer server, AlertDialog progress) {
+    private void waitForConnection(int account, TheCatServer server, AlertDialog progress) {
         final long start = SystemClock.elapsedRealtime();
         connectPoll = new Runnable() {
             @Override
@@ -332,7 +332,7 @@ public class ServerSelectFragment extends BaseFragment {
     // account and the server before LoginActivity's view is built, so it's
     // the natural place to resolve "should the phone screen become an email
     // screen" instead of guessing inside LoginActivity itself.
-    private void checkEmailSignupAndGoToLogin(int account, OwpengramServer server) {
+    private void checkEmailSignupAndGoToLogin(int account, TheCatServer server) {
         TLRPC.TL_help_getAppConfig req = new TLRPC.TL_help_getAppConfig();
         req.hash = 0;
         ConnectionsManager.getInstance(account).sendRequest(req, (response, error) -> AndroidUtilities.runOnUIThread(() -> {
@@ -360,7 +360,7 @@ public class ServerSelectFragment extends BaseFragment {
         }
     }
 
-    private void showConnectFailed(OwpengramServer server) {
+    private void showConnectFailed(TheCatServer server) {
         if (getParentActivity() == null) return;
         AlertDialog.Builder b = new AlertDialog.Builder(getParentActivity());
         b.setTitle("Connection failed");
@@ -370,7 +370,7 @@ public class ServerSelectFragment extends BaseFragment {
         showDialog(b.create());
     }
 
-    private void goToLogin(OwpengramServer server, boolean emailSignupEnabled) {
+    private void goToLogin(TheCatServer server, boolean emailSignupEnabled) {
         if (destroyed) return;
         // Parameterless LoginActivity for first login (target == selected account):
         // LoginActivity(n) sets newAccount=true and later calls switchToAccount(n),
@@ -394,7 +394,7 @@ public class ServerSelectFragment extends BaseFragment {
         @Override
         public int getItemViewType(int position) {
             Object o = buildRows().get(position);
-            if (o instanceof OwpengramServer) return TYPE_SERVER;
+            if (o instanceof TheCatServer) return TYPE_SERVER;
             if ("add".equals(o)) return TYPE_ADD;
             if ("spacer".equals(o)) return TYPE_SPACER;
             return TYPE_HEADER;
@@ -415,7 +415,7 @@ public class ServerSelectFragment extends BaseFragment {
             int type = getItemViewType(position);
             Object o = buildRows().get(position);
             if (type == TYPE_SERVER) {
-                OwpengramServer s = (OwpengramServer) o;
+                TheCatServer s = (TheCatServer) o;
                 ((ServerHolder) holder).cell.bind(s, pingCache.get(s.id));
             } else if (type == TYPE_HEADER) {
                 String key = (String) o;
@@ -494,17 +494,17 @@ public class ServerSelectFragment extends BaseFragment {
     }
 
     // Built-in server logos (pulled from the desktop client) decode from a
-    // drawable resource; custom servers decode from OwpengramServer.logoPath
+    // drawable resource; custom servers decode from TheCatServer.logoPath
     // (set by AddServerFragment, either auto-fetched from the server or
     // picked locally). Decoded once and cached; a server with neither falls
     // back to the generated colored initial avatar.
     private static final java.util.HashMap<String, android.graphics.Bitmap> SERVER_LOGO_CACHE = new java.util.HashMap<>();
-    private static android.graphics.Bitmap serverLogo(Context ctx, OwpengramServer server) {
+    private static android.graphics.Bitmap serverLogo(Context ctx, TheCatServer server) {
         if (ctx == null || server == null) return null;
         int res = 0;
         if (TextUtils.isEmpty(server.logoPath)) {
-            if (OwpengramServers.ID_OWPENGRAM.equals(server.id)) res = org.telegram.messenger.R.drawable.server_owpengram;
-            else if (OwpengramServers.ID_TELEGRAM.equals(server.id)) res = org.telegram.messenger.R.drawable.server_telegram;
+            if (TheCatServers.ID_THECAT.equals(server.id)) res = org.telegram.messenger.R.drawable.server_thecat;
+            else if (TheCatServers.ID_TELEGRAM.equals(server.id)) res = org.telegram.messenger.R.drawable.server_telegram;
             if (res == 0) return null;
         }
         // Keyed on logoPath too (not just id) so re-uploading a custom
@@ -626,7 +626,7 @@ public class ServerSelectFragment extends BaseFragment {
                     Gravity.CENTER_VERTICAL | Gravity.END, 0, 0, 20 + 12, 0));
         }
 
-        void bind(OwpengramServer server, Integer pingMs) {
+        void bind(TheCatServer server, Integer pingMs) {
             initial = server.name.isEmpty() ? "?" : String.valueOf(server.name.charAt(0)).toUpperCase();
             int hash = Math.abs(server.name.hashCode());
             avatarPaint.setColor(AVATAR_COLORS[hash % AVATAR_COLORS.length]);

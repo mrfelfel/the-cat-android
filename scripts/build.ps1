@@ -146,7 +146,7 @@ function Invoke-Gradle([string]$Task, [string]$Label) {
 
 try {
     Write-Host ''
-    Write-Host 'OwpenGram Android build' -ForegroundColor Cyan
+    Write-Host 'The Cat Android build' -ForegroundColor Cyan
     Write-Host "Repo: $RepoRoot"
     Write-Host 'Tip: run build-android.bat from cmd or PowerShell (not Git Bash).' -ForegroundColor DarkGray
 

@@ -1,7 +1,7 @@
 #Requires -Version 5.1
 <#
 .SYNOPSIS
-  Interactive OwpenGram Android build helper for Windows.
+  Interactive The Cat Android build helper for Windows.
 
 .DESCRIPTION
   Patches server DC options and API credentials, updates submodules,
@@ -21,7 +21,7 @@ $ConnectionsManagerFile = Join-Path $RepoRoot 'TMessagesProj\jni\tgnet\Connectio
 $DatacenterFile = Join-Path $RepoRoot 'TMessagesProj\jni\tgnet\Datacenter.h'
 $BuildVarsFile = Join-Path $RepoRoot 'TMessagesProj\src\main\java\org\telegram\messenger\BuildVars.java'
 $LocalPropertiesFile = Join-Path $RepoRoot 'local.properties'
-$ConfigFile = Join-Path $RepoRoot '.owpengram-build.local.json'
+$ConfigFile = Join-Path $RepoRoot '.thecat-build.local.json'
 $GradlewBat = Join-Path $RepoRoot 'gradlew.bat'
 
 $TestApiId = '17349'
@@ -768,11 +768,11 @@ function Show-Menu {
 }
 
 try {
-    if ($RepoRoot -notmatch 'owpengram-android-client') {
+    if ($RepoRoot -notmatch 'thecat') {
         Write-WarnMsg "Repo root: $RepoRoot"
     }
 
-    Write-Title 'OwpenGram Android - interactive Windows build'
+    Write-Title 'The Cat Android - interactive Windows build'
     Write-Host "Repository: $RepoRoot"
 
     $script:Cfg = Load-Config

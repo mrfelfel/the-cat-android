@@ -37,7 +37,7 @@ public class BuildVars {
 
     public static String HUAWEI_APP_ID = "101184875";
 
-    // OwpenGram has no FCM push infra — keep MTProto alive in background via foreground service.
+    // The Cat has no FCM push infra — keep MTProto alive in background via foreground service.
     public static boolean FORCE_BACKGROUND_WORK = true;
 
     // You can use this flag to disable Google Play Billing (If you're making fork and want it to be in Google Play)

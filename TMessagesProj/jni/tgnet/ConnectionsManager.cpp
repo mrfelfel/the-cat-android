@@ -2025,7 +2025,7 @@ void ConnectionsManager::applyServerConfig(std::string host, uint32_t port, bool
             // connection always has an endpoint even before getConfig responds.
             //
             // Exception: if the account was previously on a locked single-server
-            // backend (owpengram/custom — see the else branch below),
+            // backend (thecat/custom — see the else branch below),
             // every dc_id 1..5 was force-mapped onto that one non-Telegram host via
             // replaceAddresses. ADD would leave those poisoned entries in place
             // alongside the new Telegram address, so DC1/3/4/5 could still silently

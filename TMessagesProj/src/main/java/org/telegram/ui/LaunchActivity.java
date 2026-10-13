@@ -126,8 +126,8 @@ import org.telegram.messenger.MessageObject;
 import org.telegram.messenger.MessagesController;
 import org.telegram.messenger.MessagesStorage;
 import org.telegram.messenger.NotificationCenter;
-import org.telegram.owpengram.OwpengramServer;
-import org.telegram.owpengram.OwpengramServers;
+import org.telegram.thecat.TheCatServer;
+import org.telegram.thecat.TheCatServers;
 import org.telegram.messenger.NotificationsController;
 import org.telegram.messenger.OpenAttachedMenuBotReceiver;
 import org.telegram.messenger.PushListenerController;
@@ -1255,19 +1255,19 @@ public class LaunchActivity extends BasePermissionsActivity implements INavigati
      * false when handling was deferred to a dialog.
      */
     private boolean routeTelegramLinkToTelegramAccount(Intent intent, int[] intentAccount, Browser.Progress progress) {
-        OwpengramServer server = OwpengramServers.getServerForAccount(intentAccount[0]);
+        TheCatServer server = TheCatServers.getServerForAccount(intentAccount[0]);
         if (server == null || server.isTelegram) {
             return true; // already on a Telegram account (or legacy/unknown — allow)
         }
         if (progress != null) {
             progress.end();
         }
-        final int tgAccount = OwpengramServers.firstTelegramAccount();
+        final int tgAccount = TheCatServers.firstTelegramAccount();
         if (tgAccount < 0) {
             showNeedTelegramAccountDialog();
             return false;
         }
-        final OwpengramServer tgServer = OwpengramServers.getServerForAccount(tgAccount);
+        final TheCatServer tgServer = TheCatServers.getServerForAccount(tgAccount);
         final String name = (tgServer != null) ? tgServer.name : "Telegram";
         final Intent reintent = new Intent(intent);
         reintent.putExtra("currentAccount", tgAccount);
@@ -1287,27 +1287,27 @@ public class LaunchActivity extends BasePermissionsActivity implements INavigati
     }
 
     /**
-     * Routes a self-hosted OwpenGram invite/username link to the account that owns its
+     * Routes a self-hosted The Cat invite/username link to the account that owns its
      * host. If that account is already active, proceed; otherwise offer to switch to it
      * and re-handle the link. Mirrors routeTelegramLinkToTelegramAccount.
      */
-    private boolean routeOwpengramLinkToOwpengramAccount(int owpengramAccount, Intent intent, int[] intentAccount, Browser.Progress progress) {
-        if (owpengramAccount < 0 || owpengramAccount == intentAccount[0]) {
+    private boolean routeTheCatLinkToTheCatAccount(int thecatAccount, Intent intent, int[] intentAccount, Browser.Progress progress) {
+        if (thecatAccount < 0 || thecatAccount == intentAccount[0]) {
             return true; // already on the owning account
         }
         if (progress != null) {
             progress.end();
         }
-        final OwpengramServer server = OwpengramServers.getServerForAccount(owpengramAccount);
-        final String name = (server != null && server.name != null) ? server.name : "OwpenGram";
+        final TheCatServer server = TheCatServers.getServerForAccount(thecatAccount);
+        final String name = (server != null && server.name != null) ? server.name : "The Cat";
         final Intent reintent = new Intent(intent);
-        reintent.putExtra("currentAccount", owpengramAccount);
+        reintent.putExtra("currentAccount", thecatAccount);
         try {
             AlertDialog.Builder b = new AlertDialog.Builder(this);
             b.setTitle(LocaleController.getString(R.string.AppName));
             b.setMessage("This link belongs to your " + name + " account. Switch to it to open the link?");
             b.setPositiveButton(LocaleController.getString(R.string.OK), (d, w) -> {
-                switchToAccount(owpengramAccount, true);
+                switchToAccount(thecatAccount, true);
                 AndroidUtilities.runOnUIThread(() -> handleIntent(reintent, false, false, false, null, true, true), 200);
             });
             b.setNegativeButton(LocaleController.getString(R.string.Cancel), null);
@@ -1317,8 +1317,8 @@ public class LaunchActivity extends BasePermissionsActivity implements INavigati
         return false;
     }
 
-    /** Shown when an owpg:// link targets a server the user has no account on. */
-    private void showOwpengramOtherServerDialog(String host) {
+    /** Shown when an thecat:// link targets a server the user has no account on. */
+    private void showTheCatOtherServerDialog(String host) {
         try {
             AlertDialog.Builder b = new AlertDialog.Builder(this);
             b.setTitle(LocaleController.getString(R.string.AppName));
@@ -1330,7 +1330,7 @@ public class LaunchActivity extends BasePermissionsActivity implements INavigati
     }
 
     /**
-     * Handles an owpg://addserver?host=...&port=... link: an operator's
+     * Handles an thecat://addserver?host=...&port=... link: an operator's
      * "add my server" onboarding link, letting them hand out a single URL
      * (website, message, QR code) that opens the add-server form pre-filled
      * with just the address, so the user reviews and taps Save. Deliberately
@@ -1338,7 +1338,7 @@ public class LaunchActivity extends BasePermissionsActivity implements INavigati
      * name/description/key/DC embedded in the link itself would be a MITM
      * vector, not a convenience worth the risk.
      */
-    private void handleOwpengramAddServerLink(Uri data) {
+    private void handleTheCatAddServerLink(Uri data) {
         String host = data.getQueryParameter("host");
         String portParam = data.getQueryParameter("port");
 
@@ -1354,7 +1354,7 @@ public class LaunchActivity extends BasePermissionsActivity implements INavigati
         // fetchPublicKeyForAddress() discovery a hand-typed address
         // triggers, via the empty rsaPublicKey below), never from the link.
         if (TextUtils.isEmpty(host) || TextUtils.isEmpty(portParam)) {
-            showOwpengramAddServerLinkErrorDialog();
+            showTheCatAddServerLinkErrorDialog();
             return;
         }
         int port;
@@ -1362,15 +1362,15 @@ public class LaunchActivity extends BasePermissionsActivity implements INavigati
             port = Integer.parseInt(portParam.trim());
             if (port < 1 || port > 65535) throw new NumberFormatException();
         } catch (NumberFormatException e) {
-            showOwpengramAddServerLinkErrorDialog();
+            showTheCatAddServerLinkErrorDialog();
             return;
         }
 
         // Prefill only -- id stays unset so AddServerFragment.save() treats
         // this as a brand-new server (addCustomServer mints the id) rather
         // than an edit of an existing one (updateCustomServer, keyed by id).
-        OwpengramServer server = new OwpengramServer();
-        // OwpengramServer.name has no field initializer (defaults to null in
+        TheCatServer server = new TheCatServer();
+        // TheCatServer.name has no field initializer (defaults to null in
         // Java, unlike description/rsaPublicKey which do) -- set it
         // explicitly so AddServerFragment's nameField.setText(editingServer.name)
         // gets an empty string, not null.
@@ -1385,8 +1385,8 @@ public class LaunchActivity extends BasePermissionsActivity implements INavigati
                 Toast.makeText(LaunchActivity.this, "Server \"" + saved.name + "\" added", Toast.LENGTH_SHORT).show()));
     }
 
-    /** Shown when an owpg://addserver link is missing required fields or has an invalid port/key. */
-    private void showOwpengramAddServerLinkErrorDialog() {
+    /** Shown when an thecat://addserver link is missing required fields or has an invalid port/key. */
+    private void showTheCatAddServerLinkErrorDialog() {
         try {
             AlertDialog.Builder b = new AlertDialog.Builder(this);
             b.setTitle(LocaleController.getString(R.string.AppName));
@@ -2133,37 +2133,37 @@ public class LaunchActivity extends BasePermissionsActivity implements INavigati
                                         progress.end();
                                     }
                                     return false;
-                                case "owpg": {
-                                    // owpg://addserver?host=...&port=...
+                                case "thecat": {
+                                    // thecat://addserver?host=...&port=...
                                     // An operator's "add my server" onboarding link -- host+port
-                                    // only, see handleOwpengramAddServerLink's doc comment for why.
+                                    // only, see handleTheCatAddServerLink's doc comment for why.
                                     // Uri.getHost() separates the authority from the path/query regardless of
                                     // whether a browser normalized the path-less URL by inserting a
-                                    // "/" before the "?" (owpg://addserver/?... vs owpg://addserver?...),
+                                    // "/" before the "?" (thecat://addserver/?... vs thecat://addserver?...),
                                     // so this check is already robust to both forms.
                                     if ("addserver".equalsIgnoreCase(data.getHost())) {
                                         if (progress != null) {
                                             progress.end();
                                         }
-                                        handleOwpengramAddServerLink(data);
+                                        handleTheCatAddServerLink(data);
                                         intent.setAction(null);
                                         return false;
                                     }
-                                    // OwpenGram self-hosted scheme: owpg://<host>/<rest>. The host
+                                    // The Cat self-hosted scheme: thecat://<host>/<rest>. The host
                                     // identifies which server (me_url_prefix) the link belongs to.
                                     // Reinterpret as https://<host>/<rest> and fall through to the
                                     // http/https handler, which routes it to the owning account.
-                                    String owpgHost = data.getHost() != null ? data.getHost().toLowerCase() : "";
-                                    if (OwpengramServers.findOwpengramAccountForHost(owpgHost) < 0) {
+                                    String thecatHost = data.getHost() != null ? data.getHost().toLowerCase() : "";
+                                    if (TheCatServers.findTheCatAccountForHost(thecatHost) < 0) {
                                         // Not logged in to any account on this server.
                                         if (progress != null) {
                                             progress.end();
                                         }
-                                        showOwpengramOtherServerDialog(owpgHost);
+                                        showTheCatOtherServerDialog(thecatHost);
                                         intent.setAction(null);
                                         return false;
                                     }
-                                    data = Uri.parse("https://" + owpgHost
+                                    data = Uri.parse("https://" + thecatHost
                                             + (TextUtils.isEmpty(data.getPath()) ? "/" : data.getPath())
                                             + (TextUtils.isEmpty(data.getQuery()) ? "" : "?" + data.getQuery()));
                                     // fall through to case "http"/"https"
@@ -2173,14 +2173,14 @@ public class LaunchActivity extends BasePermissionsActivity implements INavigati
                                     String host = data.getHost().toLowerCase();
                                     Matcher prefixMatcher = PREFIX_T_ME_PATTERN.matcher(host);
                                     boolean isPrefix = prefixMatcher.find();
-                                    // OwpenGram self-hosted invite/username link: the host matches an
-                                    // account's me_url_prefix and that server advertises owpengram=true.
-                                    int owpengramAccount = OwpengramServers.findOwpengramAccountForHost(host);
-                                    boolean isOwpengram = owpengramAccount >= 0;
-                                    if (host.equals("telegram.me") || host.equals("t.me") || host.equals("telegram.dog") || isPrefix || isOwpengram) {
-                                        if (isOwpengram) {
-                                            // Route on the OwpenGram account that owns this host (switch if needed).
-                                            if (!routeOwpengramLinkToOwpengramAccount(owpengramAccount, intent, intentAccount, progress)) {
+                                    // The Cat self-hosted invite/username link: the host matches an
+                                    // account's me_url_prefix and that server advertises thecat=true.
+                                    int thecatAccount = TheCatServers.findTheCatAccountForHost(host);
+                                    boolean isTheCat = thecatAccount >= 0;
+                                    if (host.equals("telegram.me") || host.equals("t.me") || host.equals("telegram.dog") || isPrefix || isTheCat) {
+                                        if (isTheCat) {
+                                            // Route on the The Cat account that owns this host (switch if needed).
+                                            if (!routeTheCatLinkToTheCatAccount(thecatAccount, intent, intentAccount, progress)) {
                                                 return false;
                                             }
                                             // Rewrite host -> t.me so the shared t.me path parser handles /+hash, /username, etc.

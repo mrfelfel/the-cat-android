@@ -19,8 +19,8 @@ import android.widget.TextView;
 import org.telegram.messenger.MessagesController;
 import org.telegram.messenger.R;
 import org.telegram.messenger.UserConfig;
-import org.telegram.owpengram.OwpengramServer;
-import org.telegram.owpengram.OwpengramServers;
+import org.telegram.thecat.TheCatServer;
+import org.telegram.thecat.TheCatServers;
 import org.telegram.ui.ActionBar.ActionBar;
 import org.telegram.ui.ActionBar.AlertDialog;
 import org.telegram.ui.ActionBar.BaseFragment;
@@ -35,7 +35,7 @@ import java.util.concurrent.Executors;
 
 public class ServerInfoFragment extends BaseFragment {
 
-    private final OwpengramServer server;
+    private final TheCatServer server;
     private final Runnable onDeleted;
 
     private TextView statusTv;
@@ -46,7 +46,7 @@ public class ServerInfoFragment extends BaseFragment {
     private final ExecutorService pingPool = Executors.newSingleThreadExecutor();
     private final Handler uiHandler = new Handler(Looper.getMainLooper());
 
-    public ServerInfoFragment(OwpengramServer server, Runnable onDeleted) {
+    public ServerInfoFragment(TheCatServer server, Runnable onDeleted) {
         this.server    = server;
         this.onDeleted = onDeleted;
     }
@@ -270,7 +270,7 @@ public class ServerInfoFragment extends BaseFragment {
         int count = 0;
         for (int a = 0; a < UserConfig.MAX_ACCOUNT_COUNT; a++) {
             if (UserConfig.getInstance(a).isClientActivated()) {
-                OwpengramServer s = OwpengramServers.getServerForAccount(a);
+                TheCatServer s = TheCatServers.getServerForAccount(a);
                 if (s != null && server.id.equals(s.id)) count++;
             }
         }
@@ -347,7 +347,7 @@ public class ServerInfoFragment extends BaseFragment {
         // log it out as part of this same confirmation, instead of letting a
         // stale account for a server nobody's going to use again linger in
         // the switcher.
-        List<Integer> affected = OwpengramServers.accountsUsingServer(server.id);
+        List<Integer> affected = TheCatServers.accountsUsingServer(server.id);
         String message = affected.isEmpty()
                 ? "Server \"" + server.name + "\" and all related settings will be deleted."
                 : "Server \"" + server.name + "\" and all related settings will be deleted. This will log out "
@@ -360,7 +360,7 @@ public class ServerInfoFragment extends BaseFragment {
             for (int account : affected) {
                 MessagesController.getInstance(account).performLogout(1);
             }
-            OwpengramServers.removeCustomServer(server.id);
+            TheCatServers.removeCustomServer(server.id);
             if (onDeleted != null) onDeleted.run();
             finishFragment();
         });
@@ -379,7 +379,7 @@ public class ServerInfoFragment extends BaseFragment {
         private final String initial;
         private final int size;
 
-        AvatarView(Context context, OwpengramServer server, int size) {
+        AvatarView(Context context, TheCatServer server, int size) {
             super(context);
             this.size = size;
             int hash = Math.abs(server.name.hashCode());
@@ -419,15 +419,15 @@ public class ServerInfoFragment extends BaseFragment {
         }
 
         // Built-in server logos decode from a drawable resource; custom
-        // servers decode from OwpengramServer.logoPath (see the identical
+        // servers decode from TheCatServer.logoPath (see the identical
         // comment on ServerSelectFragment's serverLogo -- kept in sync).
         private static final java.util.HashMap<String, android.graphics.Bitmap> LOGO_CACHE = new java.util.HashMap<>();
-        private static android.graphics.Bitmap serverLogo(Context ctx, OwpengramServer server) {
+        private static android.graphics.Bitmap serverLogo(Context ctx, TheCatServer server) {
             if (ctx == null || server == null) return null;
             int res = 0;
             if (TextUtils.isEmpty(server.logoPath)) {
-                if (org.telegram.owpengram.OwpengramServers.ID_OWPENGRAM.equals(server.id)) res = org.telegram.messenger.R.drawable.server_owpengram;
-                else if (org.telegram.owpengram.OwpengramServers.ID_TELEGRAM.equals(server.id)) res = org.telegram.messenger.R.drawable.server_telegram;
+                if (org.telegram.thecat.TheCatServers.ID_THECAT.equals(server.id)) res = org.telegram.messenger.R.drawable.server_thecat;
+                else if (org.telegram.thecat.TheCatServers.ID_TELEGRAM.equals(server.id)) res = org.telegram.messenger.R.drawable.server_telegram;
                 if (res == 0) return null;
             }
             String cacheKey = server.id + "|" + (res != 0 ? String.valueOf(res) : server.logoPath);

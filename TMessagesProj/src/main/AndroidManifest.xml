@@ -277,14 +277,14 @@
                 <category android:name="android.intent.category.DEFAULT" />
                 <data android:scheme="tg" />
             </intent-filter>
-            <!-- OwpenGram self-hosted link scheme, registered alongside tg:// so
-                 owpg://<host>/<rest> links open the app for ANY prefix host (no
-                 per-host manifest entry). Handled in LaunchActivity (case "owpg"). -->
+            <!-- The Cat self-hosted link scheme, registered alongside tg:// so
+                 thecat://<host>/<rest> links open the app for ANY prefix host (no
+                 per-host manifest entry). Handled in LaunchActivity (case "thecat"). -->
             <intent-filter android:icon="@mipmap/ic_launcher" android:roundIcon="@mipmap/ic_launcher_round" android:priority="1">
                 <action android:name="android.intent.action.VIEW" />
                 <category android:name="android.intent.category.BROWSABLE" />
                 <category android:name="android.intent.category.DEFAULT" />
-                <data android:scheme="owpg" />
+                <data android:scheme="thecat" />
             </intent-filter>
             <intent-filter>
                 <action android:name="org.telegram.messenger.CREATE_STICKER_PACK"/>

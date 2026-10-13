@@ -3518,7 +3518,7 @@ public class DialogsActivity extends BaseFragment implements NotificationCenter.
                 statusDrawable = new AnimatedEmojiDrawable.SwapAnimatedEmojiDrawable(null, dp(26));
                 statusDrawable.center = true;
                 // Show the current account's server name in the header instead of "Telegram".
-                String serverName = org.telegram.owpengram.OwpengramServers.serverNameForAccount(currentAccount);
+                String serverName = org.telegram.thecat.TheCatServers.serverNameForAccount(currentAccount);
                 actionBar.setTitle(serverName != null ? serverName : getString(R.string.AppName), statusDrawable);
                 updateStatus(UserConfig.getInstance(currentAccount).getCurrentUser(), false);
             }

@@ -503,11 +503,11 @@ public class MessagesController extends BaseController implements NotificationCe
 
     public boolean enableJoined;
     public String linkPrefix;
-    // OwpenGram: the server's help.getAppConfig advertises owpengram=true. Used to
-    // treat links on this account's linkPrefix host as internal owpg links (not the
+    // The Cat: the server's help.getAppConfig advertises thecat=true. Used to
+    // treat links on this account's linkPrefix host as internal thecat links (not the
     // official Telegram network, and not other forks). Mirrors the desktop
-    // OwpengramAccountHost gate on appConfig().get<bool>("owpengram").
-    public boolean owpengramServer;
+    // TheCatAccountHost gate on appConfig().get<bool>("thecat").
+    public boolean thecatServer;
     public int maxGroupCount;
     public int maxBroadcastCount = 100;
     public int maxMegagroupCount;
@@ -1591,7 +1591,7 @@ public class MessagesController extends BaseController implements NotificationCe
         maxEditTime = mainPreferences.getInt("maxEditTime", 3600);
         ratingDecay = mainPreferences.getInt("ratingDecay", 2419200);
         linkPrefix = mainPreferences.getString("linkPrefix", "t.me");
-        owpengramServer = mainPreferences.getBoolean("owpengramServer", false);
+        thecatServer = mainPreferences.getBoolean("thecatServer", false);
         callReceiveTimeout = mainPreferences.getInt("callReceiveTimeout", 20000);
         callRingTimeout = mainPreferences.getInt("callRingTimeout", 90000);
         callConnectTimeout = mainPreferences.getInt("callConnectTimeout", 30000);
@@ -2677,21 +2677,21 @@ public class MessagesController extends BaseController implements NotificationCe
         TLRPC.TL_jsonObject liteAppOptions = null;
         int transcribeAudioTrialWeeklyNumber = 0;
         int transcribeAudioTrialCooldownUntil = 0;
-        boolean sawOwpengram = false;
+        boolean sawTheCat = false;
 
         changed = config.apply(editor, object);
 
         for (int a = 0, N = object.value.size(); a < N; a++) {
             TLRPC.TL_jsonObjectValue value = object.value.get(a);
             switch (value.key) {
-                case "owpengram": {
-                    // OwpenGram self-hosted server marker (true/"true"). See owpengramServer field.
-                    sawOwpengram = true;
+                case "thecat": {
+                    // The Cat self-hosted server marker (true/"true"). See thecatServer field.
+                    sawTheCat = true;
                     boolean val = (value.value instanceof TLRPC.TL_jsonBool && ((TLRPC.TL_jsonBool) value.value).value)
                             || (value.value instanceof TLRPC.TL_jsonString && "true".equalsIgnoreCase(((TLRPC.TL_jsonString) value.value).value));
-                    if (val != owpengramServer) {
-                        owpengramServer = val;
-                        editor.putBoolean("owpengramServer", owpengramServer);
+                    if (val != thecatServer) {
+                        thecatServer = val;
+                        editor.putBoolean("thecatServer", thecatServer);
                         changed = true;
                     }
                     break;
@@ -5046,10 +5046,10 @@ public class MessagesController extends BaseController implements NotificationCe
             }
         }
 
-        // Clear the OwpenGram marker if the server stopped advertising it.
-        if (!sawOwpengram && owpengramServer) {
-            owpengramServer = false;
-            editor.putBoolean("owpengramServer", false);
+        // Clear the The Cat marker if the server stopped advertising it.
+        if (!sawTheCat && thecatServer) {
+            thecatServer = false;
+            editor.putBoolean("thecatServer", false);
             changed = true;
         }
 
@@ -5868,7 +5868,7 @@ public class MessagesController extends BaseController implements NotificationCe
         TLRPC.TL_userForeign_old2 user = new TLRPC.TL_userForeign_old2();
         user.phone = "333";
         user.id = 333000;
-        user.first_name = "OwpenGram";
+        user.first_name = "The Cat";
         user.last_name = "";
         user.status = null;
         user.photo = new TLRPC.TL_userProfilePhotoEmpty();
@@ -5878,7 +5878,7 @@ public class MessagesController extends BaseController implements NotificationCe
         user.phone = "42777";
         user.id = 777000;
         user.verified = true;
-        user.first_name = "OwpenGram";
+        user.first_name = "The Cat";
         user.last_name = "Notifications";
         user.status = null;
         user.photo = new TLRPC.TL_userProfilePhotoEmpty();
@@ -16188,7 +16188,7 @@ public class MessagesController extends BaseController implements NotificationCe
         }
         getUserConfig().clearConfig();
         SharedPrefsHelper.cleanupAccount(currentAccount);
-        org.telegram.owpengram.OwpengramServers.clearServerForAccount(currentAccount);
+        org.telegram.thecat.TheCatServers.clearServerForAccount(currentAccount);
 
         boolean shouldHandle = true;
         ArrayList<NotificationCenter.NotificationCenterDelegate> observers = getNotificationCenter().getObservers(NotificationCenter.appDidLogout);
