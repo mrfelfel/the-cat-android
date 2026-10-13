@@ -21,3 +21,7 @@ TMessagesProj_AppHuawei/afat/
 TMessagesProj/config/release.keystore
 TMessagesProj/config/.keystore_password.txt
 TMessagesProj/jni/ffmpeg/build_android
+
+# release artifacts (scripts/release-apk.sh output)
+dist/
+*.apk
