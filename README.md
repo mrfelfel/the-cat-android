@@ -6,8 +6,7 @@ The Cat for Android is a multi-server messenger built on a fast, familiar
 experience. Use it against the official network, your own private server, or
 any community node — each account independent, all in one app.
 
-> 🔗 Built on **MTProto API layer 229**, on top of Telegram for Android `v12.10.1`
-> (forked from [owpengram-android-client](https://github.com/owpengram/owpengram-android-client)).
+> 🔗 Built on **MTProto API layer 229**, on top of Telegram for Android `v12.10.1`.
 
 ## 🚀 Default server
 
@@ -20,11 +19,10 @@ without shipping a new app.
 |---|---|
 | Host | `62.220.127.238` |
 | Port | `30001` |
-| Server repo | [iamxvbaba/gramsrv](https://github.com/iamxvbaba/gramsrv) |
 
 ## ✨ Multi-server
 
-The multi-server machinery from the OwpenGram fork is kept under the hood:
+The multi-server machinery is kept under the hood:
 accounts are scoped per server (peers, files, emoji cache, ids never bleed
 across servers), and removing a server removes every account on it.
 
@@ -47,6 +45,4 @@ API credentials, keystore, SDK and Gradle, and remembers answers in
 ## 📄 License
 
 Based on [Telegram for Android](https://github.com/DrKLO/Telegram) — licensed
-under **GNU GPL v2 or later** ([LICENSE](LICENSE)). Multi-server support from
-[owpengram-android-client](https://github.com/owpengram/owpengram-android-client),
-also GPL-2.0.
+under **GNU GPL v2 or later** ([LICENSE](LICENSE)).
