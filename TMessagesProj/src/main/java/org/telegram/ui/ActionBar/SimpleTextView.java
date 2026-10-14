@@ -145,6 +145,10 @@ public class SimpleTextView extends View implements Drawable.Callback {
     public SimpleTextView(Context context) {
         super(context);
         textPaint = new TextPaint(Paint.ANTI_ALIAS_FLAG);
+        // The Cat: Vazir is the app's default typeface. Callers that need a
+        // different weight/font (bold, mono, emoji) override via setTypeface();
+        // plain text — the settings/menu/label majority — keeps Vazir.
+        textPaint.setTypeface(AndroidUtilities.vazir());
         setImportantForAccessibility(IMPORTANT_FOR_ACCESSIBILITY_YES);
     }
 
