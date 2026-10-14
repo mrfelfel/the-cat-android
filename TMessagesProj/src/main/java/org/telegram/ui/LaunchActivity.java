@@ -1090,10 +1090,10 @@ public class LaunchActivity extends BasePermissionsActivity implements INavigati
         if (LoginActivity.loadCurrentState(false, currentAccount).getInt("currentViewNum", 0) != 0) {
             return new LoginActivity();
         }
-        // Adding a second account - skip intro, show server picker directly
+        // Adding a second account - skip intro, auto-connect to The Cat server
         for (int a = 0; a < UserConfig.MAX_ACCOUNT_COUNT; a++) {
             if (a != currentAccount && UserConfig.getInstance(a).isClientActivated()) {
-                return new ServerSelectFragment();
+                return new AutoConnectFragment();
             }
         }
         // Fresh install - show intro; server picker is triggered from "Start Messaging"

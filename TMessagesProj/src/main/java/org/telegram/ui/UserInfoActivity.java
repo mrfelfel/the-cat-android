@@ -65,7 +65,6 @@ import org.telegram.ui.Components.UItem;
 import org.telegram.ui.Components.UniversalAdapter;
 import org.telegram.ui.Components.UniversalFragment;
 import org.telegram.ui.Components.UniversalRecyclerView;
-import org.telegram.ui.ServerSelectFragment;
 
 import java.util.ArrayList;
 import java.util.Calendar;
@@ -490,11 +489,11 @@ public class UserInfoActivity extends UniversalFragment implements NotificationC
     @Override
     protected void onClick(UItem item, View view, int position, float x, float y) {
         if (item.id == BUTTON_ADD_ACCOUNT) {
-            // Any account (custom server) may use any free slot; the premium cap is
-            // enforced per-server (Telegram only) in ServerSelectFragment.
+            // Any account (custom server) may use any free slot; we auto-connect
+            // to The Cat server (see AutoConnectFragment).
             int availableAccount = org.telegram.thecat.TheCatServers.firstFreeAccountSlot();
             if (availableAccount >= 0) {
-                presentFragment(new ServerSelectFragment(availableAccount));
+                presentFragment(new AutoConnectFragment(availableAccount));
             } else {
                 showDialog(new LimitReachedBottomSheet(this, getContext(), TYPE_ACCOUNTS, currentAccount, null));
             }

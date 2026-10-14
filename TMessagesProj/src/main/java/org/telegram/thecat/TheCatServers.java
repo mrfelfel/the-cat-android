@@ -125,9 +125,18 @@ public class TheCatServers {
 
     // --- Server list ---
 
+    /**
+     * The list of servers shown to users when picking where to sign in. The
+     * official Telegram network is deliberately NOT listed: The Cat ships as a
+     * self-contained app whose default backend is its own server, and showing
+     * Telegram as a co-equal "official" option steers users onto a backend that
+     * does not offer this app's features (email signup, Cat Room, ...). The
+     * machinery for Telegram accounts (telegramServer(), isTelegram, the
+     * Telegram account caps below) stays intact so any account already bound to
+     * Telegram keeps working -- it just cannot be newly joined from the UI.
+     */
     public static List<TheCatServer> listServers() {
         List<TheCatServer> result = new ArrayList<>();
-        result.add(telegramServer());
         result.add(thecatServer());
         result.addAll(loadCustomServers());
         return result;
@@ -135,6 +144,10 @@ public class TheCatServers {
 
     public static TheCatServer getServerById(String id) {
         if (id == null) return null;
+        // Not offered by listServers(), but still resolvable: an account bound
+        // to Telegram before it was hidden from the picker must keep restoring
+        // its config on startup (see applyStoredServerToAccount).
+        if (ID_TELEGRAM.equals(id)) return telegramServer();
         for (TheCatServer s : listServers()) {
             if (id.equals(s.id)) return s;
         }

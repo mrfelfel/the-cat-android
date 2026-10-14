@@ -120,11 +120,11 @@ public class LogoutActivity extends BaseFragment {
         listView.setAdapter(listAdapter);
         listView.setOnItemClickListener((view, position, x, y) -> {
             if (position == addAccountRow) {
-                // Any account (custom server) may use any free slot; the premium cap
-                // is enforced per-server (Telegram only) in ServerSelectFragment.
+                // Any account (custom server) may use any free slot; we auto-connect
+                // to The Cat server (see AutoConnectFragment).
                 int availableAccount = org.telegram.thecat.TheCatServers.firstFreeAccountSlot();
                 if (availableAccount >= 0) {
-                    presentFragment(new ServerSelectFragment(availableAccount));
+                    presentFragment(new AutoConnectFragment(availableAccount));
                 } else {
                     LimitReachedBottomSheet limitReachedBottomSheet = new LimitReachedBottomSheet(this, getContext(), TYPE_ACCOUNTS, currentAccount, null);
                     showDialog(limitReachedBottomSheet);

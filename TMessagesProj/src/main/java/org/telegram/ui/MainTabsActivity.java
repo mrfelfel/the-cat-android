@@ -623,11 +623,11 @@ public class MainTabsActivity extends ViewPagerActivity implements NotificationC
         ItemOptions o = ItemOptions.makeOptions(this, button);
         if (UserConfig.getActivatedAccountsCount() < UserConfig.MAX_ACCOUNT_COUNT) {
             o.add(R.drawable.msg_addbot, getString(R.string.AddAccount), () -> {
-                // Any account (custom server) may use any free slot; the premium cap
-                // is enforced per-server (Telegram only) in ServerSelectFragment.
+                // Any account (custom server) may use any free slot; we auto-connect
+                // to The Cat server (see AutoConnectFragment).
                 int availableAccount = org.telegram.thecat.TheCatServers.firstFreeAccountSlot();
                 if (availableAccount >= 0) {
-                    presentFragment(new ServerSelectFragment(availableAccount));
+                    presentFragment(new AutoConnectFragment(availableAccount));
                 } else {
                     showDialog(new LimitReachedBottomSheet(this, getContext(), TYPE_ACCOUNTS, currentAccount, null));
                 }

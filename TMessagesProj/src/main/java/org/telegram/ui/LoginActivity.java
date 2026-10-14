@@ -329,7 +329,7 @@ public class LoginActivity extends BaseFragment implements NotificationCenter.No
 
     @ViewNumber
     private int currentViewNum;
-    // Set by ServerSelectFragment (via setEmailSignupEnabled) right after it
+    // Set by AutoConnectFragment (via setEmailSignupEnabled) right after it
     // learns the chosen server advertises email_signup_enabled=true in its
     // help.getAppConfig — before this activity's view is created, so
     // createView's VIEW_PHONE_INPUT slot can be given an EmailSignupView
