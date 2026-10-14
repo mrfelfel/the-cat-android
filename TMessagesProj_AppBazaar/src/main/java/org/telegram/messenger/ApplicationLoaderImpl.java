@@ -11,7 +11,7 @@ import androidx.core.content.FileProvider;
 import org.json.JSONObject;
 import org.telegram.messenger.billing.BazaarBillingBridge;
 import org.telegram.messenger.billing.BazaarReceiptQueue;
-import org.telegram.messenger.billing.StoreBilling;
+import org.telegram.messenger.billing.StoreBillingBridge;
 import org.telegram.messenger.web.BuildConfig;
 import org.telegram.messenger.web.R;
 import org.telegram.tgnet.TLRPC;
@@ -41,6 +41,19 @@ public class ApplicationLoaderImpl extends ApplicationLoader {
         return true;
     }
 
+    /**
+     * Provides the Poolakey-backed store bridge. The base ApplicationLoader.onCreate()
+     * assigns it into StoreBilling.bridge. Overriding this virtual method (instead of
+     * writing StoreBilling.bridge directly from here) is deliberate: R8 mangled a
+     * cross-module app->library field/method reference during minification, causing
+     * NoSuchField/NoSuchMethodError crashes at startup. A virtual override is resolved
+     * by normal dispatch and R8 processes it consistently.
+     */
+    @Override
+    protected StoreBillingBridge onCreateStoreBillingBridge() {
+        return new BazaarBillingBridge(this);
+    }
+
     @Override
     protected void startAppCenterInternal(Activity context) {
     }
@@ -60,10 +73,11 @@ public class ApplicationLoaderImpl extends ApplicationLoader {
     @Override
     public void onCreate() {
         super.onCreate();
-        // Register the Poolakey-backed store bridge before any UI can trigger a
-        // purchase. Kept here (not in the shared library) so :TMessagesProj never
-        // depends on Poolakey.
-        StoreBilling.register(new BazaarBillingBridge(this));
+        // The store bridge itself is provided by onCreateStoreBillingBridge()
+        // above and registered by the base ApplicationLoader.onCreate(), so it is
+        // in place before any UI can trigger a purchase. Kept out of this module
+        // deliberately: writing StoreBilling.bridge from here made R8 mangle the
+        // cross-module reference and crash at startup.
         // Re-send any receipts the server never acknowledged (purchases made
         // while offline or before the server method existed). Idempotent: only
         // schedules work when the queue is non-empty.

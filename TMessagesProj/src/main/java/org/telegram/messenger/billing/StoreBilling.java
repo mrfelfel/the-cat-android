@@ -13,13 +13,21 @@ import org.telegram.tgnet.TLRPC;
  */
 public final class StoreBilling {
 
-    private static volatile StoreBillingBridge bridge;
+    /**
+     * The registered store bridge, or null on Google/standalone/Huawei builds.
+     *
+     * Deliberately a public field rather than a private one behind a
+     * {@code register()} method: the only writer is the Bazaar flavour's
+     * ApplicationLoaderImpl.onCreate(). R8 was inlining that trivial static
+     * {@code register(bridge)} accessor and then stripping its (now unreferenced)
+     * definition, which left onCreate() calling a method that no longer existed
+     * in the minified dex -> {@code NoSuchMethodError} crash on every startup.
+     * A public field write here and the reads in get()/isAvailable() below are
+     * kept by R8 and cannot be optimised away the way a trivial static method can.
+     */
+    public static volatile StoreBillingBridge bridge;
 
     private StoreBilling() {
-    }
-
-    public static void register(StoreBillingBridge implementation) {
-        bridge = implementation;
     }
 
     /** Returns the registered store bridge, or null on non-Bazaar builds. */
