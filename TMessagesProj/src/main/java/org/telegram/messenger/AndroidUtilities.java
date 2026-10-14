@@ -254,18 +254,39 @@ public class AndroidUtilities {
     public final static String TYPEFACE_ROBOTO_EXTRA_BOLD = "fonts/rextrabold.ttf";
     public final static String TYPEFACE_ROBOTO_MEDIUM_ITALIC = "fonts/rmediumitalic.ttf";
     public final static String TYPEFACE_ROBOTO_MONO = "fonts/rmono.ttf";
+    // The Cat: Vazir is the app typeface (bilingual Persian/Latin).
+    public final static String TYPEFACE_VAZIR_REGULAR = "fonts/vazir_regular.ttf";
+    public final static String TYPEFACE_VAZIR_MEDIUM = "fonts/vazir_medium.ttf";
+    public final static String TYPEFACE_VAZIR_BOLD = "fonts/vazir_bold.ttf";
     public final static String TYPEFACE_MERRIWEATHER_BOLD = "fonts/mw_bold.ttf";
 
     public static Typeface mediumTypeface;
     public static ThreadLocal<byte[]> readBufferLocal = new ThreadLocal<>();
     public static ThreadLocal<byte[]> bufferLocal = new ThreadLocal<>();
 
+    private static Typeface vazirTypeface;
+    private static Typeface vazirBoldTypeface;
+
+    public static Typeface vazir() {
+        if (vazirTypeface == null) {
+            vazirTypeface = getTypeface(TYPEFACE_VAZIR_REGULAR);
+        }
+        return vazirTypeface;
+    }
+
+    public static Typeface vazirBold() {
+        if (vazirBoldTypeface == null) {
+            vazirBoldTypeface = getTypeface(TYPEFACE_VAZIR_BOLD);
+        }
+        return vazirBoldTypeface;
+    }
+
     public static Typeface bold() {
         if (mediumTypeface == null) {
             if (SharedConfig.useSystemBoldFont && Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
                 mediumTypeface = Typeface.create(null, 500, false);
             } else {
-                mediumTypeface = getTypeface(TYPEFACE_ROBOTO_MEDIUM);
+                mediumTypeface = getTypeface(TYPEFACE_VAZIR_MEDIUM);
             }
         }
         return mediumTypeface;

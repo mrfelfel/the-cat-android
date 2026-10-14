@@ -647,6 +647,17 @@ public class LocaleController {
         languages.add(localeInfo);
         languagesDict.put(localeInfo.shortName, localeInfo);
 
+        // The Cat: Persian is a first-class built-in (default product language).
+        // Bundled in values-fa; isRtl stays false — Persian keeps the LTR layout.
+        localeInfo = new LocaleInfo();
+        localeInfo.name = "فارسی";
+        localeInfo.nameEnglish = "Persian";
+        localeInfo.shortName = localeInfo.pluralLangCode = "fa";
+        localeInfo.pathToFile = null;
+        localeInfo.builtIn = true;
+        languages.add(localeInfo);
+        languagesDict.put(localeInfo.shortName, localeInfo);
+
         localeInfo = new LocaleInfo();
         localeInfo.name = "Português (Brasil)";
         localeInfo.nameEnglish = "Portuguese (Brazil)";
@@ -733,6 +744,15 @@ public class LocaleController {
             String lang = preferences.getString("language", null);
             if (lang != null) {
                 currentInfo = getLanguageFromDict(lang);
+                if (currentInfo != null) {
+                    override = true;
+                }
+            }
+
+            if (currentInfo == null) {
+                // The Cat: Persian is the default on first launch; persist it so
+                // it survives configuration changes like a user-chosen language.
+                currentInfo = getLanguageFromDict("fa");
                 if (currentInfo != null) {
                     override = true;
                 }
@@ -2773,6 +2793,10 @@ public class LocaleController {
         isRTL = lang.length() == 2 && (lang.equals("ar") || lang.equals("fa") || lang.equals("he") || lang.equals("iw")) ||
                 lang.startsWith("ar_") || lang.startsWith("fa_") || lang.startsWith("he_") || lang.startsWith("iw_")
                 || currentLocaleInfo != null && currentLocaleInfo.isRtl;
+        if (lang.equals("fa") || lang.startsWith("fa_")) {
+            // The Cat: Persian keeps the LTR layout (RTL mirroring is out of scope).
+            isRTL = false;
+        }
         nameDisplayOrder = lang.equals("ko") ? 2 : 1;
 
         formatterBoostExpired = null;

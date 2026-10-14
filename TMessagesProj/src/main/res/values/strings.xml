@@ -2475,7 +2475,7 @@
     <string name="LanguageUnsupportedError">There is no such language.</string>
     <string name="LanguageSame">You are already using this language pack (**%1$s**). You can change your language at any time in Settings.</string>
     <string name="LanguageUnknownCustomAlert">Unfortunately, this custom language pack (**%1$s**) doesn\'t contain data for The Cat Android.</string>
-    <string name="AskAQuestionInfo">Please note that The Cat Support is done by volunteers. We try to respond as quickly as possible, but it may take a while.\n\nPlease take a look at the <![CDATA[<a href=\"https://telegram.org/faq#general-questions\">Telegram FAQ</a>]]>: it has answers to most questions and important tips for <![CDATA[<a href=\"https://telegram.org/faq#troubleshooting\">troubleshooting</a>]]>.</string>
+    <string name="AskAQuestionInfo">Please note that The Cat Support is done by volunteers. We try to respond as quickly as possible, but it may take a while.\n\nFor help and troubleshooting, visit [Cat Room](https://catroom.ir) or contact our support center at 02187210128 (ext. 2).</string>
     <string name="AskButton">Ask a volunteer</string>
     <string name="TelegramFAQ">Telegram FAQ</string>
     <string name="TelegramFaq">Telegram FAQ</string>
@@ -2484,13 +2484,21 @@
     <string name="AddAccount">Add Account</string>
     <string name="SwitchAccountHint">"Long tap to switch accounts"</string>
     <string name="SelectAccount">Select Account</string>
-    <string name="TelegramFaqUrl">https://telegram.org/faq</string>
+    <string name="TelegramFaqUrl">https://catroom.ir</string>
     <string name="PrivacyPolicy">Privacy Policy</string>
     <string name="TermsOfService">Terms of Service</string>
     <string name="TermsOfServiceLogin">By signing up,\nyou agree to the *Terms of Service*.</string>
-    <string name="PrivacyPolicyUrl">https://telegram.org/privacy</string>
-    <string name="TermsOfServiceUrl">https://telegram.org/tos</string>
-    <string name="WebAppDisclaimerUrl">https://telegram.org/tos/mini-apps</string>
+    <string name="PrivacyPolicyUrl">https://catroom.ir/privacy</string>
+    <string name="TermsOfServiceUrl">https://catroom.ir/terms</string>
+    <string name="CatRoom">Cat Room</string>
+    <string name="CatRoomUrl">https://catroom.ir</string>
+    <string name="CatRoomInfo">Get The Cat app and discover more from our Android market.</string>
+    <string name="AboutUs">About Us</string>
+    <string name="AboutUsInfo">Hi! This is a custom messenger built for Generation Z, made especially for Gen Z.\n\nThe Cat is an independent messenger with its own servers, focused on speed, privacy and a clean experience.\n\nSupport: 02187210128 (ext. 2)</string>
+    <string name="ContactUs">Contact Us</string>
+    <string name="SupportPhone">02187210128</string>
+    <string name="SupportPhoneInfo">Support center — internal extension 2</string>
+    <string name="WebAppDisclaimerUrl">https://catroom.ir/terms</string>
     <string name="DeleteLocalizationTitle">Delete language pack</string>
     <string name="DeleteLocalizationText">Are you sure you want to delete **%1$s** language pack?</string>
     <string name="IncorrectLocalization">Incorrect localization file</string>
@@ -8351,7 +8359,7 @@
     <string name="MessageShowSensitiveContentButton">View Anyway</string>
     <string name="SensitiveContentSettingsToast">You can update the visibility of sensitive media in **Chat Settings > Show 18+ Content**</string>
     <string name="MenuTelegramStars">Your Stars</string>
-    <string name="TelegramStars">Telegram Stars</string>
+    <string name="TelegramStars">Cat Stars</string>
     <string name="TelegramStarsInfo2">Buy Stars to unlock content and services\nin miniapps on The Cat. **More about Stars >**</string>
     <string name="TelegramStarsChoose">Choose package</string>
     <string name="TelegramStarsGift">Gift Stars to Friends</string>

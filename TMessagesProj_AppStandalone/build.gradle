@@ -44,7 +44,7 @@ android {
     }
 
     androidResources {
-        localeFilters += ["en", "ar", "de", "es", "it", "ko", "nl", "pt-rBR", "ru", "uk"]
+        localeFilters += ["en", "ar", "de", "es", "fa", "it", "ko", "nl", "pt-rBR", "ru", "uk"]
     }
 
     signingConfigs {
@@ -163,10 +163,8 @@ android {
 }
 
 // Прибрано, як і в TMessagesProj_App: без хмарних залежностей. Push працює
-// через keep-alive (self-hosted), білд не потребує Firebase-проєкту /
-// google-services.json. Лишаючи цей плагін увімкненим, processAfat*GoogleServices
-// падає з "No matching client found" -- google-services.json тут не має
-// запису для applicationId "com.thecat.messenger.web" (лише
-// org.telegram.*/com.thecat.messenger.beta), і додавати такий запис
-// вручну без доступу до Firebase-консолі неможливо/непотрібно.
-// apply plugin: 'com.google.gms.google-services'
+// Firebase Cloud Messaging push (project "roohland"). google-services.json
+// carries a client for the applicationId com.thecat.messenger, so the plugin
+// resolves cleanly. Note the app's *namespace* is org.telegram.messenger.web,
+// but the plugin matches on applicationId (APP_PACKAGE), not the namespace.
+apply plugin: 'com.google.gms.google-services'
