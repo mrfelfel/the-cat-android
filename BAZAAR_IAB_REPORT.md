@@ -260,7 +260,40 @@ payments.assignBazaarTransaction#62617a01 receipt:JSON purpose:InputStorePayment
 - [ ] دریافت کلید عمومی RSA (و قراردادن در `BazaarBillingBridge.BAZAAR_RSA_PUBLIC_KEY` در صورت فعال‌سازی بررسی محلی)
 - [ ] (فاز بعدی) تعریف SKU های ستاره (مصرفی)
 
-> **نکته‌ی بیلد:** فلاو بازار رو با `./gradlew :TMessagesProj_AppBazaar:assembleAfatBazaar` می‌سازی (buildType `bazaar` + flavor `afat`). نسخه‌ی debug هم با `assembleAfatDebug` در دسترسه.
+---
+
+## ۷.۱. بیلد و انتشار (دو فلاو)
+
+این پروژه **دو APK جدا** تولید می‌کنه که `applicationId` و keystore مشترک دارن، ولی لایه‌ی پرداختشون فرق داره:
+
+| فلاو | ماژول | buildType | لایه‌ی پرداخت | اسکریپت |
+|------|-------|-----------|----------------|---------|
+| Standalone | `:TMessagesProj_AppStandalone` | `release` | گوگل‌پلی / invoice-ربات | `scripts/release-apk.sh` |
+| **بازار** | `:TMessagesProj_AppBazaar` | `bazaar` | **Poolakey / کافه‌بازار** | `scripts/release-apk-bazaar.sh` |
+
+### اسکریپت‌ها (macOS)
+```bash
+# APK مستقل (گوگل/invoice) → dist/TheCat-<ver>-ZeroHub.apk
+scripts/release-apk.sh
+
+# APK بازار (پرداخت کافه‌بازار) → dist/TheCat-<ver>-Bazaar-ZeroHub.apk
+scripts/release-apk-bazaar.sh
+
+# هر کدوم با --skip-build → فقط دوباره امضا + verify (بدون بیلد مجدد)
+scripts/release-apk-bazaar.sh --skip-build
+```
+
+هر اسکریپت کارهای زیر رو انجام میده: بیلد release → **امضای مجدد تضمینی** با `apksigner` (امضای خود Gradle قابل‌اعتماد نیست) → verify v1/v2/v3 → کپی به `dist/`. خروجی نهایی با گواهی **ZeroHub** امضا شده.
+
+### نکته‌ی R8 / proguard (فلاوی بازار)
+اولین بیلد release بازار با خطای R8 شکست می‌خوره:
+```
+Missing class org.telegram.tgnet.TLRPC$TL_payments_assignBazaarTransaction
+```
+این **false-positive** هست — کلاس واقعاً کامپایل و در APK هست. چون فقط فلاوی بازار بهش ارجاع میده (`BazaarReceiptQueue`) و فلاوی standalone از مسیر رسید بازار استفاده نمی‌کنه، R8 موقع minify اون رو resolve نمی‌کنه. راه‌حل: قانون `-dontwarn` در [TMessagesProj_AppBazaar/proguard-rules.pro](TMessagesProj_AppBazaar/proguard-rules.pro) (خودِ R8 همین رو در `missing_rules.txt` تولید کرده).
+
+### ⚠️ رفتار بدون سرور
+APK بازار **بدون پیاده‌سازی سرور** هم بیلد و نصب می‌شه، ولی **پرمیوم/ستاره فعال نمی‌کنه**: کلاینت پول رو از کیف پول بازار می‌گیره، رسید رو می‌فرسته، چون سرور متد `assignBazaarTransaction` رو نداره رسید در **صف آفلاین** ذخیره و خودکار دوباره فرستاده می‌شه. کاربر پیام «Payment received…» می‌بینه و خریدش در **صفحه‌ی «پرداخت‌های معلق»** (منوی side-menu) قابل‌ردیابیه. فعال‌شدن واقعی فقط بعد از پیاده‌سازی سرور (بخش ۴/۵ همین گزارش + [BAZAAR_SERVER_TODO.md](BAZAAR_SERVER_TODO.md)) و تعریف SKU در پنل بازار اتفاق می‌افته.
 
 
 ---

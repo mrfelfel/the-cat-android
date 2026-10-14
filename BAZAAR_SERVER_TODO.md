@@ -236,3 +236,18 @@ CREATE TABLE bazaar_transactions (
 3. **تکراری:** همون رسید دوبار برسه → بار اول فعال، بار دوم `Updates` بدون فعال‌سازی مجدد (idempotent). پرمیوم **دوبار** تمدید نمی‌شه.
 4. **جعلی:** `signature` غلط → رد.
 5. **پکیج اشتباه:** `packageName` غیر از `com.thecat.messenger` → رد.
+
+---
+
+## ۱۱. ساخت APK تستی (فلاوی بازار)
+
+برای تستِ سمت سرور، APK بازار رو بساز:
+```bash
+scripts/release-apk-bazaar.sh          # بیلد + امضا + verify → dist/TheCat-<ver>-Bazaar-ZeroHub.apk
+scripts/release-apk-bazaar.sh --skip-build   # فقط امضای مجدد
+```
+یا مستقیم با gradle: `./gradlew :TMessagesProj_AppBazaar:assembleAfatBazaar`
+
+- **بدون سرورِ تأیید:** خرید از کیف پول بازار انجام می‌شه ولی فعال نمی‌شه؛ رسید در صف آفلاین می‌مونه و خودکار دوباره فرستاده می‌شه. برای دیدنش: منوی side-menu → «Pending purchases».
+- **بعد از پیاده‌سازی سرور:** همون خرید رو دوباره بزن (یا دکمه‌ی Resend all در صفحه‌ی بالا) تا رسیدِ مانده به سرور برسه و فعال بشه.
+- جزئیات دو فلاو و اسکریپت‌ها: بخش ۷.۱ [BAZAAR_IAB_REPORT.md](BAZAAR_IAB_REPORT.md).
