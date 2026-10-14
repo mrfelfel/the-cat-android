@@ -1,0 +1,162 @@
+apply plugin: 'com.android.application'
+
+repositories {
+    mavenCentral()
+    google()
+    maven { url 'https://jitpack.io' }
+}
+
+configurations {
+    compile.exclude module: 'support-v4'
+}
+
+configurations.all {
+    exclude group: 'com.google.firebase', module: 'firebase-core'
+    exclude group: 'androidx.recyclerview', module: 'recyclerview'
+}
+
+dependencies {
+    implementation project(':TMessagesProj')
+    implementation 'androidx.fragment:fragment:1.8.9'
+    implementation 'androidx.core:core:1.16.0'
+    coreLibraryDesugaring 'com.android.tools:desugar_jdk_libs:2.1.5'
+    implementation files('../TMessagesProj/libs/libgsaverification-client.aar')
+
+    // Cafe Bazaar in-app billing. 2.2.0 is the first release with JVM overloads,
+    // which this Java-only codebase needs. Kept ONLY in this module so the shared
+    // :TMessagesProj library never references Poolakey types; the library sees
+    // the store through org.telegram.messenger.billing.StoreBillingBridge.
+    implementation "com.github.cafebazaar.Poolakey:poolakey:2.2.0"
+}
+
+android {
+    compileSdkVersion 36
+    buildToolsVersion '36.0.0'
+
+    defaultConfig.applicationId = APP_PACKAGE
+
+    sourceSets.main.jniLibs.srcDirs = ['../TMessagesProj/jni/']
+
+    lintOptions {
+        disable 'MissingTranslation'
+        disable 'ExtraTranslation'
+        disable 'BlockedPrivateApi'
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_1_8
+        targetCompatibility JavaVersion.VERSION_1_8
+
+        coreLibraryDesugaringEnabled true
+    }
+
+    androidResources {
+        localeFilters += ["en", "ar", "de", "es", "fa", "it", "ko", "nl", "pt-rBR", "ru", "uk"]
+    }
+
+    signingConfigs {
+        debug {
+            storeFile file("../TMessagesProj/config/release.keystore")
+            storePassword RELEASE_STORE_PASSWORD
+            keyAlias RELEASE_KEY_ALIAS
+            keyPassword RELEASE_KEY_PASSWORD
+        }
+
+        release {
+            storeFile file("../TMessagesProj/config/release.keystore")
+            storePassword RELEASE_STORE_PASSWORD
+            keyAlias RELEASE_KEY_ALIAS
+            keyPassword RELEASE_KEY_PASSWORD
+        }
+    }
+
+    buildTypes {
+        debug {
+            debuggable true
+            jniDebuggable true
+            signingConfig signingConfigs.debug
+            minifyEnabled false
+            multiDexEnabled true
+            proguardFiles getDefaultProguardFile('proguard-android.txt'), '../TMessagesProj/proguard-rules.pro', '../TMessagesProj/proguard-rules-beta.pro', 'proguard-rules.pro'
+            ndk.debugSymbolLevel = 'FULL'
+        }
+        bazaar {
+            matchingFallbacks = ['release']
+            debuggable false
+            jniDebuggable false
+            signingConfig signingConfigs.release
+            minifyEnabled true
+            multiDexEnabled true
+            proguardFiles getDefaultProguardFile('proguard-android.txt'), '../TMessagesProj/proguard-rules.pro', 'proguard-rules.pro'
+            ndk.debugSymbolLevel = 'FULL'
+        }
+    }
+
+    sourceSets.debug {
+        manifest.srcFile '../TMessagesProj/config/release/AndroidManifest_standalone.xml'
+    }
+    sourceSets.bazaar {
+        manifest.srcFile '../TMessagesProj/config/release/AndroidManifest_standalone.xml'
+    }
+
+    flavorDimensions "minApi"
+
+    productFlavors {
+        afat {
+            ndk {
+                abiFilters "armeabi-v7a", "arm64-v8a", "x86", "x86_64"
+            }
+            ext {
+                abiVersionCode = 9
+            }
+        }
+    }
+
+    defaultConfig.versionCode = Integer.parseInt(APP_VERSION_CODE)
+
+    applicationVariants.all { variant ->
+        variant.outputs.all { output ->
+            outputFileName = "app.apk"
+            output.versionCodeOverride = defaultConfig.versionCode * 10 + variant.productFlavors.get(0).abiVersionCode
+        }
+    }
+
+    variantFilter { variant ->
+        def names = variant.flavors*.name
+        if (variant.buildType.name != "bazaar" && !names.contains("afat")) {
+            setIgnore(true)
+        }
+    }
+
+    defaultConfig {
+        minSdkVersion 21
+        targetSdkVersion 36
+        versionName APP_VERSION_NAME
+        ndkVersion "27.2.12479018"
+
+        multiDexEnabled true
+
+        vectorDrawables.generatedDensities = ['mdpi', 'hdpi', 'xhdpi', 'xxhdpi']
+
+        externalNativeBuild {
+            cmake {
+                version '3.22.1'
+                arguments '-DANDROID_STL=c++_static', '-DANDROID_PLATFORM=android-21'
+                targets 'tmessages.49'
+            }
+        }
+    }
+
+    buildFeatures {
+        buildConfig = true
+    }
+    namespace 'org.telegram.messenger.web'
+
+    lintOptions {
+        checkReleaseBuilds false
+    }
+}
+
+// Same Firebase project / google-services.json as the standalone flavor (the
+// applicationId is shared), so FCM push keeps working unchanged.
+apply plugin: 'com.google.gms.google-services'

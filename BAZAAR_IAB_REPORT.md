@@ -98,42 +98,98 @@ accountInstance.getConnectionsManager().sendRequest(req, callback);
 ## ۴. سمت سرور (gram srv) — چه چیزی باید پیاده بشه
 
 > این بخش مهم‌ترین قسمت گزارشه. کلاینت بدون این بخش فقط پول رو می‌گیره ولی نمی‌تونه چیزی فعال کنه.
+> **وضعیت کلاینت: پیاده‌سازی شد** (فلاو `TMessagesProj_AppBazaar`، فقط پرمیوم). کلاینت رسید رو می‌فرسته و منتظر `Updates` می‌مونه؛ سرور فعلاً متد رو نداره (placeholder).
 
-### ۴.۱. افزودن متد MTProto جدید
+### ۴.۱. متد MTProto جدید — امضای دقیق
 
-یک متد جدید مشابه `payments.assignPlayMarketTransaction` اضافه کن. پیشنهاد:
+کلاینت از این کلاس استفاده می‌کنه ([TLRPC.java](TMessagesProj/src/main/java/org/telegram/tgnet/TLRPC.java) `TL_payments_assignBazaarTransaction`):
 
 ```
-payments.assignBazaarTransaction#<layer_hash> receipt:JSON purpose:InputStorePaymentPurpose = Updates;
+payments.assignBazaarTransaction#62617a01 receipt:JSON purpose:InputStorePaymentPurpose = Updates;
 ```
 
-- `receipt`: رشته‌ی JSON رسید خرید بازار (از `PurchaseEntity` کلاینت)
-- `purpose`: همون `InputStorePaymentPurpose` موجود (تغییری نمی‌کنه)
+- **constructor id** = `0x62617a01` (محلی و غیر-upstream — سرور باید همین رو ثبت کنه)
+- `receipt`: رشته‌ی JSON رسید بازار (فرمت دقیق در بخش ۴.۳)
+- `purpose`: همون `InputStorePaymentPurpose` موجود (`TL_inputStorePaymentPremiumSubscription` برای پرمیوم)
 
-> جایگزین: اگه نمی‌خوای متد جدید بدی، می‌تونی `assignPlayMarketTransaction` رو extend کنی که بسته به نوعِ receipt (مثلاً یه فیلد `platform`) بین بازار/گوگل شاخه بزنه. ولی متد جدا تمیزتره.
+> نکته: کلاینت بعد از ارسال، منتظر `TLRPC.Updates` می‌مونه. اگه سرور خطا برگردونه، کاربر پیام «Payment could not be confirmed: ...» می‌بینه و **هیچ پرمیومی فعال نمی‌شه** (تأیید نهایی فقط سمت سرور).
 
-### ۴.۲. تأیید رسید بازار (Server-Side Verification)
+### ۴.۲. جریان از دید سرور
 
-سرور بعد از دریافت receipt باید با **سرور بازار** تأیید کنه. مراحل:
+```
+1. کلاینت → payments.assignBazaarTransaction (receipt + purpose)
+2. سرور رسید رو با کلید عمومی RSA بازار تأیید می‌کنه
+3. سرور فیلدها رو چک می‌کنه (productId / packageName / amount / ضد-replay)
+4. سرور پرمیوم رو بر اساس purpose فعال می‌کنه
+5. سرور → Updates (همون آپدیت‌هایی که گوگل برمی‌گردونه)
+6. کلاینت processUpdates می‌کنه و UI پرمیوم رو refresh می‌کنه
+```
 
-1. **دریافت کلید عمومی RSA برنامه** از پنل بازار (سربرگ پرداخت درون‌برنامه‌ای → کلید RSA). این کلید برای هر برنامه ثابت و یکتا ست.
+### ۴.۳. فرمت دقیق `receipt` (JSON)
 
-2. **تأیید امضای رسید**: رسید بازار شامل یه امضا هست که با کلید خصوصی بازار امضا شده. سرور با کلید عمومی RSA صحت امضا رو چک می‌کنه (مشابه تأیید رسید گوگل).
+کلاینت این JSON رو در فیلد `receipt` می‌فرسته ([BazaarBillingBridge.buildReceiptJson](TMessagesProj_AppBazaar/src/main/java/org/telegram/messenger/billing/BazaarBillingBridge.java)):
 
-3. **(اختوصی ولی توصیه‌شده) استعلام مستقیم**: در صورت امکان، صحت خرید رو از API سمت سرور بازار هم بگیر (برای جلوگیری از جعل). مستندات: <https://developers.cafebazaar.ir/fa/guidelines/in-app-billing>
+```json
+{
+  "productId":     "thecat_premium_monthly",
+  "orderId":       "GPA.1234-5678-9012-34567",
+  "purchaseToken": "abc123def456...",
+  "packageName":   "com.thecat.messenger",
+  "purchaseTime":  1730000000000,
+  "purchaseState": "Purchased",       // PurchaseState.Purchased
+  "payload":       "<hex purpose>",   // همون obfuscated purpose (اختیاری برای سرور)
+  "dataJson":      "{...}",           // payload خامِ امضاشده‌ی بازار
+  "signature":     "MEUCIQ..."        // امضای RSA بازار روی dataJson
+}
+```
 
-4. **اطمینان از صحت فیلدها**:
-   - `productId` با SKU محصول مورد انتظار یکی باشه
-   - مبلغ (`amount`) با قیمت تعریف‌شده در پنل بازار بخونه
-   - `packageName` با `com.thecat.messenger` یکی باشه (جلوگیری از replay بین اپ‌ها)
+**فیلدهای کلیدی برای تأیید:**
+- `dataJson` + `signature`: با کلید عمومی RSA بازار تأیید امضا کن (الگوریتم: `SHA1withRSA` روی بایت‌های UTF-8 رشته‌ی `dataJson`)
+- `productId`: با SKU محصول مورد انتظار یکی باشه
+- `packageName`: باید `com.thecat.messenger` باشه (جلوگیری از replay بین اپ‌ها)
+- `purchaseState`: باید `Purchased` باشه
+- `purchaseToken` / `orderId`: برای ضد-replay استفاده کن (هر کدوم فقط یک‌بار بپذیر)
 
-5. **فعال‌سازی**: بعد از تأیید، پرمیوم/ستاره رو بر اساس `purpose` فعال کن (دقیقاً همون منطقی که برای گوگل داری).
+### ۴.۴. SKU های پرمیوم (نگاشت کلاینت)
 
-### ۴.۳. مدیریت خریدهای مصرفی (ستاره)
+کلاینت بر اساس `months` انتخاب می‌کنه ([BazaarBillingBridge.skuForOption](TMessagesProj_AppBazaar/src/main/java/org/telegram/messenger/billing/BazaarBillingBridge.java)):
+
+| دوره | SKU پیش‌فرض | purpose |
+|------|-------------|---------|
+| ماهانه (۱ ماه) | `thecat_premium_monthly` | `TL_inputStorePaymentPremiumSubscription` |
+| سالانه (۱۲ ماه) | `thecat_premium_yearly` | `TL_inputStorePaymentPremiumSubscription` |
+
+> اگه سرور در `TL_premiumSubscriptionOption.store_product` مقدار بذاره، کلاینت **اون SKU** رو به‌جای جدول بالا استفاده می‌کنه. پس می‌تونی از سمت سرور SKU دلخواه (مثلاً ۳ ماهه، ۶ ماهه) هم تحمیل کنی.
+
+### ۴.۵. تأیید صحت (Server-Side Verification) — چک‌لیست
+
+سرور بعد از دریافت receipt باید:
+
+1. **کلید عمومی RSA برنامه** رو از پنل بازار بگیر (سربرگ پرداخت درون‌برنامه‌ای → کلید RSA). برای هر برنامه ثابت و یکتا ست.
+
+2. **تأیید امضای `dataJson`**: با کلید عمومی RSA صحت `signature` رو روی `dataJson` چک کن.
+
+3. **(توصیه‌شده) استعلام مستقیم**: در صورت امکان، صحت خرید رو از **Bazaar Developer API** هم بگیر (جلوگیری از جعل/replay). مستندات: <https://developers.cafebazaar.ir/fa/guidelines/in-app-billing>
+
+4. **اعتبارسنجی فیلدها**:
+   - `productId` ∈ SKU های مجاز پرمیوم
+   - `packageName == com.thecat.messenger`
+   - `purchaseState == Purchased`
+   - مبلغ (`amount` داخل `dataJson`) با قیمت تعریف‌شده در پنل بازار بخونه
+
+5. **ضد-replay**: هر `purchaseToken`/`orderId` رو **فقط یک‌بار** بپذیر (یه جدول/cache از تراکنش‌های مصرف‌شده نگه دار). اگه قبلاً دیدیش، ردش کن.
+
+6. **فعال‌سازی**: بعد از تأیید، پرمیوم رو بر اساس `purpose` فعال کن (دقیقاً همون منطقی که برای `assignPlayMarketTransaction` داری) و **Updates** برگردون.
+
+### ۴.۶. کلید RSA سمت کلاینت (SecurityCheck)
+
+کلاینت یه بررسی امضای محلی هم می‌تونه داشته باشه (فلگ `BAZAAR_RSA_PUBLIC_KEY` در `BazaarBillingBridge`). الان خالیه (بررسی محلی غیرفعال)، چون **تأیید نهایی سمت سرور انجام می‌شه**. اگه خواستی بررسی محلی رو هم فعال کنی، همون کلید عمومی RSA پنل بازار رو اونجا بذار — ولی این جایگزین تأیید سرور نیست، فقط یه لایه‌ی اضافه‌ست.
+
+### ۴.۷. مدیریت خریدهای مصرفی (ستاره — فاز بعدی)
 
 - ستاره‌ها محصول **مصرفی (INAPP)** هستن
 - بعد از فعال‌سازی موفق، سرور باید به کلاینت بگه `consume` کنه (یا کلاینت خودش consume کنه) تا کاربر بتونه دوباره بخره
-- پرمیوم **اشتراکیه** و consume نمی‌شه
+- پرمیوم **اشتراکیه** و consume نمی‌شه (همون‌طور که در `BazaarBillingBridge` فقط از `subscribeProduct` استفاده شده)
 
 ### ۴.۴. جلوگیری از Replay / تقلب
 
@@ -178,29 +234,34 @@ payments.assignBazaarTransaction#<layer_hash> receipt:JSON purpose:InputStorePay
 ## ۷. چک‌لیست پیاده‌سازی
 
 ### سرور (gram srv) — [ ] در انتظار
-- [ ] متد MTProto `payments.assignBazaarTransaction` (یا extend کردن متد موجود)
+- [ ] متد MTProto `payments.assignBazaarTransaction#62617a01` (بخش ۴.۱)
 - [ ] دریافت و ذخیره‌ی کلید عمومی RSA بازار
-- [ ] تأیید امضای رسید بازار با کلید RSA
-- [ ] (توصیه‌شده) استعلام مستقیم از API سرور بازار
-- [ ] اعتبارسنجی productId / amount / packageName
-- [ ] فعال‌سازی پرمیوم/ستاره بر اساس purpose
-- [ ] جدول/کش ضد-replay برای تراکنش‌ها
+- [ ] تأیید امضای `dataJson` با کلید RSA (بخش ۴.۳/۴.۵)
+- [ ] (توصیه‌شده) استعلام مستقیم از Bazaar Developer API
+- [ ] اعتبارسنجی productId / packageName / purchaseState / amount
+- [ ] جدول/کش ضد-replay برای purchaseToken / orderId
+- [ ] فعال‌سازی پرمیوم بر اساس purpose + برگرداندن Updates
 - [ ] لاگ شماره سفارش (orderId)
 
-### کلاینت (Android) — [ ] در انتظار
-- [ ] flavor/ماژول بازار با applicationId ثبت‌شده
-- [ ] افزودن Poolakey + jitpack
-- [ ] `BazaarBillingController` (connect / purchase / consume)
-- [ ] `SecurityCheck.Enable(rsaPublicKey)`
-- [ ] ارسال رسید بازار به سرور (متد MTProto جدید)
-- [ ] consume کردن محصولات مصرفی (ستاره)
-- [ ] تست با اشتراک آزمایشی بازار
+### کلاینت (Android) — [x] پرمیوم + ستاره + هدیه پیاده‌شده
+- [x] ماژول فلاو بازار `TMessagesProj_AppBazaar` (applicationId مشترک `APP_PACKAGE`)
+- [x] افزودن Poolakey ۲.۲.۰ + jitpack
+- [x] لایه‌ی انتزاعی `StoreBillingBridge` / `StoreBilling` در کتابخانه‌ی مشترک
+- [x] `BazaarBillingBridge` — پرمیوم (subscribe) + محصولات مصرفی (purchaseProduct + consume بعد از تأیید سرور)
+- [x] صف آفلاین `BazaarReceiptQueue` (ارسال خودکار با backoff + consume بعد از تأیید نهایی)
+- [x] صفحه‌ی «پرداخت‌های معلق» (دیباگ/عیب‌یابی)
+- [x] هوک انتخاب استور در پرمیوم + ستاره + هدیه
+- [x] TL `TL_payments_assignBazaarTransaction` + ارسال رسید بازار به سرور
+- [ ] تست با اشتراک/محصولات آزمایشی بازار
 
-### پنل بازار
-- [ ] ثبت برنامه و دریافت applicationId
-- [ ] تعریف SKUهای پرمیوم (اشتراک ۳۰/۳۶۵ روزه)
-- [ ] تعریف SKUهای ستاره (مصرفی)
-- [ ] دریافت کلید عمومی RSA
+### پنل بازار — [ ] در انتظار operator
+- [ ] ثبت برنامه با applicationId `com.thecat.messenger`
+- [ ] تعریف SKU اشتراک پرمیوم: `thecat_premium_monthly` و `thecat_premium_yearly`
+- [ ] دریافت کلید عمومی RSA (و قراردادن در `BazaarBillingBridge.BAZAAR_RSA_PUBLIC_KEY` در صورت فعال‌سازی بررسی محلی)
+- [ ] (فاز بعدی) تعریف SKU های ستاره (مصرفی)
+
+> **نکته‌ی بیلد:** فلاو بازار رو با `./gradlew :TMessagesProj_AppBazaar:assembleAfatBazaar` می‌سازی (buildType `bazaar` + flavor `afat`). نسخه‌ی debug هم با `assembleAfatDebug` در دسترسه.
+
 
 ---
 

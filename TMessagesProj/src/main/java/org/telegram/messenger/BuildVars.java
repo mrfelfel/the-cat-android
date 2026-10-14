@@ -95,6 +95,10 @@ public class BuildVars {
         return ApplicationLoader.isHuaweiStoreBuild();
     }
 
+    public static boolean isBazaarStoreApp() {
+        return ApplicationLoader.isBazaarStoreBuild();
+    }
+
     public static String getSmsHash() {
         return ApplicationLoader.isStandaloneBuild() ? "w0lkcmTZkKh" : (DEBUG_VERSION ? "O2P2z+/jBpJ" : "oLeq9AcOZkT");
     }

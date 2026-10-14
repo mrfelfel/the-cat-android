@@ -133,6 +133,11 @@ public class ApplicationLoader extends Application {
         return applicationLoaderInstance.isStandalone();
     }
 
+    /** True on the Cafe Bazaar flavor (TMessagesProj_AppBazaar). */
+    public static boolean isBazaarStoreBuild() {
+        return applicationLoaderInstance.isBazaarBuild();
+    }
+
     public static boolean isBetaBuild() {
         return applicationLoaderInstance.isBeta();
     }
@@ -146,6 +151,10 @@ public class ApplicationLoader extends Application {
     }
 
     protected boolean isStandalone() {
+        return false;
+    }
+
+    protected boolean isBazaarBuild() {
         return false;
     }
 

@@ -56739,6 +56739,30 @@ public class TLRPC {
         }
     }
 
+    /**
+     * Cafe Bazaar analogue of payments.assignPlayMarketTransaction. The receipt
+     * is the raw JSON returned by Poolakey for a Bazaar purchase (PurchaseInfo
+     * serialized to JSON), and the server verifies it against Bazaar's server /
+     * RSA key before activating the purchase. Constructor id is a local,
+     * non-upstream value -- the server must register the matching method.
+     */
+    public static class TL_payments_assignBazaarTransaction extends TLObject {
+        public static final int constructor = 0x62617a01;
+
+        public TL_dataJSON receipt;
+        public InputStorePaymentPurpose purpose;
+
+        public TLObject deserializeResponse(InputSerializedData stream, int constructor, boolean exception) {
+            return Updates.TLdeserialize(stream, constructor, exception);
+        }
+
+        public void serializeToStream(OutputSerializedData stream) {
+            stream.writeInt32(constructor);
+            receipt.serializeToStream(stream);
+            purpose.serializeToStream(stream);
+        }
+    }
+
     public static abstract class InputStorePaymentPurpose extends TLObject {
 
         public static InputStorePaymentPurpose TLdeserialize(InputSerializedData stream, int constructor, boolean exception) {

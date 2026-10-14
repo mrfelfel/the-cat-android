@@ -1,0 +1,48 @@
+{
+  "project_info": {
+    "project_number": "541009820209",
+    "project_id": "roohland",
+    "storage_bucket": "roohland.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:541009820209:android:763848c38abce9e30ef310",
+        "android_client_info": {
+          "package_name": "com.drfelfel.mftown"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyD2ZInG0woDvrkRSi6cqiH7MP7phyPVocA"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:541009820209:android:e5e18fb764304cd80ef310",
+        "android_client_info": {
+          "package_name": "com.thecat.messenger"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyD2ZInG0woDvrkRSi6cqiH7MP7phyPVocA"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
