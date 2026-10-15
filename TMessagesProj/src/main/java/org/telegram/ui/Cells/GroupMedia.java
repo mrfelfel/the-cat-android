@@ -742,7 +742,7 @@ public class GroupMedia {
 
                 TLRPC.TL_messageExtendedMedia extMedia = (TLRPC.TL_messageExtendedMedia) media;
                 TLRPC.MessageMedia messageMedia = extMedia.media;
-                filename = MessageObject.getFileName(messageMedia, msg.currentAccount);
+                filename = MessageObject.getFileName(messageMedia);
                 if (messageMedia instanceof TLRPC.TL_messageMediaPhoto) {
                     TLRPC.TL_messageMediaPhoto mediaPhoto = (TLRPC.TL_messageMediaPhoto) messageMedia;
                     TLRPC.PhotoSize photoSize = FileLoader.getClosestPhotoSizeWithSize(mediaPhoto.photo.sizes, AndroidUtilities.getPhotoSize(), true, null, true);

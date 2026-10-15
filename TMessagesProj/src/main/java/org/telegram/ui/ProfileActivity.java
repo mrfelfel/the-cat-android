@@ -2800,7 +2800,7 @@ public class ProfileActivity extends BaseFragment implements NotificationCenter.
                     final boolean isVideo = location.imageType == FileLoader.IMAGE_TYPE_ANIMATION;
                     File f = FileLoader.getInstance(currentAccount).getPathToAttach(location.location, isVideo ? "mp4" : null, true);
                     if (isVideo && !f.exists()) {
-                        f = new File(FileLoader.getDirectory(FileLoader.MEDIA_DIR_IMAGE), FileLoader.getScopedAttachFileName(location.location, "mp4", currentAccount));
+                        f = new File(FileLoader.getDirectory(FileLoader.MEDIA_DIR_IMAGE), FileLoader.getAttachFileName(location.location, "mp4"));
                     }
                     if (f.exists()) {
                         MediaController.saveFile(f.toString(), getParentActivity(), 0, null, null, uri -> {

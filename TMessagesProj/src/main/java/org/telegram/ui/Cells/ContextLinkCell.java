@@ -907,7 +907,7 @@ public class ContextLinkCell extends FrameLayout implements DownloadController.F
                                 cacheFile = FileLoader.getInstance(currentAccount).getPathToAttach(inlineResult.document);
                             } else if (inlineResult.photo instanceof TLRPC.TL_photo) {
                                 currentPhotoObject = FileLoader.getClosestPhotoSizeWithSize(inlineResult.photo.sizes, AndroidUtilities.getPhotoSize(), true);
-                                fileName = FileLoader.getScopedAttachFileName(currentPhotoObject, null, currentAccount);
+                                fileName = FileLoader.getAttachFileName(currentPhotoObject);
                                 cacheFile = FileLoader.getInstance(currentAccount).getPathToAttach(currentPhotoObject);
                             } else if (inlineResult.content instanceof TLRPC.TL_webDocument) {
                                 fileName = Utilities.MD5(inlineResult.content.url) + "." + ImageLoader.getHttpUrlExtension(inlineResult.content.url, FileLoader.getMimeTypePart(inlineResult.content.mime_type));

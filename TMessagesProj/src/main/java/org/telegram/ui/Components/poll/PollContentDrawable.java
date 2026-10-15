@@ -218,7 +218,7 @@ public class PollContentDrawable extends Drawable implements DownloadController.
             final String currentPhotoFilter = String.format(Locale.US, "%d_%d", (int) (w / AndroidUtilities.density), (int) (h / AndroidUtilities.density));
             final String currentPhotoFilterThumb = currentPhotoFilter + "_b";
 
-            attachFileName = !TextUtils.isEmpty(attachPath) ? attachPath : MessageObject.getFileName(media, currentAccount);
+            attachFileName = !TextUtils.isEmpty(attachPath) ? attachPath : MessageObject.getFileName(media);
             imageReceiver.setImage(
                 ImageLocation.getForObject(currentPhotoObjectObject, photoParentObject),
                 currentPhotoFilter,
@@ -259,7 +259,7 @@ public class PollContentDrawable extends Drawable implements DownloadController.
             }
 
             fileState = new FileState(currentAccount, messageObject, document, attachPath);
-            attachFileName = !TextUtils.isEmpty(attachPath) ? attachPath : MessageObject.getFileName(media, currentAccount);
+            attachFileName = !TextUtils.isEmpty(attachPath) ? attachPath : MessageObject.getFileName(media);
 
             if (MessageObject.isMusicDocument(document)) {
                 isMusic = true;

@@ -839,11 +839,7 @@ public class SendGiftSheet extends BottomSheetWithRecyclerListView implements No
                 bazaarGift.user_id = MessagesController.getInstance(currentAccount).getInputUser(user);
                 bazaarGift.currency = o.currency;
                 bazaarGift.amount = o.amount;
-                String sku = o.store_product;
-                if (sku == null || sku.isEmpty()) {
-                    sku = "thecat_gift_premium_" + o.months;
-                }
-                StoreBilling.tryPurchaseConsumable(getBaseFragment().getParentActivity(), currentAccount, bazaarGift, sku,
+                StoreBilling.tryPurchaseConsumable(getBaseFragment().getParentActivity(), currentAccount, bazaarGift, o.store_product,
                         new StoreBillingBridge.Callback() {
                             @Override public void onSuccess() { AndroidUtilities.runOnUIThread(() -> onGiftSuccess(true)); }
                             @Override public void onQueued() { AndroidUtilities.runOnUIThread(() -> onGiftSuccess(true)); }

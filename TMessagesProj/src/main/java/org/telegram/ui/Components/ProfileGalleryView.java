@@ -569,7 +569,7 @@ public class ProfileGalleryView extends CircularViewPager implements Notificatio
             if (!chatInfo.chat_photo.video_sizes.isEmpty()) {
                 final TLRPC.VideoSize videoSize = FileLoader.getClosestVideoSizeWithSize(chatInfo.chat_photo.video_sizes, 1000);
                 videoLocations.set(0, ImageLocation.getForPhoto(videoSize, chatInfo.chat_photo));
-                videoFileNames.set(0, FileLoader.getScopedAttachFileName(videoSize, null, currentAccount));
+                videoFileNames.set(0, FileLoader.getAttachFileName(videoSize));
                 if (callback != null) {
                     callback.onPhotosLoaded();
                 }
@@ -956,7 +956,7 @@ public class ProfileGalleryView extends CircularViewPager implements Notificatio
                             if (!chatInfo.chat_photo.video_sizes.isEmpty()) {
                                 final TLRPC.VideoSize videoSize = FileLoader.getClosestVideoSizeWithSize(chatInfo.chat_photo.video_sizes, 1000);
                                 videoLocations.add(ImageLocation.getForPhoto(videoSize, chatInfo.chat_photo));
-                                videoFileNames.add(FileLoader.getScopedAttachFileName(videoSize, null, currentAccount));
+                                videoFileNames.add(FileLoader.getAttachFileName(videoSize));
                             } else {
                                 videoLocations.add(null);
                                 videoFileNames.add(null);
@@ -1037,7 +1037,7 @@ public class ProfileGalleryView extends CircularViewPager implements Notificatio
                                     } else {
                                         vectorAvatars.add(null);
                                         videoLocations.add(ImageLocation.getForPhoto(videoSize, photo));
-                                        videoFileNames.add(FileLoader.getScopedAttachFileName(videoSize, null, currentAccount));
+                                        videoFileNames.add(FileLoader.getAttachFileName(videoSize));
                                     }
                                 } else {
                                     vectorAvatars.add(prevVectorAvatarThumbDrawable);
@@ -1062,7 +1062,7 @@ public class ProfileGalleryView extends CircularViewPager implements Notificatio
                                     } else {
                                         vectorAvatars.add(null);
                                         videoLocations.add(ImageLocation.getForPhoto(videoSize, photo));
-                                        videoFileNames.add(FileLoader.getScopedAttachFileName(videoSize, null, currentAccount));
+                                        videoFileNames.add(FileLoader.getAttachFileName(videoSize));
                                     }
                                 } else {
                                     videoLocations.add(null);

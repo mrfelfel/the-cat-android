@@ -199,7 +199,7 @@ public class PollButtonDrawable extends Drawable implements DownloadController.F
             final TLRPC.TL_messageMediaPhoto messageMediaPhoto = (TLRPC.TL_messageMediaPhoto) media;
 
             needDrawProgress = true;
-            attachFileName = !TextUtils.isEmpty(attachPath) ? attachPath : MessageObject.getFileName(media, currentAccount);
+            attachFileName = !TextUtils.isEmpty(attachPath) ? attachPath : MessageObject.getFileName(media);
 
             applyPhotoToImageReceiver(messageMediaPhoto.photo, parentObject);
             return true;
@@ -210,7 +210,7 @@ public class PollButtonDrawable extends Drawable implements DownloadController.F
                 return false;
             }
 
-            attachFileName = !TextUtils.isEmpty(attachPath) ? attachPath : MessageObject.getFileName(media, currentAccount);
+            attachFileName = !TextUtils.isEmpty(attachPath) ? attachPath : MessageObject.getFileName(media);
             if (MessageObject.isVideoDocument(messageMediaDocument.document)) {
                 final TLRPC.PhotoSize currentPhotoObjectThumb = FileLoader.getClosestPhotoSizeWithSize(document.thumbs, 40);
                 final TLRPC.PhotoSize currentPhotoObjectObject = FileLoader.getClosestPhotoSizeWithSize(document.thumbs, dp(36),

@@ -1102,7 +1102,7 @@ public class EmojiAnimationsOverlay implements NotificationCenter.NotificationCe
                 if (location.document != null) {
                     fileName = FileLoader.getAttachFileName(location.document, "tgs");
                 } else {
-                    fileName = FileLoader.getScopedAttachFileName(location.location, "tgs", imageReceiver.getCurrentAccount());
+                    fileName = FileLoader.getAttachFileName(location.location, "tgs");
                 }
             }
             if (fileName == null) {

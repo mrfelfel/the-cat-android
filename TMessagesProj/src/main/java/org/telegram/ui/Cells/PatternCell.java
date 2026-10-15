@@ -143,7 +143,7 @@ public class PatternCell extends BackupImageView implements DownloadController.F
                 if (wallPaper.photo != null) {
                     TLRPC.PhotoSize photoSize = FileLoader.getClosestPhotoSizeWithSize(wallPaper.photo.sizes, maxWallpaperSize, true);
                     path = FileLoader.getInstance(currentAccount).getPathToAttach(photoSize, true);
-                    fileName = FileLoader.getScopedAttachFileName(photoSize, null, currentAccount);
+                    fileName = FileLoader.getAttachFileName(photoSize);
                 } else {
                     path = ImageLoader.getHttpFilePath(wallPaper.imageUrl, "jpg");
                     fileName = path.getName();

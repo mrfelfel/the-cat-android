@@ -750,26 +750,6 @@ public class StarsController {
         return AppGlobalConfig.getInstance(currentAccount).starsSpendTopUpInvoiceDisabled.get() && purposePeer != null;
     }
 
-    /**
-     * Resolves the Bazaar SKU for a stars topup/gift option. The server may set
-     * store_product explicitly; if it hasn't (e.g. before the server supports
-     * Bazaar billing), fall back to "thecat_stars_N" derived from the star count
-     * so the purchase can proceed against a matching SKU in the Bazaar panel.
-     */
-    private static String bazaarSkuForStars(TL_stars.TL_starsTopupOption option) {
-        if (option.store_product != null && !option.store_product.isEmpty()) {
-            return option.store_product;
-        }
-        return "thecat_stars_" + option.stars;
-    }
-
-    private static String bazaarSkuForStars(TL_stars.TL_starsGiftOption option) {
-        if (option.store_product != null && !option.store_product.isEmpty()) {
-            return option.store_product;
-        }
-        return "thecat_stars_" + option.stars;
-    }
-
     public boolean canBuy(TLRPC.InputPeer purposePeer) {
         if (purposePeer != null && isInvoiceBillingDisabled(purposePeer)) {
             return BillingController.getInstance().isReady();
@@ -810,7 +790,7 @@ public class StarsController {
             bazaarPurpose.amount = option.amount;
             bazaarPurpose.currency = option.currency;
             bazaarPurpose.spend_purpose_peer = purposePeer;
-            StoreBilling.tryPurchaseConsumable(activity, UserConfig.selectedAccount, bazaarPurpose, bazaarSkuForStars(option),
+            StoreBilling.tryPurchaseConsumable(activity, UserConfig.selectedAccount, bazaarPurpose, option.store_product,
                     new StoreBillingBridge.Callback() {
                         @Override public void onSuccess() { if (whenDone != null) whenDone.run(true, null); }
                         @Override public void onError(String message) { if (whenDone != null) whenDone.run(false, message); }
@@ -964,7 +944,7 @@ public class StarsController {
             bazaarPurpose.amount = option.amount;
             bazaarPurpose.currency = option.currency;
             bazaarPurpose.user_id = MessagesController.getInstance(currentAccount).getInputUser(user_id);
-            StoreBilling.tryPurchaseConsumable(activity, currentAccount, bazaarPurpose, bazaarSkuForStars(option),
+            StoreBilling.tryPurchaseConsumable(activity, currentAccount, bazaarPurpose, option.store_product,
                     new StoreBillingBridge.Callback() {
                         @Override public void onSuccess() { if (whenDone != null) whenDone.run(true, null); }
                         @Override public void onError(String message) { if (whenDone != null) whenDone.run(false, message); }
