@@ -29,7 +29,6 @@ import android.view.View;
 import android.view.ViewGroup;
 import android.widget.TextView;
 
-import org.telegram.thecat.TheCatServers;
 import org.telegram.tgnet.TLRPC;
 import org.telegram.ui.Components.AnimatedEmojiDrawable;
 import org.telegram.ui.Components.AnimatedEmojiSpan;
@@ -68,17 +67,6 @@ public class Emoji {
     public final static ArrayList<String> recentEmoji = new ArrayList<>();
     public final static HashMap<String, String> emojiColor = new HashMap<>();
     private static boolean recentEmojiLoaded;
-    // The Cat: recent/frequently-used emoji — including custom "animated_<id>" entries — are
-    // scoped per backend server, not per device. See TheCatServers.serverScopeKeyForAccount
-    // for why device-wide sharing is wrong (a document id from one server's namespace can never
-    // resolve on another). currentEmojiScopeKey names whichever scope is currently loaded into
-    // emojiUseHistory/recentEmoji; recentByScope/historyByScope hold the in-memory state for
-    // scopes switched away from, so bouncing between accounts on different servers doesn't hit
-    // disk every time. Official Telegram (and anything unidentifiable) keeps the original,
-    // unsuffixed storage keys, so existing installs' recents are unaffected.
-    private static String currentEmojiScopeKey;
-    private final static HashMap<String, ArrayList<String>> recentByScope = new HashMap<>();
-    private final static HashMap<String, HashMap<String, Integer>> historyByScope = new HashMap<>();
     public final static Runnable invalidateUiRunnable = () -> NotificationCenter.getGlobalInstance().postNotificationName(NotificationCenter.emojiLoaded);
     public static float emojiDrawingYOffset;
     public static boolean emojiDrawingUseAlpha = true;
@@ -1027,67 +1015,28 @@ public class Emoji {
             stringBuilder.append("=");
             stringBuilder.append(entry.getValue());
         }
-        preferences.edit().putString(scopedPrefKey("emojis2"), stringBuilder.toString()).commit();
-    }
-
-    // The Cat: "" (default/Telegram scope) keeps the original, unsuffixed key so existing
-    // installs keep reading/writing the same preference they always have.
-    private static String scopedPrefKey(String base) {
-        if (currentEmojiScopeKey == null || currentEmojiScopeKey.isEmpty()) {
-            return base;
-        }
-        return base + ":" + currentEmojiScopeKey;
+        preferences.edit().putString("emojis2", stringBuilder.toString()).commit();
     }
 
     public static void clearRecentEmoji() {
         SharedPreferences preferences = MessagesController.getGlobalEmojiSettings();
-        preferences.edit().putBoolean(scopedPrefKey("filled_default"), true).commit();
+        preferences.edit().putBoolean("filled_default", true).commit();
         emojiUseHistory.clear();
         recentEmoji.clear();
         saveRecentEmoji();
     }
 
     public static void loadRecentEmoji() {
-        loadRecentEmoji(UserConfig.selectedAccount);
-    }
-
-    // The Cat: (re)loads the recent-emoji list scoped to whichever server `account` is
-    // currently connected to (see TheCatServers.serverScopeKeyForAccount), swapping the
-    // previously-active scope's in-memory state into recentByScope/historyByScope first. A
-    // cheap no-op if that scope is already the one loaded — mirrors the original
-    // recentEmojiLoaded guard, just keyed per scope instead of only once per process.
-    public static void loadRecentEmoji(int account) {
-        String scopeKey = TheCatServers.serverScopeKeyForAccount(account);
-        if (recentEmojiLoaded && Objects.equals(scopeKey, currentEmojiScopeKey)) {
+        if (recentEmojiLoaded) {
             return;
         }
-        if (currentEmojiScopeKey != null) {
-            historyByScope.put(currentEmojiScopeKey, new HashMap<>(emojiUseHistory));
-            recentByScope.put(currentEmojiScopeKey, new ArrayList<>(recentEmoji));
-        }
-        currentEmojiScopeKey = scopeKey;
-        emojiUseHistory.clear();
-        recentEmoji.clear();
-
-        HashMap<String, Integer> cachedHistory = historyByScope.get(scopeKey);
-        if (cachedHistory != null) {
-            emojiUseHistory.putAll(cachedHistory);
-            ArrayList<String> cachedRecent = recentByScope.get(scopeKey);
-            if (cachedRecent != null) {
-                recentEmoji.addAll(cachedRecent);
-            }
-            recentEmojiLoaded = true;
-            return;
-        }
-
         recentEmojiLoaded = true;
         SharedPreferences preferences = MessagesController.getGlobalEmojiSettings();
 
         String str;
         try {
             emojiUseHistory.clear();
-            if (scopeKey.isEmpty() && preferences.contains("emojis")) {
-                // Legacy pre-scoping migration path: only ever existed under the default key.
+            if (preferences.contains("emojis")) {
                 str = preferences.getString("emojis", "");
                 if (str != null && str.length() > 0) {
                     String[] args = str.split(",");
@@ -1111,7 +1060,7 @@ public class Emoji {
                 preferences.edit().remove("emojis").commit();
                 saveRecentEmoji();
             } else {
-                str = preferences.getString(scopedPrefKey("emojis2"), "");
+                str = preferences.getString("emojis2", "");
                 if (str != null && str.length() > 0) {
                     String[] args = str.split(",");
                     for (String arg : args) {
@@ -1121,11 +1070,11 @@ public class Emoji {
                 }
             }
             if (emojiUseHistory.isEmpty()) {
-                if (!preferences.getBoolean(scopedPrefKey("filled_default"), false)) {
+                if (!preferences.getBoolean("filled_default", false)) {
                     for (int i = 0; i < DEFAULT_RECENT.length; i++) {
                         emojiUseHistory.put(DEFAULT_RECENT[i], DEFAULT_RECENT.length - i);
                     }
-                    preferences.edit().putBoolean(scopedPrefKey("filled_default"), true).commit();
+                    preferences.edit().putBoolean("filled_default", true).commit();
                     saveRecentEmoji();
                 }
             }
