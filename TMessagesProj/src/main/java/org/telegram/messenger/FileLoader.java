@@ -11,7 +11,6 @@ package org.telegram.messenger;
 import android.text.TextUtils;
 import android.util.SparseArray;
 
-import org.telegram.thecat.TheCatServers;
 import org.telegram.tgnet.ConnectionsManager;
 import org.telegram.tgnet.TLObject;
 import org.telegram.tgnet.TLRPC;
@@ -532,7 +531,7 @@ public class FileLoader extends BaseController {
             return;
         }
         fileLoaderQueue.postRunnable(() -> {
-            forceLoadingFile = scopedFileLocationName(location, ext, currentAccount);
+            forceLoadingFile = getAttachFileName(location, ext);
             FileLoadOperation operation = loadOperationPaths.get(forceLoadingFile);
             if (operation != null) {
                 if (operation.isPreloadVideoOperation()) {
@@ -595,7 +594,7 @@ public class FileLoader extends BaseController {
         }
         final String fileName;
         if (location != null) {
-            fileName = scopedFileLocationName(location, locationExt, currentAccount);
+            fileName = getAttachFileName(location, locationExt);
         } else if (document != null) {
             fileName = getAttachFileName(document);
         } else if (secureDocument != null) {
@@ -653,7 +652,7 @@ public class FileLoader extends BaseController {
         }
         final String fileName;
         if (location != null) {
-            fileName = scopedFileLocationName(location, locationExt, currentAccount);
+            fileName = getAttachFileName(location, locationExt);
         } else if (document != null) {
             fileName = getAttachFileName(document);
         } else if (secureDocument != null) {
@@ -823,7 +822,7 @@ public class FileLoader extends BaseController {
     private FileLoadOperation loadFileInternal(final TLRPC.Document document, final SecureDocument secureDocument, final WebFile webDocument, TLRPC.TL_fileLocationToBeDeprecated location, final ImageLocation imageLocation, Object parentObject, final String locationExt, final long locationSize, int priority, FileLoadOperationStream stream, final long streamOffset, boolean streamPriority, final int cacheType) {
         String fileName;
         if (location != null) {
-            fileName = scopedFileLocationName(location, locationExt, currentAccount);
+            fileName = getAttachFileName(location, locationExt);
         } else if (secureDocument != null) {
             fileName = getAttachFileName(secureDocument);
         } else if (document != null) {
@@ -1155,7 +1154,7 @@ public class FileLoader extends BaseController {
     private void loadFile(final TLRPC.Document document, final SecureDocument secureDocument, final WebFile webDocument, TLRPC.TL_fileLocationToBeDeprecated location, final ImageLocation imageLocation, final Object parentObject, final String locationExt, final long locationSize, final int priority, final int cacheType) {
         String fileName;
         if (location != null) {
-            fileName = scopedFileLocationName(location, locationExt, currentAccount);
+            fileName = getAttachFileName(location, locationExt);
         } else if (document != null) {
             fileName = getAttachFileName(document);
         } else if (webDocument != null) {
@@ -1640,34 +1639,6 @@ public class FileLoader extends BaseController {
     }
 
     /**
-     * TheCatServers: server-scoped name for a plain avatar/photo TLRPC.FileLocation download
-     * (volume_id/local_id only, no dc_id -- see ImageLocation.getKey for why two independent
-     * self-hosted servers can hand out colliding ids). MUST produce exactly the same string as
-     * ImageLocation.getKey's location branch + extension: this fileName is what the actual
-     * FileLoadOperation is tracked and completed under (see loadFileInternal/loadFile below), and
-     * ImageLoader matches a finished download back to its pending CacheImage entry by this same
-     * string. A mismatch here doesn't show the wrong avatar -- it makes the download's
-     * fileDidLoaded callback match nothing, so the avatar just never renders.
-     */
-    private static String scopedFileLocationName(TLRPC.FileLocation location, String ext, int currentAccount) {
-        String name = getAttachFileName(location, ext);
-        if (currentAccount >= 0 && !TextUtils.isEmpty(name)) {
-            try {
-                String scope = TheCatServers.serverScopeKeyForAccount(currentAccount);
-                if (!scope.isEmpty()) {
-                    int dot = name.lastIndexOf('.');
-                    String base = dot >= 0 ? name.substring(0, dot) : name;
-                    String suffix = dot >= 0 ? name.substring(dot) : "";
-                    name = base + "_s" + Integer.toHexString(scope.hashCode()) + suffix;
-                }
-            } catch (Exception e) {
-                FileLog.e(e);
-            }
-        }
-        return name;
-    }
-
-    /**
      * file hash. contains docId, dcId, ext.
      */
     public static String getAttachFileName(TLObject attach, String size, String ext) {
@@ -1924,14 +1895,7 @@ public class FileLoader extends BaseController {
 
     public static boolean checkUploadFileSize(int currentAccount, long length) {
         boolean premium = AccountInstance.getInstance(currentAccount).getUserConfig().isPremium();
-        MessagesController messagesController = MessagesController.getInstance(currentAccount);
-        long maxSize = messagesController.uploadMaxFileParts > 0
-                ? messagesController.uploadMaxFileParts * 512L * 1024L
-                : DEFAULT_MAX_FILE_SIZE;
-        long maxSizePremium = messagesController.uploadMaxFilePartsPremium > 0
-                ? messagesController.uploadMaxFilePartsPremium * 512L * 1024L
-                : DEFAULT_MAX_FILE_SIZE_PREMIUM;
-        if (length < maxSize || (length < maxSizePremium && premium)) {
+        if (length < DEFAULT_MAX_FILE_SIZE || (length < DEFAULT_MAX_FILE_SIZE_PREMIUM && premium)) {
             return true;
         }
         return false;
