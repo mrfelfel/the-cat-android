@@ -7109,7 +7109,7 @@ public class RichMessageLayout {
 
         @Override
         protected String getFileName() {
-            return FileLoader.getAttachFileName(sizeFull);
+            return FileLoader.getScopedAttachFileName(sizeFull, null, root.currentAccount);
         }
 
         @Override
@@ -8157,7 +8157,7 @@ public class RichMessageLayout {
         }
 
         public String getFileName() {
-            if (sizeFull != null) return FileLoader.getAttachFileName(sizeFull);
+            if (sizeFull != null) return FileLoader.getScopedAttachFileName(sizeFull, null, root.currentAccount);
             if (document != null) return FileLoader.getAttachFileName(document);
             return null;
         }

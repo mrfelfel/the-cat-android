@@ -3893,7 +3893,7 @@ public class ThemePreviewActivity extends BaseFragment implements DownloadContro
                 if (wallPaper.photo != null) {
                     TLRPC.PhotoSize photoSize = FileLoader.getClosestPhotoSizeWithSize(wallPaper.photo.sizes, maxWallpaperSize, true);
                     path = FileLoader.getInstance(currentAccount).getPathToAttach(photoSize, true);
-                    fileName = FileLoader.getAttachFileName(photoSize);
+                    fileName = FileLoader.getScopedAttachFileName(photoSize, null, currentAccount);
                     size = photoSize.size;
                 } else {
                     path = ImageLoader.getHttpFilePath(wallPaper.imageUrl, "jpg");

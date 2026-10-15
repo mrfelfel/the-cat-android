@@ -218,7 +218,7 @@ public class AvatarPreviewer {
             if (userFull.profile_photo != null && !userFull.profile_photo.video_sizes.isEmpty()) {
                 final TLRPC.VideoSize videoSize = FileLoader.getClosestVideoSizeWithSize(userFull.profile_photo.video_sizes, 1000);
                 videoLocation = ImageLocation.getForPhoto(videoSize, userFull.profile_photo);
-                videoFileName = FileLoader.getAttachFileName(videoSize);
+                videoFileName = FileLoader.getScopedAttachFileName(videoSize, null, UserConfig.selectedAccount);
             } else {
                 videoLocation = null;
                 videoFileName = null;
@@ -245,7 +245,7 @@ public class AvatarPreviewer {
             if (chatFull.chat_photo != null && !chatFull.chat_photo.video_sizes.isEmpty()) {
                 final TLRPC.VideoSize videoSize = FileLoader.getClosestVideoSizeWithSize(chatFull.chat_photo.video_sizes, 1000);
                 videoLocation = ImageLocation.getForPhoto(videoSize, chatFull.chat_photo);
-                videoFileName = FileLoader.getAttachFileName(videoSize);
+                videoFileName = FileLoader.getScopedAttachFileName(videoSize, null, UserConfig.selectedAccount);
             } else {
                 videoLocation = null;
                 videoFileName = null;

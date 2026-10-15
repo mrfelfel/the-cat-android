@@ -12862,7 +12862,7 @@ public class ArticleViewer extends IArticleViewer implements NotificationCenter.
 
         public void updateButtonState(boolean animated) {
             final int currentAccount = parent.getCurrentAccount();
-            final String fileName = FileLoader.getAttachFileName(currentPhotoObject);
+            final String fileName = FileLoader.getScopedAttachFileName(currentPhotoObject, null, currentAccount);
             final File path = FileLoader.getInstance(currentAccount).getPathToAttach(currentPhotoObject, true);
             final File path2 = FileLoader.getInstance(currentAccount).getPathToAttach(currentPhotoObject, false);
             boolean fileExists = path.exists() || path2 != null && path2.exists();

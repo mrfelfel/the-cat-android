@@ -13557,15 +13557,15 @@ public class PhotoViewer implements NotificationCenter.NotificationCenterDelegat
                     return null;
                 }
                 if (videoLocation != null && videoLocation != location) {
-                    return videoLocation.location.volume_id + "_" + videoLocation.location.local_id + ".mp4";
+                    return FileLoader.getScopedAttachFileName(videoLocation.location, "mp4", currentAccount);
                 } else {
-                    return location.location.volume_id + "_" + location.location.local_id + ".jpg";
+                    return FileLoader.getScopedAttachFileName(location.location, "jpg", currentAccount);
                 }
             } else {
                 if (index >= imagesArr.size()) {
                     return null;
                 }
-                return FileLoader.getMessageFileName(imagesArr.get(index).messageOwner);
+                return FileLoader.getMessageFileName(imagesArr.get(index).messageOwner, currentAccount);
             }
         } else if (!imagesArrLocals.isEmpty()) {
             if (index >= imagesArrLocals.size()) {
@@ -13581,7 +13581,7 @@ public class PhotoViewer implements NotificationCenter.NotificationCenterDelegat
                     return FileLoader.getAttachFileName(botInlineResult.document);
                 }  else if (botInlineResult.photo != null) {
                     TLRPC.PhotoSize sizeFull = FileLoader.getClosestPhotoSizeWithSize(botInlineResult.photo.sizes, AndroidUtilities.getPhotoSize());
-                    return FileLoader.getAttachFileName(sizeFull);
+                    return FileLoader.getScopedAttachFileName(sizeFull, null, currentAccount);
                 } else if (botInlineResult.content instanceof TLRPC.TL_webDocument) {
                     return Utilities.MD5(botInlineResult.content.url) + "." + ImageLoader.getHttpUrlExtension(botInlineResult.content.url, FileLoader.getMimeTypePart(botInlineResult.content.mime_type));
                 }

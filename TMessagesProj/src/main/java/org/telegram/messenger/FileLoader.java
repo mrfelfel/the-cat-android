@@ -1220,6 +1220,15 @@ public class FileLoader extends BaseController {
     }
 
     public static String getMessageFileName(TLRPC.Message message) {
+        return getMessageFileName(message, -1);
+    }
+
+    /**
+     * TheCatServers: account-aware variant -- pass currentAccount so photo (FileLocation-based)
+     * names come out scoped, matching both the download operation and getPathToAttach. Documents
+     * are unaffected either way.
+     */
+    public static String getMessageFileName(TLRPC.Message message, int currentAccount) {
         if (message == null) {
             return "";
         }
@@ -1229,30 +1238,30 @@ public class FileLoader extends BaseController {
                 if (sizes.size() > 0) {
                     TLRPC.PhotoSize sizeFull = getClosestPhotoSizeWithSize(sizes, AndroidUtilities.getPhotoSize());
                     if (sizeFull != null) {
-                        return getAttachFileName(sizeFull);
+                        return getScopedAttachFileName(sizeFull, null, currentAccount);
                     }
                 }
             }
         } else {
             if (MessageObject.getMedia(message) instanceof TLRPC.TL_messageMediaDocument) {
-                return getAttachFileName(MessageObject.getMedia(message).document);
+                return getScopedAttachFileName(MessageObject.getMedia(message).document, null, currentAccount);
             } else if (MessageObject.getMedia(message) instanceof TLRPC.TL_messageMediaPhoto) {
                 ArrayList<TLRPC.PhotoSize> sizes = MessageObject.getMedia(message).photo.sizes;
                 if (sizes.size() > 0) {
                     TLRPC.PhotoSize sizeFull = getClosestPhotoSizeWithSize(sizes, AndroidUtilities.getPhotoSize(true), false, null, true);
                     if (sizeFull != null) {
-                        return getAttachFileName(sizeFull);
+                        return getScopedAttachFileName(sizeFull, null, currentAccount);
                     }
                 }
             } else if (MessageObject.getMedia(message) instanceof TLRPC.TL_messageMediaWebPage) {
                 if (MessageObject.getMedia(message).webpage.document != null) {
-                    return getAttachFileName(MessageObject.getMedia(message).webpage.document);
+                    return getScopedAttachFileName(MessageObject.getMedia(message).webpage.document, null, currentAccount);
                 } else if (MessageObject.getMedia(message).webpage.photo != null) {
                     ArrayList<TLRPC.PhotoSize> sizes = MessageObject.getMedia(message).webpage.photo.sizes;
                     if (sizes.size() > 0) {
                         TLRPC.PhotoSize sizeFull = getClosestPhotoSizeWithSize(sizes, AndroidUtilities.getPhotoSize());
                         if (sizeFull != null) {
-                            return getAttachFileName(sizeFull);
+                            return getScopedAttachFileName(sizeFull, null, currentAccount);
                         }
                     }
                 }
@@ -1429,7 +1438,10 @@ public class FileLoader extends BaseController {
                 return new File(path);
             }
         }
-        return new File(dir, getAttachFileName(attach, ext));
+        // TheCatServers: must produce the same scoped string the download was tracked under --
+        // see getScopedAttachFileName. Plain getAttachFileName here left PhotoViewer and other
+        // lookups hunting for an unscoped name that never exists for avatars on custom servers.
+        return new File(dir, getScopedAttachFileName(attach, size, ext, currentAccount));
     }
 
     public FilePathDatabase getFileDatabase() {
@@ -1665,6 +1677,74 @@ public class FileLoader extends BaseController {
             }
         }
         return name;
+    }
+
+    /**
+     * TheCatServers: scoped file name for any TLObject path lookup that must agree with where
+     * FileLoadOperation actually stores the file. FileLoader's load/cancel/priority entry points
+     * name plain FileLocation downloads via {@link #scopedFileLocationName}, so every consumer
+     * that later looks the file back up (getPathToAttach, PhotoViewer.getFileName,
+     * getMessageFileName) must go through this helper too -- an unscoped name here matches
+     * nothing and the image/viewer spins forever. Documents, secure files and web files keep
+     * their dc_id/id or MD5 naming (no scope, no collision), and pass through unchanged.
+     */
+    public static String getScopedAttachFileName(TLObject attach, String ext, int currentAccount) {
+        return getScopedAttachFileName(attach, null, ext, currentAccount);
+    }
+
+    public static String getScopedAttachFileName(TLObject attach, String size, String ext, int currentAccount) {
+        if (attach instanceof TLRPC.PhotoSize) {
+            TLRPC.PhotoSize photo = (TLRPC.PhotoSize) attach;
+            if (photo.location == null || photo.location instanceof TLRPC.TL_fileLocationUnavailable) {
+                return "";
+            }
+            // TheCatServers: volume_id == Integer.MIN_VALUE marks a client-local TEMP location
+            // (outgoing media being prepared for upload) -- never a server id, so no cross-server
+            // collision possible and nothing to scope. The send pipeline writes these cache files
+            // under the plain name; scoping here would make uploadFile miss them (ENOENT).
+            if (photo.location.volume_id == Integer.MIN_VALUE) {
+                return getAttachFileName(photo, ext);
+            }
+            return scopedFileLocationName(photo.location, ext != null ? ext : "jpg", currentAccount);
+        } else if (attach instanceof TLRPC.TL_videoSize) {
+            TLRPC.TL_videoSize video = (TLRPC.TL_videoSize) attach;
+            if (video.location == null || video.location instanceof TLRPC.TL_fileLocationUnavailable) {
+                return "";
+            }
+            if (video.location.volume_id == Integer.MIN_VALUE) {
+                return getAttachFileName(video, ext);
+            }
+            return scopedFileLocationName(video.location, ext != null ? ext : "mp4", currentAccount);
+        } else if (attach instanceof TLRPC.FileLocation) {
+            if (attach instanceof TLRPC.TL_fileLocationUnavailable) {
+                return "";
+            }
+            if (((TLRPC.FileLocation) attach).volume_id == Integer.MIN_VALUE) {
+                return getAttachFileName(attach, ext);
+            }
+            return scopedFileLocationName((TLRPC.FileLocation) attach, ext, currentAccount);
+        } else if (attach instanceof TLRPC.UserProfilePhoto) {
+            TLRPC.UserProfilePhoto photo = (TLRPC.UserProfilePhoto) attach;
+            if (photo.photo_small == null) {
+                return getAttachFileName(photo, size, ext);
+            }
+            if (size == null) {
+                size = "s";
+            }
+            TLRPC.FileLocation location = "s".equals(size) ? photo.photo_small : photo.photo_big;
+            return getScopedAttachFileName(location, ext, currentAccount);
+        } else if (attach instanceof TLRPC.ChatPhoto) {
+            TLRPC.ChatPhoto photo = (TLRPC.ChatPhoto) attach;
+            if (photo.photo_small == null) {
+                return getAttachFileName(photo, size, ext);
+            }
+            if (size == null) {
+                size = "s";
+            }
+            TLRPC.FileLocation location = "s".equals(size) ? photo.photo_small : photo.photo_big;
+            return getScopedAttachFileName(location, ext, currentAccount);
+        }
+        return getAttachFileName(attach, ext);
     }
 
     /**

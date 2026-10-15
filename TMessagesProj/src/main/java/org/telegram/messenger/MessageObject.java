@@ -7322,17 +7322,26 @@ public class MessageObject {
         if (getDocument() != null) {
             return getFileName(getDocument());
         }
-        return getFileName(messageOwner);
+        return getFileName(messageOwner, currentAccount);
     }
 
     public String getFileNameFast() {
         if (getDocumentFast() != null) {
             return getFileName(getDocumentFast());
         }
-        return getFileName(messageOwner);
+        return getFileName(messageOwner, currentAccount);
     }
 
     public static String getFileName(TLRPC.Message messageOwner) {
+        return getFileName(messageOwner, -1);
+    }
+
+    /**
+     * TheCatServers: account-aware variant so photo (FileLocation-based) names come out scoped,
+     * matching the download operation and getPathToAttach. Pass -1 (or use the one-arg overload)
+     * to keep the original unscoped names.
+     */
+    public static String getFileName(TLRPC.Message messageOwner, int currentAccount) {
         if (getMedia(messageOwner) instanceof TLRPC.TL_messageMediaDocument) {
             return getFileName(getDocument(messageOwner));
         } else if (getMedia(messageOwner) instanceof TLRPC.TL_messageMediaPhoto) {
@@ -7340,7 +7349,7 @@ public class MessageObject {
             if (sizes.size() > 0) {
                 TLRPC.PhotoSize sizeFull = FileLoader.getClosestPhotoSizeWithSize(sizes, AndroidUtilities.getPhotoSize());
                 if (sizeFull != null) {
-                    return FileLoader.getAttachFileName(sizeFull);
+                    return FileLoader.getScopedAttachFileName(sizeFull, null, currentAccount);
                 }
             }
         } else if (getMedia(messageOwner) instanceof TLRPC.TL_messageMediaWebPage && getMedia(messageOwner).webpage != null) {
@@ -7354,6 +7363,10 @@ public class MessageObject {
     }
 
     public static String getFileName(TLRPC.MessageMedia media) {
+        return getFileName(media, -1);
+    }
+
+    public static String getFileName(TLRPC.MessageMedia media, int currentAccount) {
         if (media instanceof TLRPC.TL_messageMediaDocument) {
             return FileLoader.getAttachFileName(media.document);
         } else if (media instanceof TLRPC.TL_messageMediaPhoto) {
@@ -7361,7 +7374,7 @@ public class MessageObject {
             if (sizes.size() > 0) {
                 TLRPC.PhotoSize sizeFull = FileLoader.getClosestPhotoSizeWithSize(sizes, AndroidUtilities.getPhotoSize());
                 if (sizeFull != null) {
-                    return FileLoader.getAttachFileName(sizeFull);
+                    return FileLoader.getScopedAttachFileName(sizeFull, null, currentAccount);
                 }
             }
         } else if (media instanceof TLRPC.TL_messageMediaWebPage && media.webpage != null) {

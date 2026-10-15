@@ -1021,7 +1021,7 @@ public class ChatActionCell extends BaseCell implements DownloadController.FileD
                         videoSize = FileLoader.getClosestVideoSizeWithSize(photo.video_sizes, 1000);
                         if (!messageObject.mediaExists && !DownloadController.getInstance(currentAccount).canDownloadMedia(DownloadController.AUTODOWNLOAD_TYPE_VIDEO, videoSize.size)) {
                             currentVideoLocation = ImageLocation.getForPhoto(videoSize, photo);
-                            String fileName = FileLoader.getAttachFileName(videoSize);
+                            String fileName = FileLoader.getScopedAttachFileName(videoSize, null, currentAccount);
                             DownloadController.getInstance(currentAccount).addLoadingFileObserver(fileName, messageObject, this);
                             videoSize = null;
                         }

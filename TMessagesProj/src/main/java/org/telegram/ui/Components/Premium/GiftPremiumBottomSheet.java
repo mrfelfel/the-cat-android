@@ -316,7 +316,11 @@ public class GiftPremiumBottomSheet extends BottomSheetWithRecyclerListView impl
                 bazaarGift.currency = tier.giftCodeOption.currency;
                 bazaarGift.amount = tier.giftCodeOption.amount;
             }
-            StoreBilling.tryPurchaseConsumable(getBaseFragment().getParentActivity(), currentAccount, bazaarGift, tier.getStoreProduct(),
+            String sku = tier.getStoreProduct();
+            if (sku == null || sku.isEmpty()) {
+                sku = "thecat_gift_premium_" + tier.getMonths();
+            }
+            StoreBilling.tryPurchaseConsumable(getBaseFragment().getParentActivity(), currentAccount, bazaarGift, sku,
                     new StoreBillingBridge.Callback() {
                         @Override public void onSuccess() { AndroidUtilities.runOnUIThread(() -> onGiftSuccess(true)); }
                         @Override public void onQueued() { AndroidUtilities.runOnUIThread(() -> onGiftSuccess(true)); }
