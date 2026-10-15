@@ -1329,74 +1329,6 @@ public class LaunchActivity extends BasePermissionsActivity implements INavigati
         }
     }
 
-    /**
-     * Handles an thecat://addserver?host=...&port=... link: an operator's
-     * "add my server" onboarding link, letting them hand out a single URL
-     * (website, message, QR code) that opens the add-server form pre-filled
-     * with just the address, so the user reviews and taps Save. Deliberately
-     * carries nothing else -- see this method's body comment for why a
-     * name/description/key/DC embedded in the link itself would be a MITM
-     * vector, not a convenience worth the risk.
-     */
-    private void handleTheCatAddServerLink(Uri data) {
-        String host = data.getQueryParameter("host");
-        String portParam = data.getQueryParameter("port");
-
-        // Only host+port are ever read from this link -- deliberately never
-        // name/description/key/dc/multidc, even if a link happens to carry
-        // them. Whoever crafts a link (a forum post, a chat message, an
-        // intercepted share) fully controls its contents; if a forged key
-        // pointed at an attacker's own host were accepted from it, the app
-        // would trust that as "this server's identity" outright -- a real
-        // MITM vector, not a hypothetical one. host+port alone can't
-        // misrepresent anything: name/description/key/DC always come from
-        // whatever actually answers at that address (the same
-        // fetchPublicKeyForAddress() discovery a hand-typed address
-        // triggers, via the empty rsaPublicKey below), never from the link.
-        if (TextUtils.isEmpty(host) || TextUtils.isEmpty(portParam)) {
-            showTheCatAddServerLinkErrorDialog();
-            return;
-        }
-        int port;
-        try {
-            port = Integer.parseInt(portParam.trim());
-            if (port < 1 || port > 65535) throw new NumberFormatException();
-        } catch (NumberFormatException e) {
-            showTheCatAddServerLinkErrorDialog();
-            return;
-        }
-
-        // Prefill only -- id stays unset so AddServerFragment.save() treats
-        // this as a brand-new server (addCustomServer mints the id) rather
-        // than an edit of an existing one (updateCustomServer, keyed by id).
-        TheCatServer server = new TheCatServer();
-        // TheCatServer.name has no field initializer (defaults to null in
-        // Java, unlike description/rsaPublicKey which do) -- set it
-        // explicitly so AddServerFragment's nameField.setText(editingServer.name)
-        // gets an empty string, not null.
-        server.name = "";
-        server.host = host.trim();
-        server.port = port;
-
-        // fetchPublicKeyForAddress() inside AddServerFragment's own prefill
-        // handles the "key missing, ask the server" case; nothing extra to
-        // trigger from here.
-        presentFragment(new AddServerFragment(server, saved ->
-                Toast.makeText(LaunchActivity.this, "Server \"" + saved.name + "\" added", Toast.LENGTH_SHORT).show()));
-    }
-
-    /** Shown when an thecat://addserver link is missing required fields or has an invalid port/key. */
-    private void showTheCatAddServerLinkErrorDialog() {
-        try {
-            AlertDialog.Builder b = new AlertDialog.Builder(this);
-            b.setTitle(LocaleController.getString(R.string.AppName));
-            b.setMessage("This add-server link is missing required information and could not be opened.");
-            b.setPositiveButton(LocaleController.getString(R.string.OK), null);
-            b.show();
-        } catch (Exception ignore) {
-        }
-    }
-
     private void showNeedTelegramAccountDialog() {
         try {
             AlertDialog.Builder b = new AlertDialog.Builder(this);
@@ -2134,21 +2066,6 @@ public class LaunchActivity extends BasePermissionsActivity implements INavigati
                                     }
                                     return false;
                                 case "thecat": {
-                                    // thecat://addserver?host=...&port=...
-                                    // An operator's "add my server" onboarding link -- host+port
-                                    // only, see handleTheCatAddServerLink's doc comment for why.
-                                    // Uri.getHost() separates the authority from the path/query regardless of
-                                    // whether a browser normalized the path-less URL by inserting a
-                                    // "/" before the "?" (thecat://addserver/?... vs thecat://addserver?...),
-                                    // so this check is already robust to both forms.
-                                    if ("addserver".equalsIgnoreCase(data.getHost())) {
-                                        if (progress != null) {
-                                            progress.end();
-                                        }
-                                        handleTheCatAddServerLink(data);
-                                        intent.setAction(null);
-                                        return false;
-                                    }
                                     // The Cat self-hosted scheme: thecat://<host>/<rest>. The host
                                     // identifies which server (me_url_prefix) the link belongs to.
                                     // Reinterpret as https://<host>/<rest> and fall through to the

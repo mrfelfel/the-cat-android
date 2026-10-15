@@ -27,7 +27,7 @@ import org.telegram.ui.Components.LayoutHelper;
  *
  * The Cat ships as a self-contained app whose default backend is its own
  * server, so first launch and add-account both land here and silently join
- * The Cat -- the picker ({@link ServerSelectFragment}) stays under the hood,
+ * The Cat -- the picker stays under the hood,
  * reachable only from an operator's {@code thecat://addserver} flow. This is
  * the picker's connection half (bind server -> wait for MTProto -> learn
  * email-signup -> LoginActivity) as a self-running fragment, so it also works

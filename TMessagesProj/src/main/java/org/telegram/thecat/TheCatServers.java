@@ -257,27 +257,6 @@ public class TheCatServers {
     }
 
     /**
-     * Stable key for grouping per-server local device state (currently: recent/frequently-used
-     * emoji, see Emoji.java) by backend rather than by device. Two different custom servers do
-     * NOT share a document-id namespace — a custom-emoji document id cached while using one
-     * never resolves on another (or on official Telegram), so state keyed only by device would
-     * leak cross-server ids into every account's UI, permanently unresolvable there (see
-     * AnimatedEmojiDrawable.EmojiDocumentFetcher — a not-found custom emoji has no negative
-     * cache/timeout, it just stays broken forever). Official Telegram, and anything we can't
-     * identify a server for, get "" (the original, unsuffixed storage keys) so existing
-     * installs' state is preserved unchanged. Host, not server id, is the actual identity that
-     * matters here: the same physical backend added twice under different local ids should
-     * still share one scope.
-     */
-    public static String serverScopeKeyForAccount(int accountNum) {
-        TheCatServer s = getServerForAccount(accountNum);
-        if (s == null || s.isTelegram || TextUtils.isEmpty(s.host)) {
-            return "";
-        }
-        return s.host.toLowerCase(java.util.Locale.US);
-    }
-
-    /**
      * Whether the account's current server exposes Telegram Premium / Stars /
      * Business features. Telegram always does. Any other (custom
      * self-hosted, e.g. gramsrv) server is trusted based on its own appConfig
