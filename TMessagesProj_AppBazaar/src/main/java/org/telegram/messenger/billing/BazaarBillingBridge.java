@@ -53,10 +53,10 @@ public class BazaarBillingBridge implements StoreBillingBridge {
     /**
      * RSA public key from the Bazaar panel (In-App Billing tab). Enables
      * Poolakey's local signature check as a first line of defence; the server
-     * MUST still verify independently. Empty string disables the local check.
-     * TODO(operator): paste the app's RSA public key here before shipping.
+     * MUST still verify independently.
      */
-    private static final String BAZAAR_RSA_PUBLIC_KEY = "";
+    private static final String BAZAAR_RSA_PUBLIC_KEY =
+            "MIHNMA0GCSqGSIb3DQEBAQUAA4G7ADCBtwKBrwDYzR6TTCgSHqc4XnwB1b0uWUn5/3ek/z1P+qiYYs2e0davkBFXlDIMzZx+qRTsZDNWhdyceDsGUgTCDQBXvF+GoKK/uysaN+uDx6xYKkYNFXngUfNW2OEAYYApbSMTOqV0ZkuayKsquEcPrrUj0nULwQve+JV6bA7gDXbvDyzDG0UdlXvI7GBVXHOFsLVDuuAJgkhiXi795D/BSoFqZwwCe8n+YsnIqUFvP30Y6i8CAwEAAQ==";
 
     private final Payment payment;
     private volatile boolean connected;
