@@ -3517,9 +3517,10 @@ public class DialogsActivity extends BaseFragment implements NotificationCenter.
             } else {
                 statusDrawable = new AnimatedEmojiDrawable.SwapAnimatedEmojiDrawable(null, dp(26));
                 statusDrawable.center = true;
-                // Show the current account's server name in the header instead of "Telegram".
-                String serverName = org.telegram.thecat.TheCatServers.serverNameForAccount(currentAccount);
-                actionBar.setTitle(serverName != null ? serverName : getString(R.string.AppName), statusDrawable);
+                // Always the app's own localized name (کت / TheCat). The key is
+                // one no lang pack ships, so neither the server's re-branding nor
+                // a stock Telegram pack can ever override it.
+                actionBar.setTitle(getString(R.string.TheCatHeaderName), statusDrawable);
                 updateStatus(UserConfig.getInstance(currentAccount).getCurrentUser(), false);
             }
             if (folderId == 0) {

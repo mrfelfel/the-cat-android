@@ -205,16 +205,16 @@ public class Browser {
         if (link.startsWith("@")) {
             return link.substring(1);
         }
-        if (link.startsWith("t.me/")) {
-            return link.substring(5);
-        }
-        if (link.startsWith("http://t.me/")) {
-            return link.substring(12);
-        }
-        if (link.startsWith("https://t.me/")) {
+        if (link.startsWith("http://cr0.ir/")) {
             return link.substring(13);
         }
-        Matcher prefixMatcher = LaunchActivity.PREFIX_T_ME_PATTERN.matcher(link);
+        if (link.startsWith("https://cr0.ir/")) {
+            return link.substring(14);
+        }
+        if (link.startsWith("cr0.ir/")) {
+            return link.substring(7);
+        }
+        Matcher prefixMatcher = LaunchActivity.PREFIX_LINK_PATTERN.matcher(link);
         if (prefixMatcher.find()) {
             return prefixMatcher.group(1);
         }
@@ -224,9 +224,9 @@ public class Browser {
     public static boolean urlMustNotHaveConfirmation(String url) {
         return (
             isTelegraphUrl(url, false, true) ||
-            url.matches("^(https://)?t\\.me/iv\\??(/.*|$)") || // t.me/iv?
-            url.matches("^(https://)?telegram\\.org/(blog|tour)(/.*|$)") || // telegram.org/blog, telegram.org/tour
-            url.matches("^(https://)?fragment\\.com(/.*|$)") // fragment.com
+            url.matches("^(https://)?cr0\\.ir/iv\\??(/.*|$)") || // iv links
+            url.matches("^(https://)?catroom\\.ir/(blog|tour)(/.*|$)") || // blog, tour
+            url.matches("^(https://)?catroom\\.ir/cat-market(/.*|$)") // marketplace
         );
     }
 
@@ -689,9 +689,9 @@ public class Browser {
             return false;
         }
 
-        Matcher prefixMatcher = LaunchActivity.PREFIX_T_ME_PATTERN.matcher(host);
+        Matcher prefixMatcher = LaunchActivity.PREFIX_LINK_PATTERN.matcher(host);
         if (prefixMatcher.find()) {
-            uri = Uri.parse("https://t.me/" + prefixMatcher.group(1) + (TextUtils.isEmpty(uri.getPath()) ? "" : "/" + uri.getPath()) + (TextUtils.isEmpty(uri.getQuery()) ? "" : "?" + uri.getQuery()));
+            uri = Uri.parse("https://cr0.ir/" + prefixMatcher.group(1) + (TextUtils.isEmpty(uri.getPath()) ? "" : "/" + uri.getPath()) + (TextUtils.isEmpty(uri.getQuery()) ? "" : "?" + uri.getQuery()));
 
             host = uri.getHost();
             host = host != null ? host.toLowerCase() : "";
@@ -701,7 +701,7 @@ public class Browser {
         // account's me_url_prefix is internal — rewrite to t.me so the checks below
         // route it into the app instead of opening a browser.
         if (TheCatServers.findTheCatAccountForHost(host) >= 0) {
-            uri = Uri.parse("https://t.me" + (TextUtils.isEmpty(uri.getPath()) ? "/" : uri.getPath()) + (TextUtils.isEmpty(uri.getQuery()) ? "" : "?" + uri.getQuery()));
+            uri = Uri.parse("https://cr0.ir" + (TextUtils.isEmpty(uri.getPath()) ? "/" : uri.getPath()) + (TextUtils.isEmpty(uri.getQuery()) ? "" : "?" + uri.getQuery()));
             host = uri.getHost();
             host = host != null ? host.toLowerCase() : "";
         }
@@ -722,22 +722,7 @@ public class Browser {
         } else if ("thecat".equals(uri.getScheme())) {
             // The Cat self-hosted scheme — always internal (routed to the owning server).
             return true;
-        } else if ("telegram.dog".equals(host)) {
-            String path = uri.getPath();
-            if (path != null && path.length() > 1) {
-                if (all) {
-                    return true;
-                }
-                path = path.substring(1).toLowerCase();
-                if (path.startsWith("blog") || path.equals("iv") || path.startsWith("faq") || path.equals("apps") || path.startsWith("s/")) {
-                    if (forceBrowser != null) {
-                        forceBrowser[0] = true;
-                    }
-                    return false;
-                }
-                return true;
-            }
-        } else if ("telegram.me".equals(host) || "t.me".equals(host)) {
+        } else if ("cr0.ir".equals(host)) {
             String path = uri.getPath();
             if (path != null && path.length() > 1) {
                 if (all) {

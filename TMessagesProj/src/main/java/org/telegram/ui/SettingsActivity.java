@@ -757,23 +757,13 @@ public class SettingsActivity extends BaseFragment implements NotificationCenter
             items.add(UItem.asShadow(null));
 
         items.add(UItem.asHeader(getString(R.string.SettingsHelp)));
-        // Ask a Question / Telegram FAQ / Telegram Features / Privacy Policy are
-        // Telegram-specific. Show them only when the active account is on the
-        // official Telegram network; hide them on The Cat and other servers.
-        // On The Cat (and custom servers) show Cat-specific entries instead:
-        // About Us, Cat Room market, Privacy Policy and Terms — all catroom.ir.
-        boolean officialTelegram = org.telegram.thecat.TheCatServers.serverIsOfficialTelegram(currentAccount);
-        if (officialTelegram) {
-            items.add(SettingCell.Factory.of(17, 0xFFF09F1B, 0xFFE18A11, R.drawable.settings_ask, getString(R.string.AskAQuestion)));
-            items.add(SettingCell.Factory.of(18, 0xFF1BA4ED, 0xFF1488E1, R.drawable.settings_faq, getString(R.string.TelegramFAQ)));
-            items.add(SettingCell.Factory.of(23, 0xFFC46EF4, 0xFF9F55DF, R.drawable.settings_features, getString(R.string.TelegramFeatures)));
-            items.add(SettingCell.Factory.of(19, 0xFF55CA47, 0xFF27B434, R.drawable.settings_policy, getString(R.string.PrivacyPolicy)));
-        } else {
-            items.add(SettingCell.Factory.of(24, 0xFF1BA4ED, 0xFF1488E1, R.drawable.settings_faq, getString(R.string.AboutUs)));
-            items.add(SettingCell.Factory.of(25, 0xFFF09F1B, 0xFFE18A11, R.drawable.settings_gram_24, getString(R.string.CatRoom)));
-            items.add(SettingCell.Factory.of(19, 0xFF55CA47, 0xFF27B434, R.drawable.settings_policy, getString(R.string.PrivacyPolicy)));
-            items.add(SettingCell.Factory.of(26, 0xFFC46EF4, 0xFF9F55DF, R.drawable.settings_features, getString(R.string.TermsOfService)));
-        }
+        // Cat-specific help entries (About Us, Cat Room market, Privacy Policy,
+        // Terms) — all catroom.ir. The Telegram-only entries (Ask a Question,
+        // Telegram FAQ / Features) are gone with the Telegram server.
+        items.add(SettingCell.Factory.of(24, 0xFF1BA4ED, 0xFF1488E1, R.drawable.settings_faq, getString(R.string.AboutUs)));
+        items.add(SettingCell.Factory.of(25, 0xFFF09F1B, 0xFFE18A11, R.drawable.settings_gram_24, getString(R.string.CatRoom)));
+        items.add(SettingCell.Factory.of(19, 0xFF55CA47, 0xFF27B434, R.drawable.settings_policy, getString(R.string.PrivacyPolicy)));
+        items.add(SettingCell.Factory.of(26, 0xFFC46EF4, 0xFF9F55DF, R.drawable.settings_features, getString(R.string.TermsOfService)));
 
         if (BuildVars.LOGS_ENABLED || BuildVars.DEBUG_PRIVATE_VERSION) {
             items.add(UItem.asShadow(null));
@@ -984,7 +974,7 @@ public class SettingsActivity extends BaseFragment implements NotificationCenter
             //APP VERSION HERE
             versionName += "_O7";
 
-            return "The Cat " + String.format(Locale.US, "v%s (%d)\n%s", versionName, code, abi);
+            return "TheCat " + String.format(Locale.US, "v%s (%d)\n%s", versionName, code, abi);
         } catch (Exception e) {
             FileLog.e(e);
         }

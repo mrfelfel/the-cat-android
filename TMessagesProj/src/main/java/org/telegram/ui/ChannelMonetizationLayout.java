@@ -323,7 +323,7 @@ public class ChannelMonetizationLayout extends SizeNotifierFrameLayout implement
         int padding = AndroidUtilities.dp(16);
         starsBalanceEditText.setPadding(dp(6), padding, padding, padding);
         starsBalanceEditText.setInputType(InputType.TYPE_CLASS_NUMBER);
-        starsBalanceEditText.setTypeface(Typeface.DEFAULT);
+        starsBalanceEditText.setTypeface(AndroidUtilities.vazir());
         starsBalanceEditText.setHighlightColor(Theme.getColor(Theme.key_chat_inTextSelectionHighlight, resourcesProvider));
         starsBalanceEditText.setHandlesColor(Theme.getColor(Theme.key_chat_TextSelectionCursor, resourcesProvider));
         starsBalanceEditText.setGravity(LocaleController.isRTL ? Gravity.RIGHT : Gravity.LEFT);

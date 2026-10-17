@@ -160,15 +160,17 @@ public class ApplicationLoader extends Application {
 
     /**
      * Store-specific billing bridge, provided by the flavour's loader (the Bazaar
-     * module returns a Poolakey bridge). Assigned into
-     * {@link org.telegram.messenger.billing.StoreBilling#bridge} by the base
-     * onCreate() below -- deliberately NOT written from the app module, because
-     * R8 mangled a cross-module (app -> library) field/method reference during
-     * minification and caused NoSuchField/NoSuchMethodError crashes at startup.
-     * Keeping the write inside the library keeps the reference library-internal,
-     * which R8 processes consistently.
+     * module overrides this to return a lazily-created Poolakey bridge). Read by
+     * StoreBilling through {@code applicationLoaderInstance}.
+     *
+     * The getter and StoreBilling are kept by rules in the LIBRARY's
+     * proguard-rules.pro — the library's own R8 pass cannot see app-module
+     * subclasses and has twice constant-folded unkept variants of this chain to
+     * null/false, silently disabling every store purchase. Do not remove those
+     * keep rules; isBazaarBuild()/addItemOptions() ship correctly only by
+     * accident of bytecode shape, not by protection.
      */
-    protected org.telegram.messenger.billing.StoreBillingBridge onCreateStoreBillingBridge() {
+    public org.telegram.messenger.billing.StoreBillingBridge getStoreBillingBridge() {
         return null;
     }
 
@@ -314,16 +316,6 @@ public class ApplicationLoader extends Application {
         }
 
         super.onCreate();
-
-        // Register the flavour's store billing bridge (Bazaar supplies a Poolakey
-        // one; every other flavour returns null). Done here, inside the library,
-        // so the field write is library-internal and R8 cannot break it — see
-        // onCreateStoreBillingBridge() for why this must not be written from the
-        // app module.
-        org.telegram.messenger.billing.StoreBillingBridge storeBridge = onCreateStoreBillingBridge();
-        if (storeBridge != null) {
-            org.telegram.messenger.billing.StoreBilling.bridge = storeBridge;
-        }
 
         // AndroidUtilities must be initialized before FileLog
         final String helloWorld = AndroidUtilities.getHelloWorld();

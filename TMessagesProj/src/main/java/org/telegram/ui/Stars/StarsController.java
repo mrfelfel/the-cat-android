@@ -298,7 +298,7 @@ public class StarsController {
                     if (object instanceof TL_stars.TL_starsTopupOption) {
                         TL_stars.TL_starsTopupOption option = (TL_stars.TL_starsTopupOption) object;
                         loadedOptions.add(option);
-                        if (option.store_product != null && !BuildVars.useInvoiceBilling()) {
+                        if (option.store_product != null && !BuildVars.useInvoiceBilling() && !BuildVars.isBazaarStoreApp()) {
                             toLoadStorePrice.add(option);
                             option.loadingStorePrice = true;
                         }
@@ -385,7 +385,7 @@ public class StarsController {
                     if (object instanceof TL_stars.TL_starsGiftOption) {
                         TL_stars.TL_starsGiftOption option = (TL_stars.TL_starsGiftOption) object;
                         loadedOptions.add(option);
-                        if (option.store_product != null && !BuildVars.useInvoiceBilling()) {
+                        if (option.store_product != null && !BuildVars.useInvoiceBilling() && !BuildVars.isBazaarStoreApp()) {
                             toLoadStorePrice.add(option);
                             option.loadingStorePrice = true;
                         }
@@ -472,7 +472,7 @@ public class StarsController {
                     if (object instanceof TL_stars.TL_starsGiveawayOption) {
                         TL_stars.TL_starsGiveawayOption option = (TL_stars.TL_starsGiveawayOption) object;
                         loadedOptions.add(option);
-                        if (option.store_product != null && !BuildVars.useInvoiceBilling()) {
+                        if (option.store_product != null && !BuildVars.useInvoiceBilling() && !BuildVars.isBazaarStoreApp()) {
                             toLoadStorePrice.add(option);
                             option.loadingStorePrice = true;
                         }

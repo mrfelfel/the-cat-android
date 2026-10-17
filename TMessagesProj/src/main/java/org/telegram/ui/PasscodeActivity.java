@@ -495,7 +495,7 @@ public class PasscodeActivity extends BaseFragment implements NotificationCenter
                     passwordEditText.setImeOptions(EditorInfo.IME_ACTION_DONE);
                 }
                 passwordEditText.setTransformationMethod(PasswordTransformationMethod.getInstance());
-                passwordEditText.setTypeface(Typeface.DEFAULT);
+                passwordEditText.setTypeface(AndroidUtilities.vazir());
                 passwordEditText.setCursorColor(Theme.getColor(Theme.key_windowBackgroundWhiteInputFieldActivated));
                 passwordEditText.setCursorSize(dp(20));
                 passwordEditText.setCursorWidth(1.5f);

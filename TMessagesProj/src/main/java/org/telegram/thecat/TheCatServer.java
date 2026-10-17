@@ -13,7 +13,6 @@ public class TheCatServer {
     public long rsaKeyFingerprint = 0;
     public String logoPath = "";
     public boolean isOfficial;
-    public boolean isTelegram;
     public boolean multiDc;
     public int mainDcId;
 

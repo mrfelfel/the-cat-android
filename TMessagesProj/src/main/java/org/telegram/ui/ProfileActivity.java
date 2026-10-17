@@ -7490,7 +7490,7 @@ public class ProfileActivity extends BaseFragment implements NotificationCenter.
                     textView.setBackground(Theme.createRadSelectorDrawable(Theme.getColor(Theme.key_dialogButtonSelector, resourcesProvider), 0, 6));
                     textView.setOnClickListener(v -> {
                         try {
-                            v.getContext().startActivity(new Intent(Intent.ACTION_VIEW, Uri.parse("https://fragment.com")));
+                            v.getContext().startActivity(new Intent(Intent.ACTION_VIEW, Uri.parse("https://catroom.ir/cat-market")));
                         } catch (ActivityNotFoundException e) {
                             FileLog.e(e);
                         }

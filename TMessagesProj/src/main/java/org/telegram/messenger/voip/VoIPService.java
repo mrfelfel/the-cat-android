@@ -2250,7 +2250,7 @@ public class VoIPService extends Service implements SensorEventListener, AudioMa
 			groupCall.call.can_change_join_muted = true;
 			groupCall.call.rtmp_stream = isRtmpStream;
 			if (joinConference instanceof TLRPC.TL_inputGroupCallSlug) {
-				groupCall.call.invite_link = "https://t.me/call/" + joinConference.slug;
+				groupCall.call.invite_link = "https://cr0.ir/call/" + joinConference.slug;
 			}
 			groupCall.chatId = 0;
 			groupCall.currentAccount = AccountInstance.getInstance(currentAccount);

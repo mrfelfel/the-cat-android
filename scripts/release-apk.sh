@@ -1,10 +1,17 @@
 #!/usr/bin/env bash
 # The Cat — one-shot release APK build for macOS.
 #
-#   scripts/release-apk.sh            build + sign + verify + copy to dist/
-#   scripts/release-apk.sh --skip-build   re-sign the existing APK only
+#   scripts/release-apk.sh                  build + sign + verify BOTH flavors
+#   scripts/release-apk.sh --arm            only the ARM-only (small) build
+#   scripts/release-apk.sh --fat           only the all-ABIs build
+#   scripts/release-apk.sh --skip-build    re-sign existing APKs only
+#                                           (combine with --arm/--fat)
 #
-# Produces: dist/TheCat-<version>-ZeroHub.apk  (v1+v2+v3, ZeroHub cert)
+# Produces (same versionCode + keystore, so either installs over the other
+# in place):
+#   dist/TheCat-<version>-ZeroHub.apk      (afat: all 4 ABIs)
+#   dist/TheCat-<version>-ARM-ZeroHub.apk  (aarm: armeabi-v7a + arm64-v8a,
+#                                           ~19 MB smaller — default download)
 #
 # Environment quirks this script papers over:
 #   - ~/.gradle/gradle.properties may point at a dead SOCKS proxy -> disabled via -D
@@ -28,12 +35,28 @@ SDK="${ANDROID_HOME:-$HOME/Library/Android/sdk}"
 APKSIGNER="$SDK/build-tools/36.0.0/apksigner"
 NDK_DIR="$SDK/ndk/27.2.12479018"
 KEYSTORE="TMessagesProj/config/release.keystore"
-APK_SRC="TMessagesProj_AppStandalone/build/outputs/apk/afat/release/app.apk"
 OUT_DIR="dist"
-OUT="$OUT_DIR/TheCat-${VERSION}-ZeroHub.apk"
+APK_DIR="TMessagesProj_AppStandalone/build/outputs/apk"
+# flavor -> output file
+declare -A OUT_NAME=(
+    [afat]="TheCat-${VERSION}-ZeroHub.apk"
+    [aarm]="TheCat-${VERSION}-ARM-ZeroHub.apk"
+)
 
 fail() { echo "ERROR: $*" >&2; exit 1; }
 step() { echo; echo "==> $*"; }
+
+# --- Flavor selection: default both; --arm / --fat narrow it ---
+FLAVORS=(afat aarm)
+SKIP_BUILD=0
+for arg in "$@"; do
+    case "$arg" in
+        --arm)        FLAVORS=(aarm) ;;
+        --fat)        FLAVORS=(afat) ;;
+        --skip-build) SKIP_BUILD=1 ;;
+        *) fail "Unknown option: $arg (use --arm, --fat, --skip-build)" ;;
+    esac
+done
 
 # JDK: Gradle 8.11 needs a modern JDK (17+); the real build ran on Homebrew's
 # openjdk. Honor an explicit override, else prefer Homebrew, else java_home.
@@ -102,31 +125,45 @@ if [ "$FREE_KB" -lt $((5 * 1024 * 1024)) ]; then
 fi
 
 # --- Build ---
-if [ "${1:-}" = "--skip-build" ]; then
+# task name helpers: afat -> assembleAfatRelease, aarm -> assembleAarmRelease
+GRADLE_TASKS=()
+for flavor in "${FLAVORS[@]}"; do
+    cap="$(tr '[:lower:]' '[:upper:]' <<< "${flavor:0:1}")${flavor:1}"
+    GRADLE_TASKS+=(":TMessagesProj_AppStandalone:assemble${cap}Release")
+done
+
+if [ "$SKIP_BUILD" = 1 ]; then
     step "Skipping build (--skip-build)"
-    [ -f "$APK_SRC" ] || fail "No APK at $APK_SRC — run without --skip-build first"
+    for flavor in "${FLAVORS[@]}"; do
+        [ -f "$APK_DIR/$flavor/release/app.apk" ] \
+            || fail "No APK at $APK_DIR/$flavor/release/app.apk — run without --skip-build first"
+    done
 else
-    step "Building :TMessagesProj_AppStandalone:assembleAfatRelease"
-    ./gradlew :TMessagesProj_AppStandalone:assembleAfatRelease "${GRADLE_FLAGS[@]}"
+    step "Building ${GRADLE_TASKS[*]}"
+    ./gradlew "${GRADLE_TASKS[@]}" "${GRADLE_FLAGS[@]}"
 fi
-[ -f "$APK_SRC" ] || fail "Build produced no APK at $APK_SRC"
 
-# --- Sign (always; Gradle's own signature is not trusted to be intact) ---
-step "Signing with $KEYSTORE (alias: $KEY_ALIAS)"
-SIGNED="$(mktemp -t thecat-apk).apk"
-trap 'rm -f "$SIGNED"' EXIT
-"$APKSIGNER" sign \
-    --ks "$KEYSTORE" --ks-key-alias "$KEY_ALIAS" \
-    --ks-pass "pass:$STORE_PASS" --key-pass "pass:$KEY_PASS" \
-    --out "$SIGNED" "$APK_SRC"
-cp "$SIGNED" "$APK_SRC"
-
-# --- Verify before shipping ---
-step "Verifying"
-"$APKSIGNER" verify --verbose --print-certs "$APK_SRC" | grep -E \
-    'Verifies$|Verified using v[123] scheme|certificate DN|key size' || fail "Verification failed"
-
+# --- Sign + verify each selected flavor (always re-sign; Gradle's signature is not trusted) ---
 mkdir -p "$OUT_DIR"
-cp "$APK_SRC" "$OUT"
-echo
-echo "DONE  $(du -h "$OUT" | cut -f1)  ->  $OUT"
+for flavor in "${FLAVORS[@]}"; do
+    APK_SRC="$APK_DIR/$flavor/release/app.apk"
+    OUT="$OUT_DIR/${OUT_NAME[$flavor]}"
+    [ -f "$APK_SRC" ] || fail "Build produced no APK at $APK_SRC"
+
+    step "Signing $flavor with $KEYSTORE (alias: $KEY_ALIAS)"
+    SIGNED="$(mktemp -t thecat-apk).apk"
+    "$APKSIGNER" sign \
+        --ks "$KEYSTORE" --ks-key-alias "$KEY_ALIAS" \
+        --ks-pass "pass:$STORE_PASS" --key-pass "pass:$KEY_PASS" \
+        --out "$SIGNED" "$APK_SRC"
+    cp "$SIGNED" "$APK_SRC"
+    rm -f "$SIGNED"
+
+    step "Verifying $flavor"
+    "$APKSIGNER" verify --verbose --print-certs "$APK_SRC" | grep -E \
+        'Verifies$|Verified using v[123] scheme|certificate DN|key size' \
+        || fail "Verification failed: $APK_SRC"
+
+    cp "$APK_SRC" "$OUT"
+    echo "DONE  $(du -h "$OUT" | cut -f1)  ->  $OUT"
+done

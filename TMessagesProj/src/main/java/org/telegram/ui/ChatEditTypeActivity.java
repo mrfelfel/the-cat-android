@@ -497,7 +497,7 @@ public class ChatEditTypeActivity extends BaseFragment implements NotificationCe
                             new ClickableSpan() {
                                 @Override
                                 public void onClick(@NonNull View view) {
-                                    Browser.openUrl(getContext(), "https://fragment.com/username/" + username);
+                                    Browser.openUrl(getContext(), "https://catroom.ir/cat-market/username/" + username);
                                 }
                                 @Override
                                 public void updateDrawState(@NonNull TextPaint ds) {

@@ -42,17 +42,24 @@ public class ApplicationLoaderImpl extends ApplicationLoader {
     }
 
     /**
-     * Provides the Poolakey-backed store bridge. The base ApplicationLoader.onCreate()
-     * assigns it into StoreBilling.bridge. Overriding this virtual method (instead of
-     * writing StoreBilling.bridge directly from here) is deliberate: R8 mangled a
-     * cross-module app->library field/method reference during minification, causing
-     * NoSuchField/NoSuchMethodError crashes at startup. A virtual override is resolved
-     * by normal dispatch and R8 processes it consistently.
+     * Lazily-creates the Poolakey-backed store bridge. A virtual override on the
+     * Application — same shape as isBazaarBuild(), which ships correctly — is the
+     * only variant R8 has not folded away: an earlier onCreate()-registration
+     * into a field (static on StoreBilling, then instance on ApplicationLoader)
+     * was constant-folded to null by the library's own R8 pass (it cannot see
+     * app-module subclasses), which silently disabled every store purchase and
+     * sent users to the invoice WebView.
      */
     @Override
-    protected StoreBillingBridge onCreateStoreBillingBridge() {
-        return new BazaarBillingBridge(this);
+    public StoreBillingBridge getStoreBillingBridge() {
+        StoreBillingBridge b = bridge;
+        if (b == null) {
+            b = bridge = new BazaarBillingBridge(this);
+        }
+        return b;
     }
+
+    private volatile StoreBillingBridge bridge;
 
     @Override
     protected void startAppCenterInternal(Activity context) {
@@ -73,11 +80,9 @@ public class ApplicationLoaderImpl extends ApplicationLoader {
     @Override
     public void onCreate() {
         super.onCreate();
-        // The store bridge itself is provided by onCreateStoreBillingBridge()
-        // above and registered by the base ApplicationLoader.onCreate(), so it is
-        // in place before any UI can trigger a purchase. Kept out of this module
-        // deliberately: writing StoreBilling.bridge from here made R8 mangle the
-        // cross-module reference and crash at startup.
+        // Eagerly create the store bridge so its receipt-consume handler is
+        // registered before any auto-flush or UI purchase can run.
+        getStoreBillingBridge();
         // Re-send any receipts the server never acknowledged (purchases made
         // while offline or before the server method existed). Idempotent: only
         // schedules work when the queue is non-empty.

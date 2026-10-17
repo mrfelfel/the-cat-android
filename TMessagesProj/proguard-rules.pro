@@ -114,3 +114,17 @@
 # Use -keep to explicitly keep any other classes shrinking would remove
 -dontoptimize
 -dontobfuscate
+
+# Store billing bridge (Cafe Bazaar). CRITICAL: the library is minified by its
+# OWN R8 pass (minifyReleaseWithR8) BEFORE the app module is seen, and app-module
+# keep rules never reach that pass. Without the rules below, library R8 sees only
+# the base ApplicationLoader (getStoreBillingBridge() returns null, no Bazaar
+# subclass visible), constant-folds StoreBilling.get()/isAvailable() to
+# null/false, and every store purchase silently falls through to the invoice
+# WebView. isBazaarBuild() survives only because its result flows straight into
+# an ireturn — do not rely on such accidents. Keeps here are load-bearing for
+# payment correctness; verified via javap on shrunkClasses.jar.
+-keep class org.telegram.messenger.billing.** { *; }
+-keepclassmembers class org.telegram.messenger.ApplicationLoader {
+    public org.telegram.messenger.billing.StoreBillingBridge getStoreBillingBridge();
+}

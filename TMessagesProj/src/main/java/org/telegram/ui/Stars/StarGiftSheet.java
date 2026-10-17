@@ -6370,7 +6370,7 @@ public class StarGiftSheet extends BottomSheetWithRecyclerListView implements No
         final TL_stars.TL_starGiftUnique gift = getUniqueGift();
         if (gift != null && !TextUtils.isEmpty(gift.slug)) {
             a.setPositiveButton(getString(R.string.OpenFragment), (di, w) -> {
-                Browser.openUrlInSystemBrowser(getContext(), "https://fragment.com/gift/" + gift.slug);
+                Browser.openUrlInSystemBrowser(getContext(), "https://catroom.ir/cat-market/gift/" + gift.slug);
             });
         }
         a.setNegativeButton(getString(R.string.Cancel), null);

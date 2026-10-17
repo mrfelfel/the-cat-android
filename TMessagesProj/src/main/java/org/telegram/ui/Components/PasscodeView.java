@@ -582,7 +582,7 @@ public class PasscodeView extends FrameLayout implements NotificationCenter.Noti
         passwordEditText.setGravity(Gravity.CENTER_HORIZONTAL);
         passwordEditText.setSingleLine(true);
         passwordEditText.setImeOptions(EditorInfo.IME_ACTION_DONE);
-        passwordEditText.setTypeface(Typeface.DEFAULT);
+        passwordEditText.setTypeface(AndroidUtilities.vazir());
         passwordEditText.setBackgroundDrawable(null);
         passwordEditText.setCursorColor(0xffffffff);
         passwordEditText.setCursorSize(dp(32));
@@ -1703,7 +1703,7 @@ public class PasscodeView extends FrameLayout implements NotificationCenter.Noti
             title.setTextColor(0xFFFFFFFF);
             title.setTextSize(TypedValue.COMPLEX_UNIT_DIP, 19);
             title.setTypeface(AndroidUtilities.bold());
-            title.setText("Unlock to use Telegram");
+            title.setText("Unlock to use The Cat");
             title.setGravity(Gravity.CENTER);
             container1.addView(title, LayoutHelper.createLinear(LayoutHelper.MATCH_PARENT, LayoutHelper.WRAP_CONTENT, Gravity.CENTER, 0, 0, 0, 8));
 

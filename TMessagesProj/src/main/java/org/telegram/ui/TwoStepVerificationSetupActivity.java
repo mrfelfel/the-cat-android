@@ -432,7 +432,7 @@ public class TwoStepVerificationSetupActivity extends BaseFragment {
             case TYPE_INTRO:
             case TYPE_PASSWORD_SET:
             case TYPE_VERIFY_OK:
-                titleTextView.setTypeface(Typeface.DEFAULT);
+                titleTextView.setTypeface(AndroidUtilities.vazir());
                 titleTextView.setTextSize(TypedValue.COMPLEX_UNIT_DIP, 24);
                 break;
             default:
@@ -992,7 +992,7 @@ public class TwoStepVerificationSetupActivity extends BaseFragment {
                 editTextFirstRow.setImeOptions(EditorInfo.IME_ACTION_DONE | EditorInfo.IME_FLAG_NO_EXTRACT_UI);
                 editTextFirstRow.setInputType(InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_VARIATION_PASSWORD);
                 editTextFirstRow.setTransformationMethod(PasswordTransformationMethod.getInstance());
-                editTextFirstRow.setTypeface(Typeface.DEFAULT);
+                editTextFirstRow.setTypeface(AndroidUtilities.vazir());
 
                 imageView.setAnimation(R.raw.wallet_science, 120, 120);
                 imageView.playAnimation();
@@ -1018,7 +1018,7 @@ public class TwoStepVerificationSetupActivity extends BaseFragment {
                 editTextFirstRow.setImeOptions(EditorInfo.IME_ACTION_NEXT | EditorInfo.IME_FLAG_NO_EXTRACT_UI);
                 editTextFirstRow.setInputType(InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_VARIATION_PASSWORD);
                 editTextFirstRow.setTransformationMethod(PasswordTransformationMethod.getInstance());
-                editTextFirstRow.setTypeface(Typeface.DEFAULT);
+                editTextFirstRow.setTypeface(AndroidUtilities.vazir());
 
                 needPasswordButton = currentType == TYPE_CREATE_PASSWORD_STEP_1;
                 AndroidUtilities.updateViewVisibilityAnimated(showPasswordButton, false, 0.1f, false);

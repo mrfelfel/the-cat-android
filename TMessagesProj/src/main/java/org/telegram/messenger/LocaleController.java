@@ -1280,6 +1280,10 @@ public class LocaleController {
                 }
                 eventType = parser.next();
             }
+            // The app's own name is never taken from a server lang pack: Telegram's
+            // packs ship AppName="Telegram", which would rename the app (header etc.).
+            stringMap.remove("AppName");
+            stringMap.remove("AppNameBeta");
             return stringMap;
         } catch (Exception e) {
             try {

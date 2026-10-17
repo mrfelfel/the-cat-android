@@ -4,13 +4,22 @@
 -keep class com.android.vending.billing.** { *; }
 -dontwarn ir.cafebazaar.poolakey.**
 
-# The store bridge lives in the shared :TMessagesProj library. R8 was inlining
-# and stripping StoreBilling.register()/get()/isAvailable() as trivial static
-# accessors, which left ApplicationLoaderImpl.onCreate() calling a method that
-# no longer existed in the minified dex -> NoSuchMethodError crash on startup
-# (java.lang.NoSuchMethodError: No static method register(...) in StoreBilling).
-# These gate real payment correctness, so keep the whole bridge intact.
+# The store bridge lives in the shared :TMessagesProj library. R8 has broken
+# every field-based registration of it in the minified bazaar build — stripping
+# a register() accessor (NoSuchMethodError at startup), then constant-folding
+# a static field to null and later an ApplicationLoader instance field the same
+# way (isAvailable() became a hardcoded false and every store purchase silently
+# fell through to the invoice WebView). The bridge is now a lazily-created
+# virtual override on the Application (getStoreBillingBridge) — the same shape
+# as isBazaarBuild(), which ships correctly. Keep that chain explicitly; it
+# gates real payment correctness and has burned us three times.
 -keep class org.telegram.messenger.billing.** { *; }
+-keepclassmembers class org.telegram.messenger.ApplicationLoader {
+    public org.telegram.messenger.billing.StoreBillingBridge getStoreBillingBridge();
+}
+-keepclassmembers class * extends org.telegram.messenger.ApplicationLoader {
+    public org.telegram.messenger.billing.StoreBillingBridge getStoreBillingBridge();
+}
 
 # R8's "missing classes" check false-positives on this TL schema class: it IS
 # compiled into the :TMessagesProj library (TLRPC$TL_payments_assignBazaarTransaction

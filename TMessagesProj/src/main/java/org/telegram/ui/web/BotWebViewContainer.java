@@ -465,7 +465,7 @@ public abstract class BotWebViewContainer extends FrameLayout implements Notific
                 final PackageInfo packageInfo = ApplicationLoader.applicationContext.getPackageManager().getPackageInfo(ApplicationLoader.applicationContext.getPackageName(), 0);
                 final int perf = SharedConfig.getDevicePerformanceClass();
                 final String perfName = perf == SharedConfig.PERFORMANCE_CLASS_LOW ? "LOW" : perf == SharedConfig.PERFORMANCE_CLASS_AVERAGE ? "AVERAGE" : "HIGH";
-                useragent += " Telegram-Android/" + packageInfo.versionName + " (" + capitalizeFirst(Build.MANUFACTURER) + " " + Build.MODEL + "; Android " + Build.VERSION.RELEASE + "; SDK " + Build.VERSION.SDK_INT + "; " + perfName + ")";
+                useragent += " TheCat-Android/" + packageInfo.versionName + " (" + capitalizeFirst(Build.MANUFACTURER) + " " + Build.MODEL + "; Android " + Build.VERSION.RELEASE + "; SDK " + Build.VERSION.SDK_INT + "; " + perfName + ")";
             }
             settings.setUserAgentString(useragent);
         } catch (Exception e) {
@@ -1789,7 +1789,7 @@ public abstract class BotWebViewContainer extends FrameLayout implements Notific
                     if (pathFull.startsWith("/")) {
                         pathFull = pathFull.substring(1);
                     }
-                    onOpenUri(Uri.parse("https://t.me/" + pathFull), null, false, true, force_request);
+                    onOpenUri(Uri.parse("https://cr0.ir/" + pathFull), null, false, true, force_request);
                 } catch (JSONException e) {
                     FileLog.e(e);
                 }
@@ -4119,7 +4119,7 @@ public abstract class BotWebViewContainer extends FrameLayout implements Notific
                         }
                     }
                     if (botWebViewContainer != null && Browser.isInternalUri(uriNew, null)) {
-                        if (!bot && "1".equals(uriNew.getQueryParameter("embed")) && "t.me".equals(uriNew.getAuthority())) {
+                        if (!bot && "1".equals(uriNew.getQueryParameter("embed")) && "cr0.ir".equals(uriNew.getAuthority())) {
                             return false;
                         }
                         if (MessagesController.getInstance(botWebViewContainer.currentAccount).webAppAllowedProtocols != null &&

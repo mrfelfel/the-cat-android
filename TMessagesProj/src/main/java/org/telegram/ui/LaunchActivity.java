@@ -262,7 +262,7 @@ import java.util.zip.ZipInputStream;
 public class LaunchActivity extends BasePermissionsActivity implements INavigationLayout.INavigationLayoutDelegate, NotificationCenter.NotificationCenterDelegate, DialogsActivity.DialogsActivityDelegate, IPipActivity {
     public final static String EXTRA_FORCE_NOT_INTERNAL_APPS = "force_not_internal_apps";
     public final static String EXTRA_FORCE_REQUEST = "force_request";
-    public final static Pattern PREFIX_T_ME_PATTERN = Pattern.compile("^(?:http(?:s|)://|)([A-z0-9-]+?)\\.t\\.me");
+    public final static Pattern PREFIX_LINK_PATTERN = Pattern.compile("^(?:http(?:s|)://|)([A-z0-9-]+?)\\.cr0\\.ir");
 
     public static boolean isActive;
     private static int activeInstanceCount;
@@ -1246,50 +1246,9 @@ public class LaunchActivity extends BasePermissionsActivity implements INavigati
     }
 
     /**
-     * Telegram links (t.me / tg://) only work on a Telegram-official account. When
-     * the active account is on a custom/self-hosted server, this either offers to
-     * switch to a Telegram account (and re-opens the link there) or, if there is no
-     * Telegram account, explains that one is required.
-     *
-     * Returns true when the link may be processed right now (already on Telegram);
-     * false when handling was deferred to a dialog.
-     */
-    private boolean routeTelegramLinkToTelegramAccount(Intent intent, int[] intentAccount, Browser.Progress progress) {
-        TheCatServer server = TheCatServers.getServerForAccount(intentAccount[0]);
-        if (server == null || server.isTelegram) {
-            return true; // already on a Telegram account (or legacy/unknown — allow)
-        }
-        if (progress != null) {
-            progress.end();
-        }
-        final int tgAccount = TheCatServers.firstTelegramAccount();
-        if (tgAccount < 0) {
-            showNeedTelegramAccountDialog();
-            return false;
-        }
-        final TheCatServer tgServer = TheCatServers.getServerForAccount(tgAccount);
-        final String name = (tgServer != null) ? tgServer.name : "Telegram";
-        final Intent reintent = new Intent(intent);
-        reintent.putExtra("currentAccount", tgAccount);
-        try {
-            AlertDialog.Builder b = new AlertDialog.Builder(this);
-            b.setTitle(LocaleController.getString(R.string.AppName));
-            b.setMessage("This is a Telegram link. Switch to your " + name + " account to open it?");
-            b.setPositiveButton(LocaleController.getString(R.string.OK), (d, w) -> {
-                switchToAccount(tgAccount, true);
-                AndroidUtilities.runOnUIThread(() -> handleIntent(reintent, false, false, false, null, true, true), 200);
-            });
-            b.setNegativeButton(LocaleController.getString(R.string.Cancel), null);
-            b.show();
-        } catch (Exception ignore) {
-        }
-        return false;
-    }
-
-    /**
      * Routes a self-hosted The Cat invite/username link to the account that owns its
      * host. If that account is already active, proceed; otherwise offer to switch to it
-     * and re-handle the link. Mirrors routeTelegramLinkToTelegramAccount.
+     * and re-handle the link.
      */
     private boolean routeTheCatLinkToTheCatAccount(int thecatAccount, Intent intent, int[] intentAccount, Browser.Progress progress) {
         if (thecatAccount < 0 || thecatAccount == intentAccount[0]) {
@@ -1299,7 +1258,7 @@ public class LaunchActivity extends BasePermissionsActivity implements INavigati
             progress.end();
         }
         final TheCatServer server = TheCatServers.getServerForAccount(thecatAccount);
-        final String name = (server != null && server.name != null) ? server.name : "The Cat";
+        final String name = (server != null && server.name != null) ? server.name : "TheCat";
         final Intent reintent = new Intent(intent);
         reintent.putExtra("currentAccount", thecatAccount);
         try {
@@ -1323,17 +1282,6 @@ public class LaunchActivity extends BasePermissionsActivity implements INavigati
             AlertDialog.Builder b = new AlertDialog.Builder(this);
             b.setTitle(LocaleController.getString(R.string.AppName));
             b.setMessage("This link belongs to a server you are not connected to" + (TextUtils.isEmpty(host) ? "." : (": " + host)));
-            b.setPositiveButton(LocaleController.getString(R.string.OK), null);
-            b.show();
-        } catch (Exception ignore) {
-        }
-    }
-
-    private void showNeedTelegramAccountDialog() {
-        try {
-            AlertDialog.Builder b = new AlertDialog.Builder(this);
-            b.setTitle(LocaleController.getString(R.string.AppName));
-            b.setMessage("This link can only be opened with an official Telegram account. Add or switch to a Telegram account first.");
             b.setPositiveButton(LocaleController.getString(R.string.OK), null);
             b.show();
         } catch (Exception ignore) {
@@ -2088,27 +2036,23 @@ public class LaunchActivity extends BasePermissionsActivity implements INavigati
                                 case "http":
                                 case "https": {
                                     String host = data.getHost().toLowerCase();
-                                    Matcher prefixMatcher = PREFIX_T_ME_PATTERN.matcher(host);
+                                    Matcher prefixMatcher = PREFIX_LINK_PATTERN.matcher(host);
                                     boolean isPrefix = prefixMatcher.find();
                                     // The Cat self-hosted invite/username link: the host matches an
                                     // account's me_url_prefix and that server advertises thecat=true.
                                     int thecatAccount = TheCatServers.findTheCatAccountForHost(host);
                                     boolean isTheCat = thecatAccount >= 0;
-                                    if (host.equals("telegram.me") || host.equals("t.me") || host.equals("telegram.dog") || isPrefix || isTheCat) {
+                                    if (host.equals("cr0.ir") || isPrefix || isTheCat) {
                                         if (isTheCat) {
                                             // Route on the The Cat account that owns this host (switch if needed).
                                             if (!routeTheCatLinkToTheCatAccount(thecatAccount, intent, intentAccount, progress)) {
                                                 return false;
                                             }
                                             // Rewrite host -> t.me so the shared t.me path parser handles /+hash, /username, etc.
-                                            data = Uri.parse("https://t.me" + (TextUtils.isEmpty(data.getPath()) ? "/" : data.getPath()) + (TextUtils.isEmpty(data.getQuery()) ? "" : "?" + data.getQuery()));
+                                            data = Uri.parse("https://cr0.ir" + (TextUtils.isEmpty(data.getPath()) ? "/" : data.getPath()) + (TextUtils.isEmpty(data.getQuery()) ? "" : "?" + data.getQuery()));
                                         } else {
-                                            // t.me links require a Telegram-official account.
-                                            if (!routeTelegramLinkToTelegramAccount(intent, intentAccount, progress)) {
-                                                return false;
-                                            }
                                             if (isPrefix) {
-                                                data = Uri.parse("https://t.me/" + prefixMatcher.group(1) + (TextUtils.isEmpty(data.getPath()) ? "" : data.getPath()) + (TextUtils.isEmpty(data.getQuery()) ? "" : "?" + data.getQuery()));
+                                                data = Uri.parse("https://cr0.ir/" + prefixMatcher.group(1) + (TextUtils.isEmpty(data.getPath()) ? "" : data.getPath()) + (TextUtils.isEmpty(data.getQuery()) ? "" : "?" + data.getQuery()));
                                             }
                                         }
                                         String path = data.getPath();
@@ -2414,10 +2358,6 @@ public class LaunchActivity extends BasePermissionsActivity implements INavigati
                                     break;
                                 }
                                 case "tg": {
-                                    // tg:// deep links are only valid on Telegram-official accounts.
-                                    if (!routeTelegramLinkToTelegramAccount(intent, intentAccount, progress)) {
-                                        return false;
-                                    }
                                     String url = data.toString();
                                     if (url.startsWith("tg:premium_offer") || url.startsWith("tg://premium_offer")) {
                                         String finalUrl = url;
@@ -3001,9 +2941,9 @@ public class LaunchActivity extends BasePermissionsActivity implements INavigati
                                             NotificationCenter.getInstance(intentAccount[0]).postNotificationName(NotificationCenter.closeChats);
                                             push_user_id = userId;
                                             String mimeType = cursor.getString(cursor.getColumnIndex(ContactsContract.Data.MIMETYPE));
-                                            if (TextUtils.equals(mimeType, "vnd.android.cursor.item/vnd.org.telegram.messenger.android.call")) {
+                                            if (TextUtils.equals(mimeType, "vnd.android.cursor.item/vnd.com.thecat.messenger.android.call")) {
                                                 audioCallUser = true;
-                                            } else if (TextUtils.equals(mimeType, "vnd.android.cursor.item/vnd.org.telegram.messenger.android.call.video")) {
+                                            } else if (TextUtils.equals(mimeType, "vnd.android.cursor.item/vnd.com.thecat.messenger.android.call.video")) {
                                                 videoCallUser = true;
                                             }
                                         }
@@ -3014,7 +2954,7 @@ public class LaunchActivity extends BasePermissionsActivity implements INavigati
                             }
                         }
                     }
-                } else if (intent.getAction().equals("org.telegram.messenger.OPEN_ACCOUNT")) {
+                } else if (intent.getAction().equals("com.thecat.messenger.OPEN_ACCOUNT")) {
                     open_settings = 1;
                 } else if (intent.getAction().equals("new_dialog")) {
                     open_new_dialog = 1;

@@ -1590,7 +1590,7 @@ public class MessagesController extends BaseController implements NotificationCe
         maxFaveStickersCount = mainPreferences.getInt("maxFaveStickersCount", 5);
         maxEditTime = mainPreferences.getInt("maxEditTime", 3600);
         ratingDecay = mainPreferences.getInt("ratingDecay", 2419200);
-        linkPrefix = mainPreferences.getString("linkPrefix", "t.me");
+        linkPrefix = mainPreferences.getString("linkPrefix", "cr0.ir");
         thecatServer = mainPreferences.getBoolean("thecatServer", false);
         callReceiveTimeout = mainPreferences.getInt("callReceiveTimeout", 20000);
         callRingTimeout = mainPreferences.getInt("callRingTimeout", 90000);
@@ -1749,7 +1749,7 @@ public class MessagesController extends BaseController implements NotificationCe
         whitelistedBots = mainPreferences.getStringSet("whitelistedBots", new HashSet<>()).stream().map(s -> tryParseLong(s, 0)).collect(Collectors.toCollection(HashSet::new));
         starsGroupcallMessageAmountMax = mainPreferences.getInt("starsGroupcallMessageAmountMax", 10_000);
         starsGroupcallMessageLimits = parseTiersString(mainPreferences.getString("starsGroupcallMessageLimits", null));
-        freezeAppealUrl = mainPreferences.getString("freezeAppealUrl", "t.me/spambot");
+        freezeAppealUrl = mainPreferences.getString("freezeAppealUrl", "cr0.ir/spambot");
         enableGiftsInProfile = mainPreferences.getBoolean("enableGiftsInProfile", true);
         storiesPosting = mainPreferences.getString("storiesPosting", "enabled");
         storiesEntities = mainPreferences.getString("storiesEntities", "premium");
@@ -1782,7 +1782,7 @@ public class MessagesController extends BaseController implements NotificationCe
         channelRevenueWithdrawalEnabled = mainPreferences.getBoolean("channelRevenueWithdrawalEnabled", false);
         newNoncontactPeersRequirePremiumWithoutOwnpremium = mainPreferences.getBoolean("newNoncontactPeersRequirePremiumWithoutOwnpremium", false);
         reactionsUniqMax = mainPreferences.getInt("reactionsUniqMax", 11);
-        premiumManageSubscriptionUrl = mainPreferences.getString("premiumManageSubscriptionUrl", ApplicationLoader.isStandaloneBuild() ? "https://t.me/premiumbot?start=status" : "https://play.google.com/store/account/subscriptions?sku=telegram_premium&package=org.telegram.messenger");
+        premiumManageSubscriptionUrl = mainPreferences.getString("premiumManageSubscriptionUrl", ApplicationLoader.isStandaloneBuild() ? "https://cr0.ir/premiumbot?start=status" : "https://play.google.com/store/account/subscriptions?sku=telegram_premium&package=com.thecat.messenger");
         androidDisableRoundCamera2 = mainPreferences.getBoolean("androidDisableRoundCamera2", true);
         storiesPinnedToTopCountMax = mainPreferences.getInt("storiesPinnedToTopCountMax", 3);
         showAnnualPerMonth = mainPreferences.getBoolean("showAnnualPerMonth", false);
@@ -5622,7 +5622,7 @@ public class MessagesController extends BaseController implements NotificationCe
         videoIgnoreAltDocuments = false;
         freezeSinceDate = 0L;
         freezeUntilDate = 0L;
-        freezeAppealUrl = "t.me/spambot";
+        freezeAppealUrl = "cr0.ir/spambot";
         verifyAgeBotUsername = null;
         verifyAgeCountry = "GB";
         ignoreRestrictionReasons = new HashSet<String>();
@@ -8137,7 +8137,7 @@ public class MessagesController extends BaseController implements NotificationCe
         }
         if (dialogId == getUserConfig().getClientUserId()) {
             settings.business_bot_id = UserObject.REPLY_BOT;
-            settings.business_bot_manage_url = "https://telegram.org/";
+            settings.business_bot_manage_url = "https://catroom.ir/";
         }
         editor.apply();
         userPeerSettings.put(dialogId, settings);

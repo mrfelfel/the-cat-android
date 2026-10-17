@@ -32,12 +32,15 @@ public class TheCatServers {
     private static final String KEY_CUSTOM_SERVERS = "custom_servers";
     private static final String KEY_ACCOUNT_SERVER = "account_server_";
     // Built-in servers are rebuilt from compile-time constants by
-    // thecatServer()/telegramServer(), so unlike custom ones they have no
+    // thecatServer(), so unlike custom ones they have no
     // KEY_CUSTOM_SERVERS entry to write a refreshed name/description/logo
     // back into. This holds those cosmetic overrides, keyed by server id.
     private static final String KEY_BUILTIN_IDENTITY = "builtin_identity";
 
     public static final String ID_THECAT = "thecat";
+    // Legacy marker only: pre-single-server builds bound Telegram-network accounts
+    // to this id. Nothing resolves it; applyStoredServerToAccount logs such
+    // accounts out at startup.
     public static final String ID_TELEGRAM  = "telegram";
 
     // Fired whenever the stored custom-server list changes (add/update/remove,
@@ -73,29 +76,16 @@ public class TheCatServers {
     // fingerprint == 0 -> native layer derives it from the PEM (see ConnectionsManager::applyServerConfig).
     static final long THECAT_RSA_FINGERPRINT = 0;
 
-    // Official Telegram production RSA key (restored from original Android source)
-    static final String TELEGRAM_RSA_KEY =
-        "-----BEGIN RSA PUBLIC KEY-----\n" +
-        "MIIBCgKCAQEA6LszBcC1LGzyr992NzE0ieY+BSaOW622Aa9Bd4ZHLl+TuFQ4lo4g\n" +
-        "5nKaMBwK/BIb9xUfg0Q29/2mgIR6Zr9krM7HjuIcCzFvDtr+L0GQjae9H0pRB2OO\n" +
-        "62cECs5HKhT5DZ98K33vmWiLowc621dQuwKWSQKjWf50XYFw42h21P2KXUGyp2y/\n" +
-        "+aEyZ+uVgLLQbRA1dEjSDZ2iGRy12Mk5gpYc397aYp438fsJoHIgJ2lgMv5h7WY9\n" +
-        "t6N/byY9Nw9p21Og3AoXSL2q/2IJ1WRUhebgAdGVMlV1fkuOQoEzR7EdpqtQD9Cs\n" +
-        "5+bfo3Nhmcyvk5ftB0WkJ9z6bNZ7yxrP8wIDAQAB\n" +
-        "-----END RSA PUBLIC KEY-----";
-    static final long TELEGRAM_RSA_FINGERPRINT = 0xd09d1d85de64fd85L;
-
     // --- Built-in servers ---
 
     public static TheCatServer thecatServer() {
         TheCatServer s = new TheCatServer();
         s.id                 = ID_THECAT;
-        s.name               = "The Cat";
-        s.description        = "The Cat default server.";
+        s.name               = "TheCat";
+        s.description        = "TheCat default server.";
         s.host               = DEFAULT_HOST;
         s.port               = DEFAULT_PORT;
         s.isOfficial         = true;
-        s.isTelegram         = false;
         s.multiDc            = false;
         s.mainDcId           = 2;
         s.rsaPublicKey       = THECAT_RSA_KEY;
@@ -107,33 +97,14 @@ public class TheCatServers {
         return s;
     }
 
-    public static TheCatServer telegramServer() {
-        TheCatServer s = new TheCatServer();
-        s.id                 = ID_TELEGRAM;
-        s.name               = "Telegram";
-        s.description        = "Official Telegram cloud. Sign in with your Telegram account.";
-        s.host               = "149.154.167.51";
-        s.port               = 443;
-        s.isOfficial         = true;
-        s.isTelegram         = true;
-        s.multiDc            = true;
-        s.mainDcId           = 2;
-        s.rsaPublicKey       = TELEGRAM_RSA_KEY;
-        s.rsaKeyFingerprint  = TELEGRAM_RSA_FINGERPRINT;
-        return s;
-    }
-
     // --- Server list ---
 
     /**
      * The list of servers shown to users when picking where to sign in. The
-     * official Telegram network is deliberately NOT listed: The Cat ships as a
-     * self-contained app whose default backend is its own server, and showing
-     * Telegram as a co-equal "official" option steers users onto a backend that
-     * does not offer this app's features (email signup, Cat Room, ...). The
-     * machinery for Telegram accounts (telegramServer(), isTelegram, the
-     * Telegram account caps below) stays intact so any account already bound to
-     * Telegram keeps working -- it just cannot be newly joined from the UI.
+     * official Telegram network is not offered at all: this app ships as a
+     * self-contained single-server client whose backend is the Cat server.
+     * Accounts still bound to Telegram from an older build are logged out at
+     * startup (see applyStoredServerToAccount).
      */
     public static List<TheCatServer> listServers() {
         List<TheCatServer> result = new ArrayList<>();
@@ -144,10 +115,10 @@ public class TheCatServers {
 
     public static TheCatServer getServerById(String id) {
         if (id == null) return null;
-        // Not offered by listServers(), but still resolvable: an account bound
-        // to Telegram before it was hidden from the picker must keep restoring
-        // its config on startup (see applyStoredServerToAccount).
-        if (ID_TELEGRAM.equals(id)) return telegramServer();
+        // The official Telegram network is deliberately not resolvable: this app
+        // ships as a self-contained single-server client. Accounts still bound
+        // to ID_TELEGRAM from an older build are logged out at startup (see
+        // applyStoredServerToAccount).
         for (TheCatServer s : listServers()) {
             if (id.equals(s.id)) return s;
         }
@@ -257,9 +228,8 @@ public class TheCatServers {
     }
 
     /**
-     * Whether the account's current server exposes Telegram Premium / Stars /
-     * Business features. Telegram always does. Any other (custom
-     * self-hosted, e.g. gramsrv) server is trusted based on its own appConfig
+     * Whether the account's current server exposes Premium / Stars / Business
+     * features. The server is trusted based on its own appConfig
      * contract — help.getAppConfig `premium_purchase_blocked` / `stars_purchase_blocked`
      * (MessagesController.premiumLocked / starsLocked, refreshed on every appConfig
      * fetch) — the same signal the desktop client relies on via session->premiumPossible(),
@@ -273,21 +243,8 @@ public class TheCatServers {
         if (s == null) {
             return false;
         }
-        if (s.isTelegram) {
-            return true;
-        }
         MessagesController mc = MessagesController.getInstance(accountNum);
         return !mc.premiumLocked || !mc.starsLocked;
-    }
-
-    /**
-     * Whether the account's current server is the official Telegram network.
-     * Used to hide Telegram-specific help entries (Ask a Question, Telegram FAQ /
-     * Features, Privacy Policy) on The Cat and other servers, where they don't apply.
-     */
-    public static boolean serverIsOfficialTelegram(int accountNum) {
-        TheCatServer s = getServerForAccount(accountNum);
-        return s != null && s.isTelegram;
     }
 
     /**
@@ -321,8 +278,7 @@ public class TheCatServers {
         if (sa == null || sb == null) {
             return false;
         }
-        return sa.isTelegram == sb.isTelegram
-                && sa.port == sb.port
+        return sa.port == sb.port
                 && sa.host != null && sa.host.equals(sb.host);
     }
 
@@ -331,8 +287,7 @@ public class TheCatServers {
     /**
      * Applies the selected server to the given account, atomically on the network
      * thread. Mirrors desktop ApplyServerToDcOptions + RestoreServerToAccount:
-     *   - Telegram:       restore real Telegram DC 1-5, unlock, Telegram RSA key
-     *   - Single-server:  map DC 1-5 all to one host:port, lock, server RSA key
+     * map DC 1-5 all to one host:port, lock, server RSA key.
      *
      * resetKeys=true clears auth keys (user picked a NEW server -> force re-handshake);
      * resetKeys=false keeps them (startup restore -> reuse the existing session).
@@ -345,10 +300,7 @@ public class TheCatServers {
         if (server == null) return;
         final String key;
         final long fingerprint;
-        if (server.isTelegram) {
-            key = TELEGRAM_RSA_KEY;
-            fingerprint = TELEGRAM_RSA_FINGERPRINT;
-        } else if (server.rsaPublicKey != null && !server.rsaPublicKey.isEmpty()) {
+        if (server.rsaPublicKey != null && !server.rsaPublicKey.isEmpty()) {
             // Custom server with its own RSA key. Pass fingerprint 0 so the native
             // layer derives it from the PEM (we can't compute it in Java).
             key = server.rsaPublicKey;
@@ -358,14 +310,12 @@ public class TheCatServers {
             key = THECAT_RSA_KEY;
             fingerprint = THECAT_RSA_FINGERPRINT;
         }
-        int mainDc = server.mainDcId > 0
-                ? server.mainDcId
-                : (server.isTelegram ? 2 : 1);
+        int mainDc = server.mainDcId > 0 ? server.mainDcId : 1;
         ConnectionsManager.native_applyServerConfig(
                 accountNum,
                 server.host,
                 server.port,
-                server.isTelegram,
+                false,
                 mainDc,
                 key,
                 fingerprint,
@@ -376,8 +326,19 @@ public class TheCatServers {
      * Called from ApplicationLoader after each account's ConnectionsManager is
      * initialized, to restore the previously selected server config. Does NOT
      * reset auth keys so an already-authorized session keeps working.
+     *
+     * A legacy account still bound to the official Telegram network has no
+     * server in this single-server build: it is logged out on the spot instead
+     * of being silently kept alive.
      */
     public static void applyStoredServerToAccount(int accountNum) {
+        if (ID_TELEGRAM.equals(getServerIdForAccount(accountNum))) {
+            clearServerForAccount(accountNum);
+            if (UserConfig.getInstance(accountNum).isClientActivated()) {
+                MessagesController.getInstance(accountNum).performLogout(0);
+            }
+            return;
+        }
         TheCatServer server = getServerForAccount(accountNum);
         if (server != null) {
             applyServerToAccount(server, accountNum, false);
@@ -412,17 +373,6 @@ public class TheCatServers {
         return result;
     }
 
-    /** Returns true when at least one active account uses a Telegram-official server. */
-    public static boolean anyAccountIsTelegram() {
-        for (int a = 0; a < UserConfig.MAX_ACCOUNT_COUNT; a++) {
-            if (UserConfig.getInstance(a).isClientActivated()) {
-                TheCatServer s = getServerForAccount(a);
-                if (s != null && s.isTelegram) return true;
-            }
-        }
-        return false;
-    }
-
     /**
      * Self-hosted invite/username link routing (thecat scheme). Finds an activated
      * account that owns the given link host, i.e. whose me_url_prefix host
@@ -454,10 +404,6 @@ public class TheCatServers {
         if (!UserConfig.getInstance(accountNum).isClientActivated()) {
             return false;
         }
-        // thecat links never target the official Telegram network (t.me handling applies there).
-        if (serverIsOfficialTelegram(accountNum)) {
-            return false;
-        }
         MessagesController controller = MessagesController.getInstance(accountNum);
         // Primary: the host matches this account's me_url_prefix (link prefix).
         String prefix = controller.linkPrefix;
@@ -472,17 +418,6 @@ public class TheCatServers {
             return true;
         }
         return false;
-    }
-
-    /** Returns the first activated account whose server is isTelegram, or -1. */
-    public static int firstTelegramAccount() {
-        for (int a = 0; a < UserConfig.MAX_ACCOUNT_COUNT; a++) {
-            if (UserConfig.getInstance(a).isClientActivated()) {
-                TheCatServer s = getServerForAccount(a);
-                if (s != null && s.isTelegram) return a;
-            }
-        }
-        return -1;
     }
 
     /**
@@ -504,40 +439,6 @@ public class TheCatServers {
             }
         }
         return -1;
-    }
-
-    /** Number of activated accounts on a Telegram-official server. */
-    public static int countTelegramAccounts() {
-        int n = 0;
-        for (int a = 0; a < UserConfig.MAX_ACCOUNT_COUNT; a++) {
-            if (UserConfig.getInstance(a).isClientActivated()) {
-                TheCatServer s = getServerForAccount(a);
-                if (s != null && s.isTelegram) n++;
-            }
-        }
-        return n;
-    }
-
-    // Telegram-official account caps, mirroring the desktop client:
-    //   kMaxAccounts = 3 (free), kPremiumMaxAccounts = 6 (with premium).
-    private static final int TELEGRAM_FREE_LIMIT = 3;
-    private static final int TELEGRAM_PREMIUM_LIMIT = 6;
-
-    /**
-     * Telegram-account cap (premium raises it from 3 to 6). Only Telegram accounts
-     * count toward this; custom/self-hosted accounts are limited solely by the hard
-     * total slot count (MAX_ACCOUNT_COUNT).
-     */
-    public static int telegramAccountLimit() {
-        int limit = UserConfig.hasPremiumOnAccounts()
-                ? TELEGRAM_PREMIUM_LIMIT
-                : TELEGRAM_FREE_LIMIT;
-        return Math.min(limit, UserConfig.MAX_ACCOUNT_COUNT);
-    }
-
-    /** True if another Telegram account can still be added under the premium cap. */
-    public static boolean canAddTelegramAccount() {
-        return countTelegramAccounts() < telegramAccountLimit();
     }
 
     public static class ServerInfoFetchResult {
@@ -668,8 +569,7 @@ public class TheCatServers {
      * handshake is verified against; a wrong name or icon is merely wrong,
      * not dangerous.
      *
-     * The Telegram server is skipped -- it is not an The Cat backend and
-     * has no such endpoint. Fire-and-forget: one round at a time, and any
+     * Fire-and-forget: one round at a time, and any
      * failure silently keeps the stored values.
      */
     public static void refreshServersInfo() {
@@ -678,7 +578,7 @@ public class TheCatServers {
         }
         List<TheCatServer> targets = new ArrayList<>();
         for (TheCatServer s : listServers()) {
-            if (s.isTelegram || TextUtils.isEmpty(s.host) || s.port <= 0) {
+            if (TextUtils.isEmpty(s.host) || s.port <= 0) {
                 continue;
             }
             targets.add(s);
