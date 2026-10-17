@@ -58,6 +58,7 @@ import android.text.SpannableStringBuilder;
 import android.text.Spanned;
 import android.text.TextPaint;
 import android.text.TextUtils;
+import android.text.style.AbsoluteSizeSpan;
 import android.text.style.ImageSpan;
 import android.util.LongSparseArray;
 import android.util.Property;
@@ -3021,13 +3022,7 @@ public class DialogsActivity extends BaseFragment implements NotificationCenter.
             if (isCollectible) {
                 statusDrawableGiftId = ((TLRPC.TL_emojiStatusCollectible) user.emoji_status).collectible_id;
             }
-            actionBar.setRightDrawableOnClick(e -> {
-                if (dialogStoriesCellVisible && dialogStoriesCell != null && !dialogStoriesCell.isExpanded()) {
-                    scrollToTop(true, true);
-                    return;
-                }
-                showSelectStatusDialog();
-            });
+            actionBar.setRightDrawableOnClick(e -> showSelectStatusDialog());
             SelectAnimatedEmojiDialog.preload(currentAccount);
         } else if (user != null && MessagesController.getInstance(currentAccount).isPremiumUser(user)) {
             if (premiumStar == null) {
@@ -3045,13 +3040,7 @@ public class DialogsActivity extends BaseFragment implements NotificationCenter.
             premiumStar.setColorFilter(new PorterDuffColorFilter(getThemedColor(Theme.key_profile_verifiedBackground), PorterDuff.Mode.MULTIPLY));
             statusDrawable.set(premiumStar, animated);
             statusDrawable.setParticles(false, animated);
-            actionBar.setRightDrawableOnClick(e -> {
-                if (dialogStoriesCellVisible && dialogStoriesCell != null && !dialogStoriesCell.isExpanded()) {
-                    scrollToTop(true, true);
-                    return;
-                }
-                showSelectStatusDialog();
-            });
+            actionBar.setRightDrawableOnClick(e -> showSelectStatusDialog());
             SelectAnimatedEmojiDialog.preload(currentAccount);
         } else {
             statusDrawable.set((Drawable) null, animated);
@@ -3519,8 +3508,11 @@ public class DialogsActivity extends BaseFragment implements NotificationCenter.
                 statusDrawable.center = true;
                 // Always the app's own localized name (کت / TheCat). The key is
                 // one no lang pack ships, so neither the server's re-branding nor
-                // a stock Telegram pack can ever override it.
-                actionBar.setTitle(getString(R.string.TheCatHeaderName), statusDrawable);
+                // a stock Telegram pack can ever override it. Sized to match the
+                // old telegram_logo_2 wordmark (the default 20sp title reads tiny).
+                SpannableStringBuilder headerTitle = new SpannableStringBuilder(getString(R.string.TheCatHeaderName));
+                headerTitle.setSpan(new AbsoluteSizeSpan(26, true), 0, headerTitle.length(), Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
+                actionBar.setTitle(headerTitle, statusDrawable);
                 updateStatus(UserConfig.getInstance(currentAccount).getCurrentUser(), false);
             }
             if (folderId == 0) {
