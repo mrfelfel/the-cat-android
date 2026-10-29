@@ -13,6 +13,11 @@
 #   dist/TheCat-<version>-ARM-ZeroHub.apk  (aarm: armeabi-v7a + arm64-v8a,
 #                                           ~19 MB smaller — default download)
 #
+# This is the PRIORITY build (direct / standalone app). Built from the
+# store x standalone variants: production applicationId, R8 minified,
+# THE_CAT_DEV_SERVER=false. The Bazaar script is only for when a Bazaar
+# build is explicitly needed.
+#
 # Environment quirks this script papers over:
 #   - ~/.gradle/gradle.properties may point at a dead SOCKS proxy -> disabled via -D
 #   - dl.google.com is unreachable from some networks -> Aliyun mirror init script
@@ -25,7 +30,16 @@ REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$REPO_ROOT"
 
 # --- Config (kept in sync with gradle.properties) ---
-prop() { grep "^$1=" gradle.properties | head -1 | cut -d= -f2-; }
+# Release signing credentials live in ~/.gradle/gradle.properties (kept OUT of the
+# repo), so fall back there when the project gradle.properties omits them.
+prop() {
+    local v=""
+    v="$(grep "^$1=" gradle.properties 2>/dev/null | head -1 | cut -d= -f2-)"
+    if [ -z "$v" ] && [ -f "$HOME/.gradle/gradle.properties" ]; then
+        v="$(grep "^$1=" "$HOME/.gradle/gradle.properties" 2>/dev/null | head -1 | cut -d= -f2-)"
+    fi
+    printf '%s' "$v"
+}
 VERSION="$(prop APP_VERSION_NAME)"
 KEY_ALIAS="$(prop RELEASE_KEY_ALIAS)"
 KEY_PASS="$(prop RELEASE_KEY_PASSWORD)"
@@ -58,15 +72,31 @@ for arg in "$@"; do
     esac
 done
 
-# JDK: Gradle 8.11 needs a modern JDK (17+); the real build ran on Homebrew's
-# openjdk. Honor an explicit override, else prefer Homebrew, else java_home.
+# JDK: Gradle 8.11 supports Java 17..23 — newer (e.g. Homebrew openjdk 27
+# after a brew upgrade) breaks :buildSrc config. Honor RELEASE_JAVA_HOME,
+# else scan candidates and take the first whose major version is 17..23.
+jdk_major() {
+    "$1/bin/java" -version 2>&1 | sed -n 's/.*version "\([0-9][0-9]*\).*/\1/p' | head -1
+}
 JAVA_HOME="${RELEASE_JAVA_HOME:-}"
 if [ -z "$JAVA_HOME" ]; then
-    for cand in /opt/homebrew/opt/openjdk@21 /opt/homebrew/opt/openjdk; do
-        [ -x "$cand/bin/java" ] && JAVA_HOME="$cand" && break
+    for cand in /opt/homebrew/opt/openjdk@21 /opt/homebrew/opt/openjdk \
+                /opt/homebrew/Cellar/openjdk/* /Library/Java/JavaVirtualMachines/*/Contents/Home; do
+        [ -x "$cand/bin/java" ] || continue
+        ver="$(jdk_major "$cand")"
+        if [ -n "$ver" ] && [ "$ver" -ge 17 ] && [ "$ver" -le 23 ]; then
+            JAVA_HOME="$cand"
+            break
+        fi
     done
 fi
-[ -n "$JAVA_HOME" ] || JAVA_HOME="$(/usr/libexec/java_home 2>/dev/null || true)"
+if [ -z "$JAVA_HOME" ]; then
+    JAVA_HOME="$(/usr/libexec/java_home 2>/dev/null || true)"
+    ver="$(jdk_major "$JAVA_HOME")"
+    if [ -n "$ver" ] && [ "$ver" -gt 23 ]; then
+        fail "java_home JDK is $ver but Gradle 8.11 needs <= 23 (set RELEASE_JAVA_HOME)"
+    fi
+fi
 [ -n "$JAVA_HOME" ] && [ -x "$JAVA_HOME/bin/java" ] || fail "No JDK found (set RELEASE_JAVA_HOME)"
 export JAVA_HOME
 export PATH="$JAVA_HOME/bin:$PATH"
@@ -125,18 +155,21 @@ if [ "$FREE_KB" -lt $((5 * 1024 * 1024)) ]; then
 fi
 
 # --- Build ---
-# task name helpers: afat -> assembleAfatRelease, aarm -> assembleAarmRelease
+# task name helpers: afat -> assembleAfatStoreStandalone,
+#                    aarm -> assembleAarmStoreStandalone
+# (module has flavor dimensions abi x severity with store/dev; store keeps
+#  the production applicationId and THE_CAT_DEV_SERVER=false)
 GRADLE_TASKS=()
 for flavor in "${FLAVORS[@]}"; do
     cap="$(tr '[:lower:]' '[:upper:]' <<< "${flavor:0:1}")${flavor:1}"
-    GRADLE_TASKS+=(":TMessagesProj_AppStandalone:assemble${cap}Release")
+    GRADLE_TASKS+=(":TMessagesProj_AppStandalone:assemble${cap}StoreStandalone")
 done
 
 if [ "$SKIP_BUILD" = 1 ]; then
     step "Skipping build (--skip-build)"
     for flavor in "${FLAVORS[@]}"; do
-        [ -f "$APK_DIR/$flavor/release/app.apk" ] \
-            || fail "No APK at $APK_DIR/$flavor/release/app.apk — run without --skip-build first"
+        [ -f "$APK_DIR/${flavor}Store/standalone/app.apk" ] \
+            || fail "No APK at $APK_DIR/${flavor}Store/standalone/app.apk — run without --skip-build first"
     done
 else
     step "Building ${GRADLE_TASKS[*]}"
@@ -146,7 +179,7 @@ fi
 # --- Sign + verify each selected flavor (always re-sign; Gradle's signature is not trusted) ---
 mkdir -p "$OUT_DIR"
 for flavor in "${FLAVORS[@]}"; do
-    APK_SRC="$APK_DIR/$flavor/release/app.apk"
+    APK_SRC="$APK_DIR/${flavor}Store/standalone/app.apk"
     OUT="$OUT_DIR/${OUT_NAME[$flavor]}"
     [ -f "$APK_SRC" ] || fail "Build produced no APK at $APK_SRC"
 

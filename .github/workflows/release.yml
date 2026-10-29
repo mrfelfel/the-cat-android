@@ -1,0 +1,116 @@
+name: Release
+
+# Builds, signs and publishes a GitHub Release with the artifacts stores and
+# direct downloads need:
+#   TheCat-<ver>-ARM-ZeroHub.apk        direct ARM APK (THE priority build)
+#   TheCat-<ver>-ZeroHub.apk            direct all-ABIs APK
+#   TheCat-<ver>-ZeroHub.aab            direct Android App Bundle (all ABIs)
+#   TheCat-<ver>-Bazaar-ZeroHub.aab     Bazaar App Bundle (all ABIs)
+# AABs are what Play-style stores want nowadays: one bundle carries every
+# ABI/density and the store serves per-device splits.
+#
+# Triggers: manual run (Actions tab), or push a tag starting with v.
+# Signing material comes from repo secrets (KEYSTORE_B64 + RELEASE_* creds).
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Release tag (leave empty for v<versionName>-<versionCode>)'
+        required: false
+        default: ''
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Install Android SDK packages
+        run: |
+          yes | sdkmanager --licenses > /dev/null
+          sdkmanager --install "platforms;android-36" "build-tools;36.0.0" "ndk;27.2.12479018" "cmake;3.22.1"
+
+      - name: Restore signing keystore
+        env:
+          KEYSTORE_B64: ${{ secrets.KEYSTORE_B64 }}
+        run: printf '%s' "$KEYSTORE_B64" | base64 -d > TMessagesProj/config/release.keystore
+
+      - name: Build APKs and AABs
+        env:
+          ORG_GRADLE_PROJECT_RELEASE_KEY_ALIAS: ${{ secrets.RELEASE_KEY_ALIAS }}
+          ORG_GRADLE_PROJECT_RELEASE_KEY_PASSWORD: ${{ secrets.RELEASE_KEY_PASSWORD }}
+          ORG_GRADLE_PROJECT_RELEASE_STORE_PASSWORD: ${{ secrets.RELEASE_STORE_PASSWORD }}
+        run: |
+          ./gradlew --no-daemon \
+            :TMessagesProj_AppStandalone:assembleAarmStoreStandalone \
+            :TMessagesProj_AppStandalone:assembleAfatStoreStandalone \
+            :TMessagesProj_AppStandalone:bundleAfatStoreStandalone \
+            :TMessagesProj_AppBazaar:bundleAfatStoreBazaar
+
+      - name: Collect and verify artifacts
+        run: |
+          set -euo pipefail
+          VERSION="$(grep '^APP_VERSION_NAME=' gradle.properties | cut -d= -f2)"
+          CODE="$(grep '^APP_VERSION_CODE=' gradle.properties | cut -d= -f2)"
+          echo "VERSION=$VERSION CODE=$CODE" >> "$GITHUB_ENV"
+          STAND=TMessagesProj_AppStandalone/build/outputs
+          BAZAAR=TMessagesProj_AppBazaar/build/outputs
+          mkdir -p dist
+          cp "$STAND/apk/aarmStore/standalone/app.apk"  "dist/TheCat-$VERSION-ARM-ZeroHub.apk"
+          cp "$STAND/apk/afatStore/standalone/app.apk"  "dist/TheCat-$VERSION-ZeroHub.apk"
+          cp "$STAND/bundle/afatStoreStandalone/app.aab" "dist/TheCat-$VERSION-ZeroHub.aab"
+          cp "$BAZAAR/bundle/afatStoreBazaar/app.aab"    "dist/TheCat-$VERSION-Bazaar-ZeroHub.aab"
+
+          APKSIGNER="$ANDROID_HOME/build-tools/36.0.0/apksigner"
+          for apk in dist/*.apk; do
+            "$APKSIGNER" verify --print-certs "$apk" > /dev/null
+            unzip -l "$apk" | grep -q 'lib/.*/libgojni.so' \
+              || { echo "catnet native lib missing in $apk"; exit 1; }
+            unzip -p "$apk" 'classes*.dex' | strings | grep -q 'catnet/mobile' \
+              || { echo "catnet classes missing in $apk"; exit 1; }
+          done
+          for aab in dist/*.aab; do
+            unzip -l "$aab" | grep -q 'base/lib/.*libgojni.so' \
+              || { echo "catnet native lib missing in $aab"; exit 1; }
+          done
+          ls -la dist/
+
+      - name: Create GitHub Release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          if [ "${{ github.event_name }}" = "push" ]; then
+            TAG="$GITHUB_REF_NAME"
+          elif [ -n "${{ inputs.tag }}" ]; then
+            TAG="${{ inputs.tag }}"
+          else
+            TAG="v$VERSION-$CODE"
+          fi
+          if gh release view "$TAG" > /dev/null 2>&1; then
+            gh release upload "$TAG" dist/* --clobber
+          else
+            gh release create "$TAG" dist/* \
+              --title "The Cat $VERSION ($CODE)" \
+              --target "$GITHUB_SHA" \
+              --generate-notes
+          fi

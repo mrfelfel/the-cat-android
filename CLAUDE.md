@@ -9,17 +9,22 @@ Telegram fork (12.10.1 base) with a custom Cat server, plus a Cafe Bazaar IAB fl
 
 ## APK builds
 
+**Build priority: the direct (standalone) build is THE priority. Bazaar only when explicitly needed. The direct ARM release is what matters.**
+
 ```bash
-scripts/release-apk-bazaar.sh --arm    # Bazaar flavor, ARM-only (~52 MB) — preferred for sideload
-scripts/release-apk-bazaar.sh --fat    # Bazaar flavor, all 4 ABIs
-scripts/release-apk-bazaar.sh          # both
-scripts/release-apk.sh                 # standalone flavor (Google/invoice billing path)
+scripts/release-apk.sh --arm            # <- PRIORITY: direct/standalone, ARM-only (~55 MB)
+scripts/release-apk.sh --fat            # direct, all 4 ABIs
+scripts/release-apk.sh                  # direct, both
+scripts/release-apk-bazaar.sh --arm     # Bazaar flavor — ONLY when a Bazaar build is needed
+scripts/release-apk-bazaar.sh           # Bazaar, both
 ```
 
-Outputs land in `dist/TheCat-<version>-Bazaar[-ARM]-ZeroHub.apk`. All flavors share `applicationId` (`com.thecat.messenger`) and the release keystore, so installing over an existing copy replaces it in place.
+Direct outputs land in `dist/TheCat-<version>[-ARM]-ZeroHub.apk` (variants `*StoreStandalone`); Bazaar outputs in `dist/TheCat-<version>-Bazaar[-ARM]-ZeroHub.apk`. All flavors share `applicationId` (`com.thecat.messenger`) and the release keystore, so installing over an existing copy replaces it in place.
 
-- **Bazaar flavor** (`TMessagesProj_AppBazaar`): Poolakey/Cafe Bazaar in-app billing; identifiable in-app by the "Pending purchases" item in the side (hamburger) menu.
-- **Standalone flavor** (`TMessagesProj_App`): no store bridge; Stars/Premium fall through to the invoice/WebView payment path.
+CI (`.github/workflows/`) builds the same artifacts on `v*` tags or manual runs and auto-bumps `APP_VERSION_CODE` on every push to `main` — details in `AGENTS.md`.
+
+- **Direct / standalone** (`TMessagesProj_AppStandalone`, the priority): no store bridge; Stars/Premium fall through to the invoice/WebView payment path.
+- **Bazaar flavor** (`TMessagesProj_AppBazaar`, on demand): Poolakey/Cafe Bazaar in-app billing; identifiable in-app by the "Pending purchases" item in the side (hamburger) menu.
 
 ## Store billing (R8-sensitive)
 
