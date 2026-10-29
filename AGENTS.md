@@ -73,11 +73,11 @@ The reverts are deliberate: per-server scoping and per-server lang packs were at
 - Library-side R8 keep rules in `TMessagesProj/proguard-rules.pro` must not be moved or deleted (the billing chain has been constant-folded to null when they were missing).
 - Do not re-add per-server scoped filenames or multi-server UI — that layer was reverted on purpose.
 
-## CI (GitHub Actions, repo `mrfelfel/thecat`)
+## CI (GitHub Actions — runs in the PUBLIC repo `mrfelfel/the-cat-android`)
 
-- **`.github/workflows/release.yml`** — manual run or `v*` tag: builds the direct ARM APK (priority), direct all-ABIs APK, direct AAB, and Bazaar AAB; signs them with the release keystore; verifies catnet (`libgojni.so` + `catnet/mobile` dex classes) in each artifact; publishes a GitHub Release. Trigger: Actions tab (optional tag input) or push a `v*` tag.
-- **`.github/workflows/version-bump.yml`** — on every push to `main`, commits `APP_VERSION_CODE += 1` back to `gradle.properties` as a dedicated bot commit (`chore: bump versionCode to N [skip ci]`), because stores reject any submission whose versionCode is not new.
-- Signing material lives in repo secrets (created via `gh secret set`): `KEYSTORE_B64` (base64 of `release.keystore`), `RELEASE_KEY_ALIAS`, `RELEASE_KEY_PASSWORD`, `RELEASE_STORE_PASSWORD`. These are the ONLY confidential values in the whole project — never echo them, never put them in code.
+Builds and releases happen in the public repo, not here. `release.yml` (manual run or `v*` tag) builds the direct ARM APK (priority), direct all-ABIs APK, direct and Bazaar AABs; signs them with the release keystore; verifies catnet (`libgojni.so` + `catnet/mobile` dex classes) in each artifact; publishes a GitHub Release **on the public repo**. `version-bump.yml` bumps `APP_VERSION_CODE` on every push to its `main` as a dedicated bot commit (`chore: bump versionCode to N [skip ci]`), since stores reject any submission whose versionCode is not new.
+
+Signing material lives in the public repo's Actions secrets (created via `gh secret set`): `KEYSTORE_B64` (base64 of `release.keystore`), `RELEASE_KEY_ALIAS`, `RELEASE_KEY_PASSWORD`, `RELEASE_STORE_PASSWORD`. These are the ONLY confidential values in the whole project — never echo them, never put them in code. To ship a release: sync this working tree into the public repo (like the export), then run the workflow there or push a `v*` tag.
 
 ## Build mechanics
 

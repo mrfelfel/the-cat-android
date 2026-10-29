@@ -21,7 +21,7 @@ scripts/release-apk-bazaar.sh           # Bazaar, both
 
 Direct outputs land in `dist/TheCat-<version>[-ARM]-ZeroHub.apk` (variants `*StoreStandalone`); Bazaar outputs in `dist/TheCat-<version>-Bazaar[-ARM]-ZeroHub.apk`. All flavors share `applicationId` (`com.thecat.messenger`) and the release keystore, so installing over an existing copy replaces it in place.
 
-CI (`.github/workflows/`) builds the same artifacts on `v*` tags or manual runs and auto-bumps `APP_VERSION_CODE` on every push to `main` — details in `AGENTS.md`.
+CI runs in the **public** repo `mrfelfel/the-cat-android` (`.github/workflows/` there): builds the same artifacts on `v*` tags or manual runs and auto-bumps `APP_VERSION_CODE` on every push to its `main` — releases land on that repo. Details in `AGENTS.md`.
 
 - **Direct / standalone** (`TMessagesProj_AppStandalone`, the priority): no store bridge; Stars/Premium fall through to the invoice/WebView payment path.
 - **Bazaar flavor** (`TMessagesProj_AppBazaar`, on demand): Poolakey/Cafe Bazaar in-app billing; identifiable in-app by the "Pending purchases" item in the side (hamburger) menu.
