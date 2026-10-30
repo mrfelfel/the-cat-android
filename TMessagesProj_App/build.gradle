@@ -18,6 +18,7 @@ dependencies {
     implementation project(':TMessagesProj')
     coreLibraryDesugaring 'com.android.tools:desugar_jdk_libs:2.1.5'
     implementation files('../TMessagesProj/libs/libgsaverification-client.aar')
+    implementation files('../TMessagesProj/libs/catnet.aar')
 }
 
 android {
@@ -199,4 +200,6 @@ android {
     }
 }
 
-apply plugin: 'com.google.gms.google-services'
+// Прибрано: без хмарних залежностей. Push працює через keep-alive (self-hosted),
+// білд не потребує Firebase-проєкту / google-services.json.
+// apply plugin: 'com.google.gms.google-services'

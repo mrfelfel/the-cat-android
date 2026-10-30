@@ -4,6 +4,9 @@ build/
 obj/
 *.iml
 local.properties
+api_credentials.local.ps1
+*.local.json
+/logs/
 TMessagesProj/.cxx/
 TMessagesProj/jniLibs/
 TMessagesProj/jniRes/
@@ -13,4 +16,19 @@ TMessagesProj_App/afat/
 TMessagesProj_AppHockeyApp/afat/
 TMessagesProj_AppStandalone/afat/
 TMessagesProj_AppHuawei/afat/
+
+# signing key (never commit the private keystore / its password)
+TMessagesProj/config/release.keystore
+TMessagesProj/config/.keystore_password.txt
 TMessagesProj/jni/ffmpeg/build_android
+
+# release artifacts (scripts/release-apk.sh output)
+dist/
+*.apk
+
+# internal working reports / stray artifacts — never commit or publish
+BAZAAR_*.md
+REBRAND_*.md
+REBRAND_*_changed_keys.txt
+CLAUDE.md
+a76fa56a-*.png

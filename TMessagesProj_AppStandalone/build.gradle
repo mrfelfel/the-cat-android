@@ -20,6 +20,7 @@ dependencies {
     implementation 'androidx.core:core:1.16.0'
     coreLibraryDesugaring 'com.android.tools:desugar_jdk_libs:2.1.5'
     implementation files('../TMessagesProj/libs/libgsaverification-client.aar')
+    implementation files('../TMessagesProj/libs/catnet.aar')
 }
 
 android {
@@ -44,7 +45,7 @@ android {
     }
 
     androidResources {
-        localeFilters += ["en", "ar", "de", "es", "it", "ko", "nl", "pt-rBR", "ru", "uk"]
+        localeFilters += ["en", "ar", "de", "es", "fa", "it", "ko", "nl", "pt-rBR", "ru", "uk"]
     }
 
     signingConfigs {
@@ -64,11 +65,19 @@ android {
     }
 
     buildTypes {
+        // No applicationIdSuffix here (unlike upstream Telegram-Android's
+        // own AppStandalone, which keeps ".web" so its Play and
+        // direct-download builds can coexist as separate installs): this
+        // fork only ever
+        // wants ONE installed app per device, sharing the same
+        // applicationId as :TMessagesProj_App (same keystore too -- see
+        // signingConfigs above), so switching a device from the Play build
+        // to this unrestricted one is a plain in-place update, not a fresh
+        // side-by-side install that starts local chat data over from zero.
         debug {
             debuggable true
             jniDebuggable true
             signingConfig signingConfigs.debug
-            applicationIdSuffix ".web"
             minifyEnabled false
             multiDexEnabled true
             proguardFiles getDefaultProguardFile('proguard-android.txt'), '../TMessagesProj/proguard-rules.pro', '../TMessagesProj/proguard-rules-beta.pro'
@@ -79,7 +88,6 @@ android {
             debuggable false
             jniDebuggable false
             signingConfig signingConfigs.release
-            applicationIdSuffix ".web"
             minifyEnabled true
             multiDexEnabled true
             proguardFiles getDefaultProguardFile('proguard-android.txt'), '../TMessagesProj/proguard-rules.pro'
@@ -94,10 +102,14 @@ android {
         manifest.srcFile '../TMessagesProj/config/release/AndroidManifest_standalone.xml'
     }
 
-    flavorDimensions "minApi"
+    // "severity" lists store first, so assembleAfatStandalone /
+    // assembleAarmStandalone keep resolving to the store build. The dev build
+    // exists only as aarm, so a bare `assembleStandalone` cannot emit one.
+    flavorDimensions "abi", "severity"
 
     productFlavors {
         afat {
+            dimension "abi"
             ndk {
                 abiFilters "armeabi-v7a", "arm64-v8a", "x86", "x86_64"
             }
@@ -107,6 +119,35 @@ android {
             sourceSets.standalone {
                 manifest.srcFile '../TMessagesProj/config/release/AndroidManifest_standalone.xml'
             }
+        }
+        // ARM-only (no x86/x86_64): ~19 MB smaller download. Same
+        // abiVersionCode as afat on purpose — same versionCode, same
+        // keystore, so either build installs over the other in place.
+        aarm {
+            dimension "abi"
+            ndk {
+                abiFilters "armeabi-v7a", "arm64-v8a"
+            }
+            ext {
+                abiVersionCode = 9
+            }
+            sourceSets.standalone {
+                manifest.srcFile '../TMessagesProj/config/release/AndroidManifest_standalone.xml'
+            }
+        }
+        store {
+            dimension "severity"
+            matchingFallbacks = ['release', 'standalone']
+            buildConfigField "boolean", "THE_CAT_DEV_SERVER", "false"
+        }
+        // Same shape as the Bazaar dev flavor: separate applicationId and
+        // database, dev endpoint, no in-app server switch.
+        dev {
+            dimension "severity"
+            applicationId "com.thecat.messenger.dev"
+            versionNameSuffix "-dev"
+            buildConfigField "boolean", "THE_CAT_DEV_SERVER", "true"
+            matchingFallbacks = ['HA_public']
         }
     }
 
@@ -121,7 +162,10 @@ android {
 
     variantFilter { variant ->
         def names = variant.flavors*.name
-        if (variant.buildType.name != "release" && !names.contains("afat")) {
+        if (variant.buildType.name != "release" && !names.contains("afat") && !names.contains("aarm")) {
+            setIgnore(true)
+        }
+        if (names.contains("dev") && !names.contains("aarm")) {
             setIgnore(true)
         }
     }
@@ -155,4 +199,17 @@ android {
     }
 }
 
+// Прибрано, як і в TMessagesProj_App: без хмарних залежностей. Push працює
+// Firebase Cloud Messaging push (project "roohland"). google-services.json
+// carries a client for the applicationId com.thecat.messenger, so the plugin
+// resolves cleanly. Note the app's *namespace* is org.telegram.messenger.web,
+// but the plugin matches on applicationId (APP_PACKAGE), not the namespace.
 apply plugin: 'com.google.gms.google-services'
+
+// com.thecat.messenger.dev is not in google-services.json and the plugin fails
+// the whole variant when no client matches. The dev build tests the backend,
+// so it skips the plugin: PushListenerController.hasServices() catches the
+// missing Firebase and the app runs without push.
+tasks.matching { it.name.startsWith('process') && it.name.contains('Dev') && it.name.endsWith('GoogleServices') }.configureEach {
+    enabled = false
+}
