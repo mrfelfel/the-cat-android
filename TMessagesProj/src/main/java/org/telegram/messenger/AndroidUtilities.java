@@ -254,18 +254,39 @@ public class AndroidUtilities {
     public final static String TYPEFACE_ROBOTO_EXTRA_BOLD = "fonts/rextrabold.ttf";
     public final static String TYPEFACE_ROBOTO_MEDIUM_ITALIC = "fonts/rmediumitalic.ttf";
     public final static String TYPEFACE_ROBOTO_MONO = "fonts/rmono.ttf";
+    // The Cat: Vazir is the app typeface (bilingual Persian/Latin).
+    public final static String TYPEFACE_VAZIR_REGULAR = "fonts/vazir_regular.ttf";
+    public final static String TYPEFACE_VAZIR_MEDIUM = "fonts/vazir_medium.ttf";
+    public final static String TYPEFACE_VAZIR_BOLD = "fonts/vazir_bold.ttf";
     public final static String TYPEFACE_MERRIWEATHER_BOLD = "fonts/mw_bold.ttf";
 
     public static Typeface mediumTypeface;
     public static ThreadLocal<byte[]> readBufferLocal = new ThreadLocal<>();
     public static ThreadLocal<byte[]> bufferLocal = new ThreadLocal<>();
 
+    private static Typeface vazirTypeface;
+    private static Typeface vazirBoldTypeface;
+
+    public static Typeface vazir() {
+        if (vazirTypeface == null) {
+            vazirTypeface = getTypeface(TYPEFACE_VAZIR_REGULAR);
+        }
+        return vazirTypeface;
+    }
+
+    public static Typeface vazirBold() {
+        if (vazirBoldTypeface == null) {
+            vazirBoldTypeface = getTypeface(TYPEFACE_VAZIR_BOLD);
+        }
+        return vazirBoldTypeface;
+    }
+
     public static Typeface bold() {
         if (mediumTypeface == null) {
             if (SharedConfig.useSystemBoldFont && Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
                 mediumTypeface = Typeface.create(null, 500, false);
             } else {
-                mediumTypeface = getTypeface(TYPEFACE_ROBOTO_MEDIUM);
+                mediumTypeface = getTypeface(TYPEFACE_VAZIR_MEDIUM);
             }
         }
         return mediumTypeface;
@@ -2391,6 +2412,13 @@ public class AndroidUtilities {
     }
 
     public static Typeface getTypeface(String assetPath) {
+        // The Cat: Roboto weights used across the UI map to Vazir (bilingual
+        // Persian/Latin). Mono/italic/condensed keep Roboto — no Vazir equivalent.
+        if (TYPEFACE_ROBOTO_MEDIUM.equals(assetPath)) {
+            assetPath = TYPEFACE_VAZIR_MEDIUM;
+        } else if (TYPEFACE_ROBOTO_EXTRA_BOLD.equals(assetPath)) {
+            assetPath = TYPEFACE_VAZIR_BOLD;
+        }
         synchronized (typefaceCache) {
             if (!typefaceCache.containsKey(assetPath)) {
                 try {
@@ -3670,7 +3698,7 @@ public class AndroidUtilities {
         }
         File storageDir = null;
         if (Environment.MEDIA_MOUNTED.equals(Environment.getExternalStorageState())) {
-            storageDir = new File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_PICTURES), "Telegram");
+            storageDir = new File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_PICTURES), "TheCat");
             if (!storageDir.mkdirs()) {
                 if (!storageDir.exists()) {
                     if (BuildVars.LOGS_ENABLED) {
@@ -4606,7 +4634,7 @@ public class AndroidUtilities {
                 if (scheme != null) {
                     if ((scheme.equals("http") || scheme.equals("https"))) {
                         String host = data.getHost().toLowerCase();
-                        if (host.equals("telegram.me") || host.equals("t.me") || host.equals("telegram.dog")) {
+                        if (host.equals("cr0.ir")) {
                             String path = data.getPath();
                             if (path != null) {
                                 if (path.startsWith("/socks") || path.startsWith("/proxy")) {

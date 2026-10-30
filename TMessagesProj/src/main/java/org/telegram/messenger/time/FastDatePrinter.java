@@ -487,8 +487,18 @@ public class FastDatePrinter implements DatePrinter, Serializable {
      * @return the specified string buffer
      */
     protected StringBuffer applyRules(final Calendar calendar, final StringBuffer buf) {
+        final Calendar source;
+        if (JalaliCalendar.isEnabled() && !(calendar instanceof JalaliCalendar.JalaliCalendarView)) {
+            source = JalaliCalendar.wrap(calendar);
+        } else {
+            source = calendar;
+        }
+        final int start = buf.length();
         for (final Rule rule : mRules) {
-            rule.appendTo(buf, calendar);
+            rule.appendTo(buf, source);
+        }
+        if (JalaliCalendar.isEnabled()) {
+            JalaliCalendar.persianizeDigits(buf, start);
         }
         return buf;
     }
@@ -729,6 +739,10 @@ public class FastDatePrinter implements DatePrinter, Serializable {
          */
         @Override
         public void appendTo(final StringBuffer buffer, final Calendar calendar) {
+            if (mField == Calendar.MONTH && JalaliCalendar.isEnabled()) {
+                buffer.append(JalaliCalendar.getMonthName(calendar.get(Calendar.MONTH) + 1));
+                return;
+            }
             buffer.append(mValues[calendar.get(mField)]);
         }
     }

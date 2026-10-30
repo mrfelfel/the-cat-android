@@ -90,8 +90,8 @@ public class TextPriceCell extends FrameLayout {
             setTag(Theme.key_windowBackgroundWhiteGrayText2);
             textView.setTextColor(Theme.getColor(Theme.key_windowBackgroundWhiteGrayText2));
             valueTextView.setTextColor(Theme.getColor(Theme.key_windowBackgroundWhiteGrayText2));
-            textView.setTypeface(Typeface.DEFAULT);
-            valueTextView.setTypeface(Typeface.DEFAULT);
+            textView.setTypeface(AndroidUtilities.vazir());
+            valueTextView.setTypeface(AndroidUtilities.vazir());
         }
         requestLayout();
     }

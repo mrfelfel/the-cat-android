@@ -11,6 +11,7 @@
         <item name="android:windowBackground">@android:color/white</item>
         <item name="android:windowContentOverlay">@null</item>
         <item name="android:textViewStyle">@style/MyTextViewStyle</item>
+        <item name="android:fontFamily">@font/vazir</item>
     </style>
 
     <style name="Theme.TMessages" parent="Theme.AppCompat.Light">
@@ -25,6 +26,7 @@
         <item name="android:listChoiceBackgroundIndicator">@drawable/list_selector_ex</item>
         <item name="android:actionBarItemBackground">@drawable/bar_selector_style</item>
         <item name="android:textViewStyle">@style/MyTextViewStyle</item>
+        <item name="android:fontFamily">@font/vazir</item>
     </style>
 
     <style name="Theme.TMessages.Dark" parent="Theme.AppCompat.DayNight">
@@ -39,6 +41,7 @@
         <item name="android:listChoiceBackgroundIndicator">@drawable/list_selector_ex</item>
         <item name="android:actionBarItemBackground">@drawable/bar_selector_style</item>
         <item name="android:textViewStyle">@style/MyTextViewStyle</item>
+        <item name="android:fontFamily">@font/vazir</item>
     </style>
 
     <style name="Theme.TMessages.PopupNotification" parent="Theme.TMessages">
@@ -87,6 +90,7 @@
 
     <style name="MyTextViewStyle" parent="android:Widget.Holo.Light.TextView">
         <item name="android:hyphenationFrequency">none</item>
+        <item name="android:fontFamily">@font/vazir</item>
     </style>
 
     <style name="EditTextNoBackgroundStyle" parent="android:Widget.EditText">

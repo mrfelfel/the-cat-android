@@ -79,6 +79,7 @@ public class TextSettingsCell extends FrameLayout {
         this.padding = padding;
 
         textView = new TextView(context);
+        textView.setTypeface(AndroidUtilities.vazir());
         textView.setTextSize(TypedValue.COMPLEX_UNIT_DIP, 16);
         textView.setLines(1);
         textView.setMaxLines(1);
