@@ -10,8 +10,20 @@ Maker: Felfel (Mohammad Javad Yahyahi). Ecosystem: Shalgham & Sefr ta Sad.
 
 ## Repos
 
-- **Published repo** (`github.com/mrfelfel/the-cat-android`): THE public repo — a GitHub **fork of DrKLO/Telegram**, with The Cat's work as a clean patch series on top of upstream `12.10.1`. Everything is public here; the only things never committed are secrets (signing keystore and passwords, operator keys).
+- **Published repo** (`github.com/mrfelfel/the-cat-android`): THE public repo — a GitHub **fork of DrKLO/Telegram**, with The Cat's work as a clean patch series on top of upstream `12.10.1`. Everything is public here; the only things never committed are secrets (signing keystore and passwords, operator keys). Local remote name: **`fork`** (there is no `origin` — it was detached 2026-10-30).
+- `github.com/mrfelfel/the-cat-android-archive`: the pre-fork export, renamed on 2026-10-30; its 3 old releases live there. Not updated anymore.
+- `github.com/mrfelfel/thecat`: old private repo — left untouched on GitHub by user decision, but disconnected from this checkout. Do not push to it and do not delete it unless the user asks.
 - `github.com/mrfelfel/the-cat-network-base` (public, open source): cloned at `network-base/`. Committing to it is fine — it can live here as a git submodule or as the primary source, either way its changes are ours to make. Public by design: everything in it is open, EXCEPT secrets (signing keys never).
+
+## Publishing (the only publish path)
+
+Local branches here carry pre-rebrand history — **never push them to the fork**; it would poison the clean series. Publish = rebuild the series:
+
+1. `git worktree add --detach /tmp/thecat-series 62b56a07c` (or reuse the existing one).
+2. rsync the working tree into it (with `--delete`, excluding `.git`, `.claude/`, `.gradle/`, `local.properties`, `*.keystore`/`*.jks`, `network-base/`, `dist/`, `build/`, `.cxx/`, `.kotlin/`, the six third_party submodules, `tlottie`, `jlatexmath`, `TheCat-*.apk`).
+3. `git add -A`, then split into the series' logical commits by path (build → fonts/Persian → rebrand → server/catnet → billing → docs → CI → catch-all); `git log` on the fork shows the existing shape.
+4. `git fetch fork main`, commit on top of it, `git push fork HEAD:refs/heads/main`.
+5. Signing material already lives in the fork's Actions secrets — never re-derive, never echo.
 
 ## Build priority (user directive, 2026-06-30)
 
