@@ -1,7 +1,7 @@
 # گزارش: پرداخت درون‌برنامه‌ای کافه‌بازار برای The Cat
 
 > وضعیت: **طراحی / در انتظار پیاده‌سازی**
-> دامنه: کلاینت (Android) + سرور (gram srv)
+> دامنه: کلاینت (Android) + سرور (TESSMTPROTO)
 > هدف: خرید Telegram Premium و ستاره (Stars) از طریق کافه‌بازار، به‌جای گوگل‌پلی (که در ایران فیلتر/ناسازگاره)
 
 ---
@@ -85,17 +85,17 @@ accountInstance.getConnectionsManager().sendRequest(req, callback);
        ▼  MTProto
 ┌──────────────┐   تأیید HTTP  ┌──────────────┐
 │ سرور Cat     │ ←───────────→ │ کافه‌بازار    │
-│  (gram srv)  │               │ Server API   │
+│  (TESSMTPROTO)  │               │ Server API   │
 └──────────────┘               └──────────────┘
 ```
 
 **کلاینت (Android):** `BillingClient` → `Poolakey`. رسید رو هم به‌جای `originalJson` گوگل، `PurchaseEntity` بازار می‌فرسته.
 
-**سرور (gram srv):** باید رسید بازار رو تأیید کنه — **این بخش اصلی کار سروره.**
+**سرور (TESSMTPROTO):** باید رسید بازار رو تأیید کنه — **این بخش اصلی کار سروره.**
 
 ---
 
-## ۴. سمت سرور (gram srv) — چه چیزی باید پیاده بشه
+## ۴. سمت سرور (TESSMTPROTO) — چه چیزی باید پیاده بشه
 
 > این بخش مهم‌ترین قسمت گزارشه. کلاینت بدون این بخش فقط پول رو می‌گیره ولی نمی‌تونه چیزی فعال کنه.
 > **وضعیت کلاینت: پیاده‌سازی شد** (فلاو `TMessagesProj_AppBazaar`، فقط پرمیوم). کلاینت رسید رو می‌فرسته و منتظر `Updates` می‌مونه؛ سرور فعلاً متد رو نداره (placeholder).
@@ -233,7 +233,7 @@ payments.assignBazaarTransaction#62617a01 receipt:JSON purpose:InputStorePayment
 
 ## ۷. چک‌لیست پیاده‌سازی
 
-### سرور (gram srv) — [ ] در انتظار
+### سرور (TESSMTPROTO) — [ ] در انتظار
 - [ ] متد MTProto `payments.assignBazaarTransaction#62617a01` (بخش ۴.۱)
 - [ ] دریافت و ذخیره‌ی کلید عمومی RSA بازار
 - [ ] تأیید امضای `dataJson` با کلید RSA (بخش ۴.۳/۴.۵)
