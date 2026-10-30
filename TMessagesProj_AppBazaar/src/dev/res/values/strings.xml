@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Launcher label only. Referenced as @string/AppName by the shared
+         manifest; the store build keeps the value from TMessagesProj. -->
+    <string name="AppName">TheCat DEV</string>
+</resources>

@@ -1254,7 +1254,7 @@ public class PaymentFormActivity extends BaseFragment implements NotificationCen
                         shouldNavigateBack = !url.equals(webViewUrl);
                         try {
                             Uri uri = Uri.parse(url);
-                            if ("t.me".equals(uri.getHost())) {
+                            if ("cr0.ir".equals(uri.getHost())) {
                                 goToNextStep();
                                 return true;
                             }
@@ -1382,7 +1382,7 @@ public class PaymentFormActivity extends BaseFragment implements NotificationCen
                         inputFilters[0] = new InputFilter.LengthFilter(3);
                         inputFields[a].setFilters(inputFilters);
                         inputFields[a].setInputType(InputType.TYPE_CLASS_NUMBER | InputType.TYPE_TEXT_VARIATION_PASSWORD);
-                        inputFields[a].setTypeface(Typeface.DEFAULT);
+                        inputFields[a].setTypeface(AndroidUtilities.vazir());
                         inputFields[a].setTransformationMethod(PasswordTransformationMethod.getInstance());
                     } else if (a == FIELD_CARD) {
                         inputFields[a].setInputType(InputType.TYPE_CLASS_PHONE);
@@ -1849,7 +1849,7 @@ public class PaymentFormActivity extends BaseFragment implements NotificationCen
                     inputFields[a].setInputType(0);
                 } else {
                     inputFields[a].setInputType(InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_VARIATION_PASSWORD);
-                    inputFields[a].setTypeface(Typeface.DEFAULT);
+                    inputFields[a].setTypeface(AndroidUtilities.vazir());
                 }
                 inputFields[a].setImeOptions(EditorInfo.IME_ACTION_DONE | EditorInfo.IME_FLAG_NO_EXTRACT_UI);
                 switch (a) {
@@ -1962,7 +1962,7 @@ public class PaymentFormActivity extends BaseFragment implements NotificationCen
                 inputFields[0].setCursorWidth(1.5f);
                 inputFields[0].setInputType(InputType.TYPE_CLASS_PHONE);
                 inputFields[0].setImeOptions(EditorInfo.IME_ACTION_DONE | EditorInfo.IME_FLAG_NO_EXTRACT_UI);
-                inputFields[0].setHint(LocaleController.getInstance().formatCurrencyString(0, paymentForm.invoice.currency));
+                inputFields[0].setHint(LocaleController.getInstance().formatCurrencyString(0, true, true, true, paymentForm.invoice.currency));
                 inputFields[0].setPadding(0, 0, 0, AndroidUtilities.dp(6));
                 inputFields[0].setGravity(LocaleController.isRTL ? Gravity.LEFT : Gravity.RIGHT);
                 container.addView(inputFields[0], LayoutHelper.createFrame(LayoutHelper.MATCH_PARENT, LayoutHelper.WRAP_CONTENT, Gravity.LEFT | Gravity.TOP, 21, 9, 21, 1));
@@ -2536,7 +2536,7 @@ public class PaymentFormActivity extends BaseFragment implements NotificationCen
                         public boolean shouldOverrideUrlLoading(WebView view, String url) {
                             try {
                                 Uri uri = Uri.parse(url);
-                                if ("t.me".equals(uri.getHost())) {
+                                if ("cr0.ir".equals(uri.getHost())) {
                                     goToNextStep();
                                     return true;
                                 }
@@ -2752,7 +2752,7 @@ public class PaymentFormActivity extends BaseFragment implements NotificationCen
 
                 if (a == FIELD_ENTERPASSWORD || a == FIELD_REENTERPASSWORD) {
                     inputFields[a].setInputType(InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_VARIATION_PASSWORD);
-                    inputFields[a].setTypeface(Typeface.DEFAULT);
+                    inputFields[a].setTypeface(AndroidUtilities.vazir());
                     inputFields[a].setImeOptions(EditorInfo.IME_ACTION_NEXT | EditorInfo.IME_FLAG_NO_EXTRACT_UI);
                 } else {
                     inputFields[a].setInputType(InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_VARIATION_EMAIL_ADDRESS);
