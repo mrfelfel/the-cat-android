@@ -953,6 +953,9 @@ public class ItemOptions {
         textView.setPadding(dp(13), dp(8), dp(13), dp(8));
         textView.setText(Emoji.replaceEmoji(text, textView.getPaint().getFontMetricsInt(), false));
         textView.setTag(R.id.fit_width_tag, 1);
+        if (typeface == null || Typeface.DEFAULT.equals(typeface)) {
+            typeface = AndroidUtilities.vazir();
+        }
         textView.setTypeface(typeface);
         NotificationCenter.listenEmojiLoading(textView);
         if (maxWidth > 0) {

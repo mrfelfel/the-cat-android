@@ -52,7 +52,7 @@ public class PremiumNotAvailableBottomSheet extends BottomSheet {
         buttonTextView.setText(LocaleController.getString(R.string.InstallOfficialApp));
         buttonTextView.setOnClickListener(v -> {
             try {
-                v.getContext().startActivity(new Intent(Intent.ACTION_VIEW, Uri.parse("https://play.google.com/store/apps/details?id=org.telegram.messenger")));
+                v.getContext().startActivity(new Intent(Intent.ACTION_VIEW, Uri.parse("https://play.google.com/store/apps/details?id=com.thecat.messenger")));
             } catch (ActivityNotFoundException e) {
                 FileLog.e(e);
             }

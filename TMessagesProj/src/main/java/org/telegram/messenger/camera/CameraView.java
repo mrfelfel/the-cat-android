@@ -122,7 +122,10 @@ public class CameraView extends FrameLayout implements TextureView.SurfaceTextur
     private int focusAreaSize;
     private Drawable thumbDrawable;
 
-    private final boolean useCamera2 = false && SharedConfig.isUsingCamera2(UserConfig.selectedAccount);
+    // Was hard-disabled with `false && ...`, which forced the legacy Camera1 API
+    // and showed a black preview (e.g. the QR-login scanner) on modern devices.
+    // Restore the intended behaviour: use camera2 when the device/config allows.
+    private final boolean useCamera2 = SharedConfig.isUsingCamera2(UserConfig.selectedAccount);
     private final CameraSessionWrapper[] cameraSession = new CameraSessionWrapper[2];
     private CameraSessionWrapper cameraSessionRecording;
 

@@ -42,6 +42,7 @@ import org.telegram.ui.Components.UniversalRecyclerView;
 import org.telegram.ui.Stars.StarsIntroActivity;
 
 import java.util.ArrayList;
+import org.telegram.messenger.utils.TheCatMoney;
 
 public class PostSuggestionsEditActivity extends BaseFragment {
     private final long currentChatId;
@@ -164,7 +165,8 @@ public class PostSuggestionsEditActivity extends BaseFragment {
     private CharSequence getIncomeInfo() {
         final int percent = getMessagesController().starsPaidMessageCommissionPermille;
         final float revenuePercent = percent / 1000.0f;
-        final String income = String.valueOf((int) ((suggestionsStarsCount * revenuePercent / 1000.0 * getMessagesController().starsUsdWithdrawRate1000)) / 100.0);
+        final long usdCents = (long) (suggestionsStarsCount * revenuePercent / 1000.0 * getMessagesController().starsUsdWithdrawRate1000);
+        final String income = TheCatMoney.formatToman(TheCatMoney.toToman(usdCents / 100.0, "USD"));
         return formatString(R.string.PostSuggestionsPriceInfo2, percents(percent), income);
     }
 

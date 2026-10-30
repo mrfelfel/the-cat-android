@@ -91,6 +91,32 @@ public class LinkManager {
         if ("tg".equalsIgnoreCase(scheme))
             return handleTg(uri);
 
+        if ("thecat".equalsIgnoreCase(scheme))
+            return handleOwpg(uri);
+
+        return false;
+    }
+
+    // thecat://oauth?token=... and thecat://resolve?domain=oauth&startapp=... are
+    // command-style links (mirroring tg://oauth / tg://resolve), not the
+    // thecat://<server-host>/<path> invite/username form. They must be caught
+    // here, before LaunchActivity's thecat case reinterprets the host as a
+    // server address — otherwise "oauth"/"resolve" gets treated as a host or
+    // username and messages.requestUrlAuth is never sent.
+    private boolean handleOwpg(Uri uri) {
+        final String host = uri.getHost();
+        if (host == null) return false;
+
+        if ("oauth".equalsIgnoreCase(host))
+            return handleOAuth(uri, uri.getQueryParameter("token"));
+
+        if ("resolve".equalsIgnoreCase(host)) {
+            final String domain = uri.getQueryParameter("domain");
+            final String startapp = uri.getQueryParameter("startapp");
+            if ("oauth".equalsIgnoreCase(domain) && !isEmpty(startapp))
+                return handleOAuth(uri, startapp);
+        }
+
         return false;
     }
 
@@ -102,13 +128,13 @@ public class LinkManager {
     private boolean handleHttp(Uri uri) {
         final String host = uri.getHost();
         if (host == null) return false;
-        final Matcher prefixMatcher = LaunchActivity.PREFIX_T_ME_PATTERN.matcher(host.toLowerCase());
+        final Matcher prefixMatcher = LaunchActivity.PREFIX_LINK_PATTERN.matcher(host.toLowerCase());
         final boolean isPrefix = prefixMatcher.find();
-        if (!"telegram.me".equalsIgnoreCase(host) && !"t.me".equalsIgnoreCase(host) && !"telegram.dog".equalsIgnoreCase(host) && !isPrefix)
+        if (!"cr0.ir".equalsIgnoreCase(host) && !isPrefix)
             return false;
 
         if (isPrefix) {
-            uri = Uri.parse("https://t.me/" + prefixMatcher.group(1) + (TextUtils.isEmpty(uri.getPath()) ? "" : uri.getPath()) + (TextUtils.isEmpty(uri.getQuery()) ? "" : "?" + uri.getQuery()));
+            uri = Uri.parse("https://cr0.ir/" + prefixMatcher.group(1) + (TextUtils.isEmpty(uri.getPath()) ? "" : uri.getPath()) + (TextUtils.isEmpty(uri.getQuery()) ? "" : "?" + uri.getQuery()));
         }
 
         String path = uri.getPath();
@@ -1513,9 +1539,9 @@ public class LinkManager {
                 case "https": {
                     if (path.isEmpty()) return false;
                     String host = uri.getHost().toLowerCase();
-                    Matcher prefixMatcher = LaunchActivity.PREFIX_T_ME_PATTERN.matcher(host);
+                    Matcher prefixMatcher = LaunchActivity.PREFIX_LINK_PATTERN.matcher(host);
                     boolean isPrefix = prefixMatcher.find();
-                    if (host.equals("telegram.me") || host.equals("t.me") || host.equals("telegram.dog") || isPrefix) {
+                    if (host.equals("cr0.ir") || isPrefix) {
                         ArrayList<String> segments = new ArrayList<>(uri.getPathSegments());
                         if (segments.size() > 0 && segments.get(0).equals("s")) {
                             segments.remove(0);

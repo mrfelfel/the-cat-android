@@ -234,7 +234,7 @@ public class BotVerifySheet {
         editText.setTextSize(TypedValue.COMPLEX_UNIT_DIP, 18);
         editText.setMaxLines(15);
         editText.setInputType(InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_FLAG_MULTI_LINE | InputType.TYPE_TEXT_FLAG_AUTO_CORRECT | InputType.TYPE_TEXT_FLAG_CAP_SENTENCES);
-        editText.setTypeface(Typeface.DEFAULT);
+        editText.setTypeface(AndroidUtilities.vazir());
         editText.setSelectAllOnFocus(true);
         editText.setHighlightColor(Theme.getColor(Theme.key_chat_inTextSelectionHighlight));
         editText.setHandlesColor(Theme.getColor(Theme.key_chat_TextSelectionCursor));

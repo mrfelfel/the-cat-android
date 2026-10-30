@@ -28,6 +28,9 @@ import org.telegram.messenger.AccountInstance;
 import org.telegram.messenger.AndroidUtilities;
 import org.telegram.messenger.BillingController;
 import org.telegram.messenger.BuildVars;
+import org.telegram.messenger.FileLog;
+import org.telegram.messenger.billing.StoreBilling;
+import org.telegram.messenger.billing.StoreBillingBridge;
 import org.telegram.messenger.LocaleController;
 import org.telegram.messenger.MessagesController;
 import org.telegram.messenger.NotificationCenter;
@@ -298,10 +301,35 @@ public class GiftPremiumBottomSheet extends BottomSheetWithRecyclerListView impl
 
     private void onGiftPremium() {
         GiftTier tier = giftTiers.get(selectedTierIndex);
+
+        // Bazaar flavor: gift premium via the Bazaar wallet instead of the Google
+        // or invoice/bot path. Currency/amount come straight from the server-
+        // provided gift option (no Google ProductDetails needed). Consumable, so
+        // it is consumed after the server credits it.
+        if (BuildVars.isBazaarStoreApp() && StoreBilling.isAvailable()) {
+            TLRPC.TL_inputStorePaymentGiftPremium bazaarGift = new TLRPC.TL_inputStorePaymentGiftPremium();
+            bazaarGift.user_id = MessagesController.getInstance(currentAccount).getInputUser(user);
+            if (tier.giftOption != null) {
+                bazaarGift.currency = tier.giftOption.currency;
+                bazaarGift.amount = tier.giftOption.amount;
+            } else if (tier.giftCodeOption != null) {
+                bazaarGift.currency = tier.giftCodeOption.currency;
+                bazaarGift.amount = tier.giftCodeOption.amount;
+            }
+            StoreBilling.tryPurchaseConsumable(getBaseFragment().getParentActivity(), currentAccount, bazaarGift, tier.getStoreProduct(),
+                    new StoreBillingBridge.Callback() {
+                        @Override public void onSuccess() { AndroidUtilities.runOnUIThread(() -> onGiftSuccess(true)); }
+                        @Override public void onQueued() { AndroidUtilities.runOnUIThread(() -> onGiftSuccess(true)); }
+                        @Override public void onCanceled() { }
+                        @Override public void onError(String message) { FileLog.e("Bazaar gift premium: " + message); }
+                    });
+            return;
+        }
+
         if (BuildVars.useInvoiceBilling()) {
             if (getBaseFragment().getParentActivity() instanceof LaunchActivity) {
                 Uri uri = Uri.parse(tier.giftOption.bot_url);
-                if (uri.getHost().equals("t.me")) {
+                if (uri.getHost().equals("cr0.ir")) {
                     if (!uri.getPath().startsWith("/$") && !uri.getPath().startsWith("/invoice/")) {
                         ((LaunchActivity) getBaseFragment().getParentActivity()).setNavigateToPremiumBot(true);
                     } else {

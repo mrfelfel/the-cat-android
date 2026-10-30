@@ -459,7 +459,7 @@ public class EmojiAnimationsOverlay implements NotificationCenter.NotificationCe
             StickerSetBulletinLayout layout = new StickerSetBulletinLayout(chatActivity.getParentActivity(), null, StickerSetBulletinLayout.TYPE_EMPTY, document, chatActivity.getResourceProvider());
             layout.subtitleTextView.setVisibility(View.GONE);
             layout.titleTextView.setText(Emoji.replaceEmoji(AndroidUtilities.replaceTags(LocaleController.formatString("EmojiInteractionTapHint", R.string.EmojiInteractionTapHint, chatActivity.currentUser.first_name)), layout.titleTextView.getPaint().getFontMetricsInt(), false));
-            layout.titleTextView.setTypeface(null);
+            layout.titleTextView.setTypeface(AndroidUtilities.vazir());
             layout.titleTextView.setMaxLines(3);
             layout.titleTextView.setSingleLine(false);
             Bulletin bulletin = Bulletin.make(chatActivity, layout, Bulletin.DURATION_LONG);

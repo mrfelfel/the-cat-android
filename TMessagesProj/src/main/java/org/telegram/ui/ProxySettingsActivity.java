@@ -387,7 +387,7 @@ public class ProxySettingsActivity extends BaseFragment {
                 });
             } else if (a == FIELD_PASSWORD) {
                 inputFields[a].setInputType(InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_VARIATION_PASSWORD);
-                inputFields[a].setTypeface(Typeface.DEFAULT);
+                inputFields[a].setTypeface(AndroidUtilities.vazir());
                 inputFields[a].setTransformationMethod(PasswordTransformationMethod.getInstance());
             } else {
                 inputFields[a].setInputType(InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_FLAG_NO_SUGGESTIONS);
@@ -517,13 +517,13 @@ public class ProxySettingsActivity extends BaseFragment {
                     params.append("port=").append(URLEncoder.encode(port, "UTF-8"));
                 }
                 if (currentType == 1) {
-                    url = "https://t.me/proxy?";
+                    url = "https://cr0.ir/proxy?";
                     if (params.length() != 0) {
                         params.append("&");
                     }
                     params.append("secret=").append(URLEncoder.encode(secret, "UTF-8"));
                 } else {
-                    url = "https://t.me/socks?";
+                    url = "https://cr0.ir/socks?";
                     if (!TextUtils.isEmpty(user)) {
                         if (params.length() != 0) {
                             params.append("&");
@@ -594,7 +594,7 @@ public class ProxySettingsActivity extends BaseFragment {
         if (clipText != null) {
             String[] params = null;
 
-            final String[] socksStrings = {"t.me/socks?", "tg://socks?"};
+            final String[] socksStrings = {"cr0.ir/socks?", "tg://socks?"};
             for (int i = 0; i < socksStrings.length; i++) {
                 final int index = clipText.indexOf(socksStrings[i]);
                 if (index >= 0) {
@@ -605,7 +605,7 @@ public class ProxySettingsActivity extends BaseFragment {
             }
 
             if (params == null) {
-                final String[] proxyStrings = {"t.me/proxy?", "tg://proxy?"};
+                final String[] proxyStrings = {"cr0.ir/proxy?", "tg://proxy?"};
                 for (int i = 0; i < proxyStrings.length; i++) {
                     final int index = clipText.indexOf(proxyStrings[i]);
                     if (index >= 0) {

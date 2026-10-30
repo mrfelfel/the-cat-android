@@ -503,6 +503,11 @@ public class MessagesController extends BaseController implements NotificationCe
 
     public boolean enableJoined;
     public String linkPrefix;
+    // The Cat: the server's help.getAppConfig advertises thecat=true. Used to
+    // treat links on this account's linkPrefix host as internal thecat links (not the
+    // official Telegram network, and not other forks). Mirrors the desktop
+    // TheCatAccountHost gate on appConfig().get<bool>("thecat").
+    public boolean thecatServer;
     public int maxGroupCount;
     public int maxBroadcastCount = 100;
     public int maxMegagroupCount;
@@ -733,6 +738,7 @@ public class MessagesController extends BaseController implements NotificationCe
     public boolean premiumLocked;
     public int transcribeButtonPressed;
     public boolean starsLocked;
+    public boolean emailSignupEnabled;
 
     public boolean starsPurchaseAvailable() {
         return !starsLocked;
@@ -1584,7 +1590,8 @@ public class MessagesController extends BaseController implements NotificationCe
         maxFaveStickersCount = mainPreferences.getInt("maxFaveStickersCount", 5);
         maxEditTime = mainPreferences.getInt("maxEditTime", 3600);
         ratingDecay = mainPreferences.getInt("ratingDecay", 2419200);
-        linkPrefix = mainPreferences.getString("linkPrefix", "t.me");
+        linkPrefix = mainPreferences.getString("linkPrefix", "cr0.ir");
+        thecatServer = mainPreferences.getBoolean("thecatServer", false);
         callReceiveTimeout = mainPreferences.getInt("callReceiveTimeout", 20000);
         callRingTimeout = mainPreferences.getInt("callRingTimeout", 90000);
         callConnectTimeout = mainPreferences.getInt("callConnectTimeout", 30000);
@@ -1603,8 +1610,8 @@ public class MessagesController extends BaseController implements NotificationCe
         canRevokePmInbox = mainPreferences.getBoolean("canRevokePmInbox", canRevokePmInbox);
         preloadFeaturedStickers = mainPreferences.getBoolean("preloadFeaturedStickers", false);
         youtubePipType = mainPreferences.getString("youtubePipType", "disabled");
-        keepAliveService = mainPreferences.getBoolean("keepAliveService", false);
-        backgroundConnection = mainPreferences.getBoolean("backgroundConnection", false);
+        keepAliveService = mainPreferences.getBoolean("keepAliveService", BuildVars.FORCE_BACKGROUND_WORK);
+        backgroundConnection = mainPreferences.getBoolean("backgroundConnection", BuildVars.FORCE_BACKGROUND_WORK);
         promoDialogId = mainPreferences.getLong("proxy_dialog", 0);
         nextPromoInfoCheckTime = mainPreferences.getInt("nextPromoInfoCheckTime", 0);
         promoDialogType = mainPreferences.getInt("promo_dialog_type", 0);
@@ -1673,6 +1680,7 @@ public class MessagesController extends BaseController implements NotificationCe
         premiumBotUsername = mainPreferences.getString("premiumBotUsername", null);
         premiumLocked = mainPreferences.getBoolean("premiumLocked", false);
         starsLocked = mainPreferences.getBoolean("starsLocked", true);
+        emailSignupEnabled = mainPreferences.getBoolean("emailSignupEnabled", false);
         transcribeButtonPressed = mainPreferences.getInt("transcribeButtonPressed", 0);
         forumUpgradeParticipantsMin = mainPreferences.getInt("forumUpgradeParticipantsMin", 200);
         topicsPinnedLimit = mainPreferences.getInt("topicsPinnedLimit", 3);
@@ -1741,7 +1749,7 @@ public class MessagesController extends BaseController implements NotificationCe
         whitelistedBots = mainPreferences.getStringSet("whitelistedBots", new HashSet<>()).stream().map(s -> tryParseLong(s, 0)).collect(Collectors.toCollection(HashSet::new));
         starsGroupcallMessageAmountMax = mainPreferences.getInt("starsGroupcallMessageAmountMax", 10_000);
         starsGroupcallMessageLimits = parseTiersString(mainPreferences.getString("starsGroupcallMessageLimits", null));
-        freezeAppealUrl = mainPreferences.getString("freezeAppealUrl", "t.me/spambot");
+        freezeAppealUrl = mainPreferences.getString("freezeAppealUrl", "cr0.ir/spambot");
         enableGiftsInProfile = mainPreferences.getBoolean("enableGiftsInProfile", true);
         storiesPosting = mainPreferences.getString("storiesPosting", "enabled");
         storiesEntities = mainPreferences.getString("storiesEntities", "premium");
@@ -1774,7 +1782,7 @@ public class MessagesController extends BaseController implements NotificationCe
         channelRevenueWithdrawalEnabled = mainPreferences.getBoolean("channelRevenueWithdrawalEnabled", false);
         newNoncontactPeersRequirePremiumWithoutOwnpremium = mainPreferences.getBoolean("newNoncontactPeersRequirePremiumWithoutOwnpremium", false);
         reactionsUniqMax = mainPreferences.getInt("reactionsUniqMax", 11);
-        premiumManageSubscriptionUrl = mainPreferences.getString("premiumManageSubscriptionUrl", ApplicationLoader.isStandaloneBuild() ? "https://t.me/premiumbot?start=status" : "https://play.google.com/store/account/subscriptions?sku=telegram_premium&package=org.telegram.messenger");
+        premiumManageSubscriptionUrl = mainPreferences.getString("premiumManageSubscriptionUrl", ApplicationLoader.isStandaloneBuild() ? "https://cr0.ir/premiumbot?start=status" : "https://play.google.com/store/account/subscriptions?sku=telegram_premium&package=com.thecat.messenger");
         androidDisableRoundCamera2 = mainPreferences.getBoolean("androidDisableRoundCamera2", true);
         storiesPinnedToTopCountMax = mainPreferences.getInt("storiesPinnedToTopCountMax", 3);
         showAnnualPerMonth = mainPreferences.getBoolean("showAnnualPerMonth", false);
@@ -2669,12 +2677,25 @@ public class MessagesController extends BaseController implements NotificationCe
         TLRPC.TL_jsonObject liteAppOptions = null;
         int transcribeAudioTrialWeeklyNumber = 0;
         int transcribeAudioTrialCooldownUntil = 0;
+        boolean sawTheCat = false;
 
         changed = config.apply(editor, object);
 
         for (int a = 0, N = object.value.size(); a < N; a++) {
             TLRPC.TL_jsonObjectValue value = object.value.get(a);
             switch (value.key) {
+                case "thecat": {
+                    // The Cat self-hosted server marker (true/"true"). See thecatServer field.
+                    sawTheCat = true;
+                    boolean val = (value.value instanceof TLRPC.TL_jsonBool && ((TLRPC.TL_jsonBool) value.value).value)
+                            || (value.value instanceof TLRPC.TL_jsonString && "true".equalsIgnoreCase(((TLRPC.TL_jsonString) value.value).value));
+                    if (val != thecatServer) {
+                        thecatServer = val;
+                        editor.putBoolean("thecatServer", thecatServer);
+                        changed = true;
+                    }
+                    break;
+                }
                 case "boosts_per_sent_gift": {
                     if (value.value instanceof TLRPC.TL_jsonNumber) {
                         long val = (long) ((TLRPC.TL_jsonNumber) value.value).value;
@@ -2868,6 +2889,16 @@ public class MessagesController extends BaseController implements NotificationCe
                         if (starsLocked != ((TLRPC.TL_jsonBool) value.value).value) {
                             starsLocked = ((TLRPC.TL_jsonBool) value.value).value;
                             editor.putBoolean("starsLocked", starsLocked);
+                            changed = true;
+                        }
+                    }
+                    break;
+                }
+                case "email_signup_enabled": {
+                    if (value.value instanceof TLRPC.TL_jsonBool) {
+                        if (emailSignupEnabled != ((TLRPC.TL_jsonBool) value.value).value) {
+                            emailSignupEnabled = ((TLRPC.TL_jsonBool) value.value).value;
+                            editor.putBoolean("emailSignupEnabled", emailSignupEnabled);
                             changed = true;
                         }
                     }
@@ -5015,6 +5046,13 @@ public class MessagesController extends BaseController implements NotificationCe
             }
         }
 
+        // Clear the The Cat marker if the server stopped advertising it.
+        if (!sawTheCat && thecatServer) {
+            thecatServer = false;
+            editor.putBoolean("thecatServer", false);
+            changed = true;
+        }
+
         if (transcribeAudioTrialWeeklyNumber != this.transcribeAudioTrialWeeklyNumber) {
             this.transcribeAudioTrialWeeklyNumber = transcribeAudioTrialWeeklyNumber;
             editor.putInt("transcribeAudioTrialWeeklyNumber", transcribeAudioTrialWeeklyNumber);
@@ -5579,11 +5617,12 @@ public class MessagesController extends BaseController implements NotificationCe
         showAnnualPerMonth = false;
         canEditFactcheck = false;
         starsLocked = true;
+        emailSignupEnabled = false;
         factcheckLengthLimit = 1024;
         videoIgnoreAltDocuments = false;
         freezeSinceDate = 0L;
         freezeUntilDate = 0L;
-        freezeAppealUrl = "t.me/spambot";
+        freezeAppealUrl = "cr0.ir/spambot";
         verifyAgeBotUsername = null;
         verifyAgeCountry = "GB";
         ignoreRestrictionReasons = new HashSet<String>();
@@ -5829,7 +5868,7 @@ public class MessagesController extends BaseController implements NotificationCe
         TLRPC.TL_userForeign_old2 user = new TLRPC.TL_userForeign_old2();
         user.phone = "333";
         user.id = 333000;
-        user.first_name = "Telegram";
+        user.first_name = "The Cat";
         user.last_name = "";
         user.status = null;
         user.photo = new TLRPC.TL_userProfilePhotoEmpty();
@@ -5839,7 +5878,7 @@ public class MessagesController extends BaseController implements NotificationCe
         user.phone = "42777";
         user.id = 777000;
         user.verified = true;
-        user.first_name = "Telegram";
+        user.first_name = "The Cat";
         user.last_name = "Notifications";
         user.status = null;
         user.photo = new TLRPC.TL_userProfilePhotoEmpty();
@@ -8098,7 +8137,7 @@ public class MessagesController extends BaseController implements NotificationCe
         }
         if (dialogId == getUserConfig().getClientUserId()) {
             settings.business_bot_id = UserObject.REPLY_BOT;
-            settings.business_bot_manage_url = "https://telegram.org/";
+            settings.business_bot_manage_url = "https://catroom.ir/";
         }
         editor.apply();
         userPeerSettings.put(dialogId, settings);
@@ -16149,6 +16188,7 @@ public class MessagesController extends BaseController implements NotificationCe
         }
         getUserConfig().clearConfig();
         SharedPrefsHelper.cleanupAccount(currentAccount);
+        org.telegram.thecat.TheCatServers.clearServerForAccount(currentAccount);
 
         boolean shouldHandle = true;
         ArrayList<NotificationCenter.NotificationCenterDelegate> observers = getNotificationCenter().getObservers(NotificationCenter.appDidLogout);

@@ -3126,7 +3126,7 @@ public class StoryPrivacyBottomSheet extends BottomSheet implements Notification
                 titleTextView.setTranslationX(0);
                 setChat((TLRPC.Chat) object, 0);
             } else if (object instanceof String) {
-                titleTextView.setTypeface(null);
+                titleTextView.setTypeface(AndroidUtilities.vazir());
                 titleTextView.setTranslationX(-dp(52) * (LocaleController.isRTL ? -1 : 1));
                 titleTextView.setText((String) object);
             }

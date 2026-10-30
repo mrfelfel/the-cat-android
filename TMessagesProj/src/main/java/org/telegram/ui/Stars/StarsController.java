@@ -35,6 +35,8 @@ import org.telegram.messenger.ApplicationLoader;
 import org.telegram.messenger.BillingController;
 import org.telegram.messenger.BirthdayController;
 import org.telegram.messenger.BuildVars;
+import org.telegram.messenger.billing.StoreBilling;
+import org.telegram.messenger.billing.StoreBillingBridge;
 import org.telegram.messenger.ChatObject;
 import org.telegram.messenger.ContactsController;
 import org.telegram.messenger.DialogObject;
@@ -296,7 +298,7 @@ public class StarsController {
                     if (object instanceof TL_stars.TL_starsTopupOption) {
                         TL_stars.TL_starsTopupOption option = (TL_stars.TL_starsTopupOption) object;
                         loadedOptions.add(option);
-                        if (option.store_product != null && !BuildVars.useInvoiceBilling()) {
+                        if (option.store_product != null && !BuildVars.useInvoiceBilling() && !BuildVars.isBazaarStoreApp()) {
                             toLoadStorePrice.add(option);
                             option.loadingStorePrice = true;
                         }
@@ -383,7 +385,7 @@ public class StarsController {
                     if (object instanceof TL_stars.TL_starsGiftOption) {
                         TL_stars.TL_starsGiftOption option = (TL_stars.TL_starsGiftOption) object;
                         loadedOptions.add(option);
-                        if (option.store_product != null && !BuildVars.useInvoiceBilling()) {
+                        if (option.store_product != null && !BuildVars.useInvoiceBilling() && !BuildVars.isBazaarStoreApp()) {
                             toLoadStorePrice.add(option);
                             option.loadingStorePrice = true;
                         }
@@ -470,7 +472,7 @@ public class StarsController {
                     if (object instanceof TL_stars.TL_starsGiveawayOption) {
                         TL_stars.TL_starsGiveawayOption option = (TL_stars.TL_starsGiveawayOption) object;
                         loadedOptions.add(option);
-                        if (option.store_product != null && !BuildVars.useInvoiceBilling()) {
+                        if (option.store_product != null && !BuildVars.useInvoiceBilling() && !BuildVars.isBazaarStoreApp()) {
                             toLoadStorePrice.add(option);
                             option.loadingStorePrice = true;
                         }
@@ -777,6 +779,27 @@ public class StarsController {
         }
 
         final boolean isInvoiceBillingDisabled = isInvoiceBillingDisabled(purposePeer);
+
+        // Bazaar flavor: buy the star topup from the Bazaar wallet instead of the
+        // Google or invoice/bot path below. The bridge reports the signed receipt
+        // to the server; the product is a consumable, so it is consumed after the
+        // server credits it.
+        if (BuildVars.isBazaarStoreApp() && StoreBilling.isAvailable()) {
+            final TLRPC.TL_inputStorePaymentStarsTopup bazaarPurpose = new TLRPC.TL_inputStorePaymentStarsTopup();
+            bazaarPurpose.stars = option.stars;
+            bazaarPurpose.amount = option.amount;
+            bazaarPurpose.currency = option.currency;
+            bazaarPurpose.spend_purpose_peer = purposePeer;
+            StoreBilling.tryPurchaseConsumable(activity, UserConfig.selectedAccount, bazaarPurpose, option.store_product,
+                    new StoreBillingBridge.Callback() {
+                        @Override public void onSuccess() { if (whenDone != null) whenDone.run(true, null); }
+                        @Override public void onError(String message) { if (whenDone != null) whenDone.run(false, message); }
+                        @Override public void onCanceled() { if (whenDone != null) whenDone.run(false, null); }
+                        @Override public void onQueued() { if (whenDone != null) whenDone.run(true, null); }
+                    });
+            return;
+        }
+
         if ((BuildVars.useInvoiceBilling() || !BillingController.getInstance().isReady()) && !isInvoiceBillingDisabled) {
             final TLRPC.TL_inputStorePaymentStarsTopup purpose = new TLRPC.TL_inputStorePaymentStarsTopup();
             purpose.stars = option.stars;
@@ -910,6 +933,24 @@ public class StarsController {
             } else {
                 showNoSupportDialog(activity, null);
             }
+            return;
+        }
+
+        // Bazaar flavor: gift stars via the Bazaar wallet instead of the Google or
+        // invoice/bot path. Consumable, so it is consumed after server credit.
+        if (BuildVars.isBazaarStoreApp() && StoreBilling.isAvailable()) {
+            final TLRPC.TL_inputStorePaymentStarsGift bazaarPurpose = new TLRPC.TL_inputStorePaymentStarsGift();
+            bazaarPurpose.stars = option.stars;
+            bazaarPurpose.amount = option.amount;
+            bazaarPurpose.currency = option.currency;
+            bazaarPurpose.user_id = MessagesController.getInstance(currentAccount).getInputUser(user_id);
+            StoreBilling.tryPurchaseConsumable(activity, currentAccount, bazaarPurpose, option.store_product,
+                    new StoreBillingBridge.Callback() {
+                        @Override public void onSuccess() { if (whenDone != null) whenDone.run(true, null); }
+                        @Override public void onError(String message) { if (whenDone != null) whenDone.run(false, message); }
+                        @Override public void onCanceled() { if (whenDone != null) whenDone.run(false, null); }
+                        @Override public void onQueued() { if (whenDone != null) whenDone.run(true, null); }
+                    });
             return;
         }
 

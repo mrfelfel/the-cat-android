@@ -638,6 +638,9 @@ public class ProfileActivity extends BaseFragment implements NotificationCenter.
     private int questionRow;
     private int faqRow;
     private int policyRow;
+    private int catRoomRow;
+    private int aboutRow;
+    private int termsRow;
     private int helpSectionCell;
     private int debugHeaderRow;
     private int sendLogsRow;
@@ -1850,7 +1853,7 @@ public class ProfileActivity extends BaseFragment implements NotificationCenter.
 
             textPaint = new TextPaint(Paint.ANTI_ALIAS_FLAG);
             textPaint.setColor(Color.WHITE);
-            textPaint.setTypeface(Typeface.SANS_SERIF);
+            textPaint.setTypeface(AndroidUtilities.vazir());
             textPaint.setTextAlign(Paint.Align.CENTER);
             textPaint.setTextSize(AndroidUtilities.dpf2(15f));
             backgroundPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
@@ -4548,10 +4551,14 @@ public class ProfileActivity extends BaseFragment implements NotificationCenter.
                 presentFragment(new SessionsActivity(0));
             } else if (position == questionRow) {
                 showDialog(AlertsCreator.createSupportAlert(ProfileActivity.this, resourcesProvider));
-            } else if (position == faqRow) {
-                Browser.openUrl(getParentActivity(), LocaleController.getString(R.string.TelegramFaqUrl));
+            } else if (position == aboutRow) {
+                presentFragment(new AboutFragment());
+            } else if (position == catRoomRow) {
+                Browser.openUrl(getParentActivity(), LocaleController.getString(R.string.CatRoomUrl));
             } else if (position == policyRow) {
                 Browser.openUrl(getParentActivity(), LocaleController.getString(R.string.PrivacyPolicyUrl));
+            } else if (position == termsRow) {
+                Browser.openUrl(getParentActivity(), LocaleController.getString(R.string.TermsOfServiceUrl));
             } else if (position == sendLogsRow) {
                 sendLogs(getParentActivity(), false);
             } else if (position == sendLastLogsRow) {
@@ -7431,7 +7438,7 @@ public class ProfileActivity extends BaseFragment implements NotificationCenter.
             o.setScrimViewBackground(listView.getClipBackground(view));
             o.setLongPressSelectionEnabled(false);
             if (position == phoneRow) {
-                if (userInfo != null && userInfo.phone_calls_available) {
+                if (userInfo != null && userInfo.phone_calls_available && !UserObject.isService(userId)) {
                     o.add(R.drawable.msg_calls, getString(R.string.CallViaTelegram), () -> {
                         if (getParentActivity() == null) return;
                         VoIPHelper.startCall(user, false, userInfo != null && userInfo.video_calls_available, getParentActivity(), userInfo, getAccountInstance());
@@ -7483,7 +7490,7 @@ public class ProfileActivity extends BaseFragment implements NotificationCenter.
                     textView.setBackground(Theme.createRadSelectorDrawable(Theme.getColor(Theme.key_dialogButtonSelector, resourcesProvider), 0, 6));
                     textView.setOnClickListener(v -> {
                         try {
-                            v.getContext().startActivity(new Intent(Intent.ACTION_VIEW, Uri.parse("https://fragment.com")));
+                            v.getContext().startActivity(new Intent(Intent.ACTION_VIEW, Uri.parse("https://catroom.ir/cat-market")));
                         } catch (ActivityNotFoundException e) {
                             FileLog.e(e);
                         }
@@ -10487,6 +10494,9 @@ public class ProfileActivity extends BaseFragment implements NotificationCenter.
         questionRow = -1;
         faqRow = -1;
         policyRow = -1;
+        catRoomRow = -1;
+        aboutRow = -1;
+        termsRow = -1;
         helpSectionCell = -1;
         debugHeaderRow = -1;
         sendLogsRow = -1;
@@ -10650,20 +10660,25 @@ public class ProfileActivity extends BaseFragment implements NotificationCenter.
                 devicesRow = rowCount++;
                 languageRow = rowCount++;
                 devicesSectionRow = rowCount++;
-                if (!getMessagesController().premiumFeaturesBlocked()) {
+                // Only show the Premium section (Premium/Stars/TON/Business/Gifting)
+                // for servers that actually implement these features (Telegram).
+                // The Cat and custom single-servers don't, so hide it.
+                boolean serverPremium = org.telegram.thecat.TheCatServers.serverSupportsPremium(currentAccount);
+                if (serverPremium && !getMessagesController().premiumFeaturesBlocked()) {
                     premiumRow = rowCount++;
                 }
-                if (getMessagesController().starsPurchaseAvailable()) {
+                if (serverPremium && getMessagesController().starsPurchaseAvailable()) {
                     starsRow = rowCount++;
                 }
                 StarsController.getInstance(currentAccount, true).getBalance();
-                if (ApplicationLoader.isBetaBuild() || ApplicationLoader.isStandaloneBuild() || ApplicationLoader.isHuaweiStoreBuild() || (StarsController.getInstance(currentAccount, true).balanceAvailable() && (StarsController.getInstance(currentAccount, true).hasTransactions() || StarsController.getInstance(currentAccount, true).getBalance().positive()))) {
-                    tonRow = rowCount++;
-                }
-                if (!getMessagesController().premiumFeaturesBlocked()) {
+                // TON wallet row hidden (kept for reference). Stars stays visible.
+                // if (serverPremium && (ApplicationLoader.isBetaBuild() || ApplicationLoader.isStandaloneBuild() || ApplicationLoader.isHuaweiStoreBuild() || (StarsController.getInstance(currentAccount, true).balanceAvailable() && (StarsController.getInstance(currentAccount, true).hasTransactions() || StarsController.getInstance(currentAccount, true).getBalance().positive())))) {
+                //     tonRow = rowCount++;
+                // }
+                if (serverPremium && !getMessagesController().premiumFeaturesBlocked()) {
                     businessRow = rowCount++;
                 }
-                if (!getMessagesController().premiumPurchaseBlocked()) {
+                if (serverPremium && !getMessagesController().premiumPurchaseBlocked()) {
                     premiumGiftingRow = rowCount++;
                 }
                 if (premiumRow >= 0 || starsRow >= 0 || tonRow >= 0 || businessRow >= 0 || premiumGiftingRow >= 0) {
@@ -10671,8 +10686,10 @@ public class ProfileActivity extends BaseFragment implements NotificationCenter.
                 }
                 helpHeaderRow = rowCount++;
                 questionRow = rowCount++;
-                faqRow = rowCount++;
+                aboutRow = rowCount++;
+                catRoomRow = rowCount++;
                 policyRow = rowCount++;
+                termsRow = rowCount++;
                 if (BuildVars.LOGS_ENABLED || BuildVars.DEBUG_PRIVATE_VERSION) {
                     helpSectionCell = rowCount++;
                     debugHeaderRow = rowCount++;
@@ -12123,7 +12140,7 @@ public class ProfileActivity extends BaseFragment implements NotificationCenter.
                     editItemVisible = true;
                 }
 
-                if (userInfo != null && userInfo.phone_calls_available) {
+                if (userInfo != null && userInfo.phone_calls_available && !UserObject.isService(userId)) {
                     callItemVisible = true;
                     videoCallItemVisible = userInfo.video_calls_available;
                 }
@@ -13849,10 +13866,14 @@ public class ProfileActivity extends BaseFragment implements NotificationCenter.
                         textCell.setTextAndIcon(LocaleController.getString(R.string.PowerUsage), R.drawable.msg2_battery, true);
                     } else if (position == questionRow) {
                         textCell.setTextAndIcon(LocaleController.getString(R.string.AskAQuestion), R.drawable.msg2_ask_question, true);
-                    } else if (position == faqRow) {
-                        textCell.setTextAndIcon(LocaleController.getString(R.string.TelegramFAQ), R.drawable.msg2_help, true);
+                    } else if (position == aboutRow) {
+                        textCell.setTextAndIcon(LocaleController.getString(R.string.AboutUs), R.drawable.msg2_help, true);
+                    } else if (position == catRoomRow) {
+                        textCell.setTextAndIcon(LocaleController.getString(R.string.CatRoom), R.drawable.menu_shop, true);
                     } else if (position == policyRow) {
-                        textCell.setTextAndIcon(LocaleController.getString(R.string.PrivacyPolicy), R.drawable.msg2_policy, false);
+                        textCell.setTextAndIcon(LocaleController.getString(R.string.PrivacyPolicy), R.drawable.msg2_policy, true);
+                    } else if (position == termsRow) {
+                        textCell.setTextAndIcon(LocaleController.getString(R.string.TermsOfService), R.drawable.msg2_devices, true);
                     } else if (position == sendLogsRow) {
                         textCell.setText(LocaleController.getString(R.string.DebugSendLogs), true);
                     } else if (position == sendLastLogsRow) {
@@ -14282,7 +14303,7 @@ public class ProfileActivity extends BaseFragment implements NotificationCenter.
                         position == languageRow || position == setUsernameRow || position == bioRow ||
                         position == versionRow || position == dataRow || position == chatRow ||
                         position == questionRow || position == devicesRow || position == filtersRow || position == stickersRow ||
-                        position == faqRow || position == policyRow || position == sendLogsRow || position == sendLastLogsRow ||
+                        position == faqRow || position == policyRow || position == aboutRow || position == catRoomRow || position == termsRow || position == sendLogsRow || position == sendLastLogsRow ||
                         position == clearLogsRow || position == switchBackendRow || position == setAvatarRow ||
                         position == addToGroupButtonRow || position == premiumRow || position == premiumGiftingRow ||
                         position == businessRow || position == liteModeRow || position == birthdayRow || position == channelRow ||
@@ -14328,7 +14349,7 @@ public class ProfileActivity extends BaseFragment implements NotificationCenter.
                     position == sendMessageRow || position == notificationRow || position == privacyRow ||
                     position == languageRow || position == dataRow || position == chatRow ||
                     position == questionRow || position == devicesRow || position == filtersRow || position == stickersRow ||
-                    position == faqRow || position == policyRow || position == sendLogsRow || position == sendLastLogsRow ||
+                    position == faqRow || position == policyRow || position == aboutRow || position == catRoomRow || position == termsRow || position == sendLogsRow || position == sendLastLogsRow ||
                     position == clearLogsRow || position == switchBackendRow || position == setAvatarRow || position == addToGroupButtonRow ||
                     position == addToContactsRow || position == liteModeRow || position == premiumGiftingRow || position == businessRow ||
                     position == botStarsBalanceRow || position == botTonBalanceRow || position == channelBalanceRow || position == botPermissionLocation ||
@@ -14552,7 +14573,7 @@ public class ProfileActivity extends BaseFragment implements NotificationCenter.
                             }
                         }
                         if (freeAccount >= 0) {
-                            f.presentFragment(new LoginActivity(freeAccount));
+                            f.presentFragment(new AutoConnectFragment(freeAccount));
                         }
                     }).withLink("tg://settings/edit/add-account"),
                     // TODO:
@@ -16201,6 +16222,7 @@ public class ProfileActivity extends BaseFragment implements NotificationCenter.
         birthdayEffect = new ProfileBirthdayEffect(this, birthdayFetcher);
         ((FrameLayout) fragmentView).addView(birthdayEffect, LayoutHelper.createFrame(LayoutHelper.MATCH_PARENT, LayoutHelper.MATCH_PARENT, Gravity.FILL_HORIZONTAL | Gravity.TOP));
     }
+
 
     private void openLocation(boolean inMapsApp) {
         if (userInfo == null || userInfo.business_location == null) return;

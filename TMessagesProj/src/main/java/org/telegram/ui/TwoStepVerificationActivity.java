@@ -273,7 +273,7 @@ public class TwoStepVerificationActivity extends BaseFragment implements Notific
         passwordEditText.setSingleLine(true);
         passwordEditText.setInputType(InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_VARIATION_PASSWORD);
         passwordEditText.setTransformationMethod(PasswordTransformationMethod.getInstance());
-        passwordEditText.setTypeface(Typeface.DEFAULT);
+        passwordEditText.setTypeface(AndroidUtilities.vazir());
         passwordEditText.setCursorColor(Theme.getColor(Theme.key_windowBackgroundWhiteInputFieldActivated));
         passwordEditText.setCursorWidth(1.5f);
         passwordEditText.setContentDescription(getString(R.string.EnterPassword));

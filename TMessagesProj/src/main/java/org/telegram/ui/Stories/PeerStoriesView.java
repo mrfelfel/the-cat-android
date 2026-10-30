@@ -7094,24 +7094,28 @@ public class PeerStoriesView extends SizeNotifierFrameLayout implements Notifica
             if (currentStory.storyItem == null) {
                 return null;
             }
+            // linkPrefix is this account's own server domain (me_url_prefix, e.g.
+            // "cr0.ir" for this app's server) - must not be hardcoded, or story
+            // links point at the wrong domain instead of this server.
+            final String linkPrefix = MessagesController.getInstance(currentAccount).linkPrefix;
             if (dialogId > 0) {
                 TLRPC.User user = MessagesController.getInstance(currentAccount).getUser(dialogId);
                 if (UserObject.getPublicUsername(user) == null) {
                     return null;
                 }
                 if (currentStory.isLive) {
-                    return String.format(Locale.US, "https://t.me/%1$s/s/live", UserObject.getPublicUsername(user));
+                    return String.format(Locale.US, "https://%1$s/%2$s/s/live", linkPrefix, UserObject.getPublicUsername(user));
                 }
-                return String.format(Locale.US, "https://t.me/%1$s/s/%2$s", UserObject.getPublicUsername(user), currentStory.storyItem.id);
+                return String.format(Locale.US, "https://%1$s/%2$s/s/%3$s", linkPrefix, UserObject.getPublicUsername(user), currentStory.storyItem.id);
             } else {
                 TLRPC.Chat chat = MessagesController.getInstance(currentAccount).getChat(-dialogId);
                 if (ChatObject.getPublicUsername(chat) == null) {
                     return null;
                 }
                 if (currentStory.isLive) {
-                    return String.format(Locale.US, "https://t.me/%1$s/s/live", ChatObject.getPublicUsername(chat));
+                    return String.format(Locale.US, "https://%1$s/%2$s/s/live", linkPrefix, ChatObject.getPublicUsername(chat));
                 }
-                return String.format(Locale.US, "https://t.me/%1$s/s/%2$s", ChatObject.getPublicUsername(chat), currentStory.storyItem.id);
+                return String.format(Locale.US, "https://%1$s/%2$s/s/%3$s", linkPrefix, ChatObject.getPublicUsername(chat), currentStory.storyItem.id);
             }
         }
 

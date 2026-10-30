@@ -4945,7 +4945,7 @@ public class StarsIntroActivity extends GradientHeaderActivity implements Notifi
                         }));
                     } else if (subscription.invoice_slug != null) {
                         maybeCloseAfterUpdate[0] = true;
-                        Browser.openUrl(context, Uri.parse("https://t.me/$" + subscription.invoice_slug), true, false, false, new Browser.Progress() {
+                        Browser.openUrl(context, Uri.parse("https://cr0.ir/$" + subscription.invoice_slug), true, false, false, new Browser.Progress() {
                             @Override
                             public void end() {
                                 button.setLoading(false);
@@ -5136,7 +5136,7 @@ public class StarsIntroActivity extends GradientHeaderActivity implements Notifi
         int padding = AndroidUtilities.dp(16);
         editText.setPadding(dp(6), padding, padding, padding);
         editText.setInputType(InputType.TYPE_CLASS_NUMBER);
-        editText.setTypeface(Typeface.DEFAULT);
+        editText.setTypeface(AndroidUtilities.vazir());
         editText.setSelectAllOnFocus(true);
         editText.setHighlightColor(Theme.getColor(Theme.key_chat_inTextSelectionHighlight, resourcesProvider));
         editText.setHandlesColor(Theme.getColor(Theme.key_chat_TextSelectionCursor, resourcesProvider));
@@ -5357,7 +5357,7 @@ public class StarsIntroActivity extends GradientHeaderActivity implements Notifi
         int padding = AndroidUtilities.dp(16);
         editText.setPadding(dp(6), padding, padding, padding);
         editText.setInputType(InputType.TYPE_CLASS_NUMBER);
-        editText.setTypeface(Typeface.DEFAULT);
+        editText.setTypeface(AndroidUtilities.vazir());
         editText.setSelectAllOnFocus(true);
         editText.setHighlightColor(Theme.getColor(Theme.key_chat_inTextSelectionHighlight, resourcesProvider));
         editText.setHandlesColor(Theme.getColor(Theme.key_chat_TextSelectionCursor, resourcesProvider));

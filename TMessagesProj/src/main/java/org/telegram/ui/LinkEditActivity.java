@@ -404,6 +404,7 @@ public class LinkEditActivity extends BaseFragment {
                 return super.onTouchEvent(event);
             }
         };
+        usesEditText.setTypeface(AndroidUtilities.vazir());
         usesEditText.setPadding(dp(22), 0, dp(22), 0);
         usesEditText.setGravity(Gravity.CENTER_VERTICAL);
         usesEditText.setTextSize(TypedValue.COMPLEX_UNIT_DIP, 16);
@@ -611,6 +612,7 @@ public class LinkEditActivity extends BaseFragment {
                 return super.onTouchEvent(event);
             }
         };
+        nameEditText.setTypeface(AndroidUtilities.vazir());
         nameEditText.addTextChangedListener(new TextWatcher() {
             @Override public void beforeTextChanged(CharSequence s, int start, int count, int after) { }
             @Override public void onTextChanged(CharSequence s, int start, int before, int count) { }

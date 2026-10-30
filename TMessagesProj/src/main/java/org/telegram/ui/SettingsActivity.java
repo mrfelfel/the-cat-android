@@ -681,9 +681,24 @@ public class SettingsActivity extends BaseFragment implements NotificationCenter
         }
 
         if (accountNumbers.size() > 0) {
-            items.add(UItem.asHeader(getString(R.string.SettingsAccounts)));
-            for (int i = 0; i < accountNumbers.size(); ++i) {
-                items.add(AccountCell.Factory.of(i, accountNumbers.get(i)));
+            // Group accounts by server, with the server name as the section header.
+            java.util.List<Integer> order = new java.util.ArrayList<>();
+            for (int i = 0; i < accountNumbers.size(); i++) {
+                order.add(i);
+            }
+            java.util.Collections.sort(order, (a, b) -> {
+                int c = serverLabel(accountNumbers.get(a)).compareToIgnoreCase(serverLabel(accountNumbers.get(b)));
+                return c != 0 ? c : Integer.compare(a, b);
+            });
+            String lastServer = null;
+            for (int idx : order) {
+                int account = accountNumbers.get(idx);
+                String serverName = serverLabel(account);
+                if (!serverName.equals(lastServer)) {
+                    items.add(UItem.asHeader(serverName));
+                    lastServer = serverName;
+                }
+                items.add(AccountCell.Factory.of(idx, account));
             }
             items.add(UItem.asShadow(null));
         }
@@ -700,20 +715,25 @@ public class SettingsActivity extends BaseFragment implements NotificationCenter
 
         items.add(UItem.asShadow(null));
 
-        if (!getMessagesController().premiumFeaturesBlocked()) {
+        // Only show the Premium section (Premium/Stars/TON/Business/Gift) for servers
+        // that implement these features (Telegram). The Cat and custom
+        // single-servers don't, so hide the whole block there.
+        boolean serverPremium = org.telegram.thecat.TheCatServers.serverSupportsPremium(currentAccount);
+        if (serverPremium && !getMessagesController().premiumFeaturesBlocked()) {
             items.add(SettingCell.Factory.of(11, 0xFFB659FF, 0xFF617CFF, R.drawable.settings_premium, getString(R.string.TelegramPremium)));
         }
-        if (getMessagesController().starsPurchaseAvailable()) {
+        if (serverPremium && getMessagesController().starsPurchaseAvailable()) {
             StarsController c = StarsController.getInstance(currentAccount);
             long balance = c.getBalance().amount;
             items.add(SettingCell.Factory.of(12, 0xFFEFA612, 0xFFE77512, R.drawable.settings_stars, getString(R.string.TelegramStars), null, c.balanceAvailable() && balance > 0 ? StarsIntroActivity.formatStarsAmount(c.getBalance(), 0.85f, ' ') : ""));
         }
         StarsController.getInstance(currentAccount, true).getBalance();
-        if (ApplicationLoader.isBetaBuild() || ApplicationLoader.isStandaloneBuild() || ApplicationLoader.isHuaweiStoreBuild() || (StarsController.getInstance(currentAccount, true).balanceAvailable() && (StarsController.getInstance(currentAccount, true).hasTransactions() || StarsController.getInstance(currentAccount, true).getBalance().positive()))) {
+        if (serverPremium && (ApplicationLoader.isBetaBuild() || ApplicationLoader.isStandaloneBuild() || ApplicationLoader.isHuaweiStoreBuild() || (StarsController.getInstance(currentAccount, true).balanceAvailable() && (StarsController.getInstance(currentAccount, true).hasTransactions() || StarsController.getInstance(currentAccount, true).getBalance().positive())))) {
             StarsController c = StarsController.getTonInstance(currentAccount);
             long balance = c.getBalance().amount;
             items.add(SettingCell.Factory.of(13, 0xFF1BA4ED, 0xFF1488E1, R.drawable.settings_gram_24, getString(R.string.MyTON), null, c.balanceAvailable() && balance > 0 ? StarsIntroActivity.formatStarsAmount(c.getBalance(), 0.85f, ' ') : ""));
         }
+//        items.add(SettingCell.Factory.of(14, 0, "Wallet"));
 
         TLRPC.TL_attachMenuBots menuBots = MediaDataController.getInstance(UserConfig.selectedAccount).getAttachMenuBots();
         if (menuBots != null && menuBots.bots != null && !menuBots.bots.isEmpty()) {
@@ -727,20 +747,23 @@ public class SettingsActivity extends BaseFragment implements NotificationCenter
             }
         }
 
-        if (!getMessagesController().premiumFeaturesBlocked()) {
+        if (serverPremium && !getMessagesController().premiumFeaturesBlocked()) {
             items.add(SettingCell.Factory.of(15, 0xFFF45255, 0xFFDF3955, R.drawable.settings_business, getString(R.string.TelegramBusiness)));
         }
-        if (!getMessagesController().premiumPurchaseBlocked()) {
+        if (serverPremium && !getMessagesController().premiumPurchaseBlocked()) {
             items.add(SettingCell.Factory.of(16, 0xFFF38B31, 0xFFE26314, R.drawable.settings_gift, getString(R.string.SendAGift)));
         }
         if (items.get(items.size() - 1).viewType != UniversalAdapter.VIEW_TYPE_SHADOW)
             items.add(UItem.asShadow(null));
 
         items.add(UItem.asHeader(getString(R.string.SettingsHelp)));
-        items.add(SettingCell.Factory.of(17, IconBackgroundColors.ORANGE.top, IconBackgroundColors.ORANGE.bottom, R.drawable.settings_ask, getString(R.string.AskAQuestion)));
-        items.add(SettingCell.Factory.of(18, IconBackgroundColors.BLUE_LIGHT.top, IconBackgroundColors.BLUE_LIGHT.bottom, R.drawable.settings_faq, getString(R.string.TelegramFAQ)));
-        items.add(SettingCell.Factory.of(23, IconBackgroundColors.PURPLE.top, IconBackgroundColors.PURPLE.bottom, R.drawable.settings_features, getString(R.string.TelegramFeatures)));
-        items.add(SettingCell.Factory.of(19, IconBackgroundColors.GREEN.top, IconBackgroundColors.GREEN.bottom, R.drawable.settings_policy, getString(R.string.PrivacyPolicy)));
+        // Cat-specific help entries (About Us, Cat Room market, Privacy Policy,
+        // Terms) — all catroom.ir. The Telegram-only entries (Ask a Question,
+        // Telegram FAQ / Features) are gone with the Telegram server.
+        items.add(SettingCell.Factory.of(24, 0xFF1BA4ED, 0xFF1488E1, R.drawable.settings_faq, getString(R.string.AboutUs)));
+        items.add(SettingCell.Factory.of(25, 0xFFF09F1B, 0xFFE18A11, R.drawable.settings_gram_24, getString(R.string.CatRoom)));
+        items.add(SettingCell.Factory.of(19, 0xFF55CA47, 0xFF27B434, R.drawable.settings_policy, getString(R.string.PrivacyPolicy)));
+        items.add(SettingCell.Factory.of(26, 0xFFC46EF4, 0xFF9F55DF, R.drawable.settings_features, getString(R.string.TermsOfService)));
 
         if (BuildVars.LOGS_ENABLED || BuildVars.DEBUG_PRIVATE_VERSION) {
             items.add(UItem.asShadow(null));
@@ -862,6 +885,15 @@ public class SettingsActivity extends BaseFragment implements NotificationCenter
             case 19:
                 Browser.openUrl(getParentActivity(), LocaleController.getString(R.string.PrivacyPolicyUrl));
                 break;
+            case 24:
+                presentFragment(new AboutFragment());
+                break;
+            case 25:
+                Browser.openUrl(getParentActivity(), LocaleController.getString(R.string.CatRoomUrl));
+                break;
+            case 26:
+                Browser.openUrl(getParentActivity(), LocaleController.getString(R.string.TermsOfServiceUrl));
+                break;
 
             case 20:
                 ProfileActivity.sendLogs(getParentActivity(), false);
@@ -881,6 +913,11 @@ public class SettingsActivity extends BaseFragment implements NotificationCenter
                 break;
             }
         }
+    }
+
+    private String serverLabel(int account) {
+        String name = org.telegram.thecat.TheCatServers.serverNameForAccount(account);
+        return name != null ? name : getString(R.string.AppName);
     }
 
     private boolean onLongClick(UItem item, View view, int position, float x, float y) {
@@ -933,7 +970,11 @@ public class SettingsActivity extends BaseFragment implements NotificationCenter
                     }
                     break;
             }
-            return formatString(R.string.TelegramVersion, String.format(Locale.US, "v%s (%d)\n%s", pInfo.versionName, code, abi));
+            String versionName = pInfo.versionName;
+            //APP VERSION HERE
+            versionName += "_O7";
+
+            return "TheCat " + String.format(Locale.US, "v%s (%d)\n%s", versionName, code, abi);
         } catch (Exception e) {
             FileLog.e(e);
         }

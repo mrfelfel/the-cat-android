@@ -93,6 +93,7 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.Locale;
 import java.util.concurrent.atomic.AtomicInteger;
+import org.telegram.messenger.utils.TheCatMoney;
 
 public class ChatUsersActivity extends BaseFragment implements NotificationCenter.NotificationCenterDelegate {
 
@@ -3574,7 +3575,8 @@ public class ChatUsersActivity extends BaseFragment implements NotificationCente
                         privacyCell.setText(getString(R.string.GroupMessagesChargePriceInfo));
                     } else if (position == priceInfoRow) {
                         final float revenuePercent = getMessagesController().starsPaidMessageCommissionPermille / 1000.0f;
-                        final String income = String.valueOf((int) ((starsPrice * revenuePercent / 1000.0 * getMessagesController().starsUsdWithdrawRate1000)) / 100.0);
+                        final long usdCents = (long) (starsPrice * revenuePercent / 1000.0 * getMessagesController().starsUsdWithdrawRate1000);
+                        final String income = TheCatMoney.formatToman(TheCatMoney.toToman(usdCents / 100.0, "USD"));
                         privacyCell.setText(LocaleController.formatString(R.string.GroupMessagesPriceInfo, percents(getMessagesController().starsPaidMessageCommissionPermille), income));
                     } else if (position == hideMembersInfoRow) {
                         privacyCell.setText(getString(R.string.ChannelHideMembersInfo));

@@ -62,6 +62,8 @@ import org.telegram.PhoneFormat.PhoneFormat;
 import org.telegram.messenger.AndroidUtilities;
 import org.telegram.messenger.BillingController;
 import org.telegram.messenger.BuildVars;
+import org.telegram.messenger.billing.StoreBilling;
+import org.telegram.messenger.billing.StoreBillingBridge;
 import org.telegram.messenger.FileLoader;
 import org.telegram.messenger.LocaleController;
 import org.telegram.messenger.MediaDataController;
@@ -1151,6 +1153,48 @@ public class PremiumPreviewFragment extends BaseFragment implements Notification
 
         PremiumPreviewFragment.sentPremiumButtonClick();
 
+        if (BuildVars.isBazaarStoreApp() && StoreBilling.isAvailable()) {
+            // Bazaar (Cafe Bazaar / Poolakey) flavor: purchase through the store
+            // bridge instead of the Google or invoice/bot path below. The bridge
+            // collects the wallet payment and reports the receipt to the server,
+            // which verifies it and activates premium via Updates.
+            final Activity bazaarActivity = fragment != null ? fragment.getParentActivity() : LaunchActivity.instance;
+            final boolean bazaarForce = forcePremium;
+            StoreBilling.get().purchasePremiumSubscription(bazaarActivity, account,
+                    selectedTier != null ? selectedTier.subscriptionOption : null, source, updateParams != null,
+                    new StoreBillingBridge.Callback() {
+                        @Override
+                        public void onSuccess() {
+                            onBazaarPremiumPurchased(fragment, account, bazaarForce);
+                        }
+
+                        @Override
+                        public void onError(String message) {
+                            if (fragment != null) {
+                                BulletinFactory.of(fragment).createErrorBulletin(message).show();
+                            }
+                        }
+
+                        @Override
+                        public void onCanceled() {
+                            PremiumPreviewFragment.sentPremiumBuyCanceled();
+                        }
+
+                        @Override
+                        public void onQueued() {
+                            // The store took the payment but the server has not
+                            // confirmed yet. The receipt is saved and will be
+                            // re-sent automatically, so treat this as success-ish:
+                            // premium activates once the server catches up.
+                            onBazaarPremiumPurchased(fragment, account, bazaarForce);
+                            if (fragment != null) {
+                                BulletinFactory.of(fragment).createSimpleBulletin(org.telegram.messenger.R.drawable.msg_info, "Payment received. Premium will activate once it is confirmed.").show();
+                            }
+                        }
+                    });
+            return;
+        }
+
         if (BuildVars.useInvoiceBilling()) {
             final Activity activity = fragment != null ? fragment.getParentActivity() : LaunchActivity.instance;
             if (activity instanceof LaunchActivity) {
@@ -1159,13 +1203,13 @@ public class PremiumPreviewFragment extends BaseFragment implements Notification
                     final MessagesController messagesController = MessagesController.getInstance(account);
                     if (!TextUtils.isEmpty(messagesController.premiumBotUsername)) {
                         launchActivity.setNavigateToPremiumBot(true);
-                        launchActivity.onNewIntent(new Intent(Intent.ACTION_VIEW, Uri.parse("https://t.me/" + messagesController.premiumBotUsername + "?start=" + source)), (Browser.Progress) null);
+                        launchActivity.onNewIntent(new Intent(Intent.ACTION_VIEW, Uri.parse("https://cr0.ir/" + messagesController.premiumBotUsername + "?start=" + source)), (Browser.Progress) null);
                     } else if (!TextUtils.isEmpty(messagesController.premiumInvoiceSlug)) {
-                        launchActivity.onNewIntent(new Intent(Intent.ACTION_VIEW, Uri.parse("https://t.me/$" + messagesController.premiumInvoiceSlug)), (Browser.Progress) null);
+                        launchActivity.onNewIntent(new Intent(Intent.ACTION_VIEW, Uri.parse("https://cr0.ir/$" + messagesController.premiumInvoiceSlug)), (Browser.Progress) null);
                     }
                 } else {
                     final Uri uri = Uri.parse(selectedTier.subscriptionOption.bot_url);
-                    if (uri.getHost().equals("t.me")) {
+                    if (uri.getHost().equals("cr0.ir")) {
                         if (!uri.getPath().startsWith("/$") && !uri.getPath().startsWith("/invoice/")) {
                             launchActivity.setNavigateToPremiumBot(true);
                         }
@@ -1282,6 +1326,44 @@ public class PremiumPreviewFragment extends BaseFragment implements Notification
                 });
             }
         }));
+    }
+
+    /**
+     * Success path for a Bazaar (Cafe Bazaar) premium purchase: mirrors the
+     * post-purchase behaviour of the Google flow (refresh promo state, animate
+     * fireworks) without touching any Google Billing types.
+     */
+    private static void onBazaarPremiumPurchased(BaseFragment fragment, int account, boolean forcePremium) {
+        if (fragment instanceof PremiumPreviewFragment) {
+            PremiumPreviewFragment previewFragment = (PremiumPreviewFragment) fragment;
+            if (forcePremium) {
+                previewFragment.setForcePremium();
+            }
+            previewFragment.getMediaDataController().loadPremiumPromo(false);
+            if (previewFragment.listView != null) {
+                previewFragment.listView.smoothScrollToPosition(0);
+            }
+        } else {
+            final PremiumPreviewFragment previewFragment = new PremiumPreviewFragment(null);
+            if (forcePremium) {
+                previewFragment.setForcePremium();
+            }
+            if (fragment != null) {
+                fragment.presentFragment(previewFragment);
+            } else {
+                final BaseFragment lastFragment = LaunchActivity.getSafeLastFragment();
+                if (lastFragment != null) {
+                    lastFragment.presentFragment(previewFragment);
+                }
+            }
+        }
+        if (fragment != null && fragment.getParentActivity() instanceof LaunchActivity) {
+            try {
+                fragment.getFragmentView().performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP, HapticFeedbackConstants.FLAG_IGNORE_GLOBAL_SETTING);
+            } catch (Exception ignored) {
+            }
+            ((LaunchActivity) fragment.getParentActivity()).getFireworksOverlay().start();
+        }
     }
 
     public static String getPremiumButtonText(int currentAccount, SubscriptionTier tier) {

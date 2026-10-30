@@ -2731,7 +2731,7 @@ public class VoIPFragment implements
         if (currentUserIsVideo || callingUserIsVideo) {
             isVideoAvailable = true;
         } else {
-            isVideoAvailable = service.isVideoAvailable();
+            isVideoAvailable = service.isVideoAvailable() || (service.privateCall != null && service.privateCall.video);
         }
         if (isVideoAvailable) {
             if (currentUserIsVideo) {

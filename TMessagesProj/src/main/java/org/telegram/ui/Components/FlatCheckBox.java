@@ -46,7 +46,7 @@ public class FlatCheckBox extends View {
         super(context);
         textPaint.setTextSize(AndroidUtilities.dp(14));
         textPaint.setTextAlign(Paint.Align.CENTER);
-        textPaint.setTypeface(Typeface.create("sans-serif-medium", Typeface.NORMAL));
+        textPaint.setTypeface(AndroidUtilities.bold());
         outLinePaint.setStrokeWidth(AndroidUtilities.dpf2(1.5f));
         outLinePaint.setStyle(Paint.Style.STROKE);
 

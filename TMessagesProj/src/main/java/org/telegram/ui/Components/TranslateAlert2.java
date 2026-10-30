@@ -860,7 +860,7 @@ public class TranslateAlert2 extends BottomSheet implements NotificationCenter.N
                     newEntity.length = entity.length;
                     received.entities.set(i, newEntity);
                 } else if (
-                    entity.url.startsWith("https://t.me/") &&
+                    entity.url.startsWith("https://cr0.ir/") &&
                     text.startsWith("@") &&
                     TextUtils.equals(text.substring(1), entity.url.substring(13))
                 ) {

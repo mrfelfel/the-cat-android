@@ -870,7 +870,7 @@ public class ChannelCreateActivity extends BaseFragment implements NotificationC
                                 new ClickableSpan() {
                                     @Override
                                     public void onClick(@NonNull View view) {
-                                        Browser.openUrl(getContext(), "https://fragment.com/username/" + username);
+                                        Browser.openUrl(getContext(), "https://catroom.ir/cat-market/username/" + username);
                                     }
 
                                     @Override

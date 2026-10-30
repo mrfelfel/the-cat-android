@@ -610,35 +610,25 @@ public class MainTabsActivity extends ViewPagerActivity implements NotificationC
             }
         }
         Collections.sort(accountNumbers, (o1, o2) -> {
+            // Group by server first, then by login time within a server.
+            int c = serverLabel(o1).compareToIgnoreCase(serverLabel(o2));
+            if (c != 0) {
+                return c;
+            }
             long l1 = UserConfig.getInstance(o1).loginTime;
             long l2 = UserConfig.getInstance(o2).loginTime;
-            if (l1 > l2) {
-                return 1;
-            } else if (l1 < l2) {
-                return -1;
-            }
-            return 0;
+            return Long.compare(l1, l2);
         });
 
         ItemOptions o = ItemOptions.makeOptions(this, button);
         if (UserConfig.getActivatedAccountsCount() < UserConfig.MAX_ACCOUNT_COUNT) {
             o.add(R.drawable.msg_addbot, getString(R.string.AddAccount), () -> {
-                int freeAccounts = 0;
-                Integer availableAccount = null;
-                for (int a = UserConfig.MAX_ACCOUNT_COUNT - 1; a >= 0; a--) {
-                    if (!UserConfig.getInstance(a).isClientActivated()) {
-                        freeAccounts++;
-                        if (availableAccount == null) {
-                            availableAccount = a;
-                        }
-                    }
-                }
-                if (!UserConfig.hasPremiumOnAccounts()) {
-                    freeAccounts -= (UserConfig.MAX_ACCOUNT_COUNT - UserConfig.MAX_ACCOUNT_DEFAULT_COUNT);
-                }
-                if (freeAccounts > 0 && availableAccount != null) {
-                    presentFragment(new LoginActivity(availableAccount));
-                } else if (!UserConfig.hasPremiumOnAccounts()) {
+                // Any account (custom server) may use any free slot; we auto-connect
+                // to The Cat server (see AutoConnectFragment).
+                int availableAccount = org.telegram.thecat.TheCatServers.firstFreeAccountSlot();
+                if (availableAccount >= 0) {
+                    presentFragment(new AutoConnectFragment(availableAccount));
+                } else {
                     showDialog(new LimitReachedBottomSheet(this, getContext(), TYPE_ACCOUNTS, currentAccount, null));
                 }
             });
@@ -650,8 +640,17 @@ public class MainTabsActivity extends ViewPagerActivity implements NotificationC
 
         if (accountNumbers.size() > 0) {
             if (o.getItemsCount() > 0) o.addGap();
+            String lastServer = null;
             for (int acc : accountNumbers) {
                 final int account = acc;
+                final String serverName = serverLabel(acc);
+                if (!serverName.equals(lastServer)) {
+                    if (lastServer != null) {
+                        o.addGap(); // separator between server groups
+                    }
+                    o.addView(serverHeaderView(serverName), LayoutHelper.createLinear(230, LayoutHelper.WRAP_CONTENT));
+                    lastServer = serverName;
+                }
                 final View btn = accountView(acc, currentAccount == acc);
                 btn.setOnClickListener(v -> {
                     if (currentAccount == account) return;
@@ -674,6 +673,22 @@ public class MainTabsActivity extends ViewPagerActivity implements NotificationC
         HintsController.Hint.AccountSwitchHint.doNotShowAgain();
 
         return true;
+    }
+
+    private String serverLabel(int account) {
+        String name = org.telegram.thecat.TheCatServers.serverNameForAccount(account);
+        return name != null ? name : getString(R.string.AppName);
+    }
+
+    private android.widget.TextView serverHeaderView(String title) {
+        android.widget.TextView tv = new android.widget.TextView(getContext());
+        tv.setText(title);
+        tv.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, 12);
+        tv.setTypeface(AndroidUtilities.bold());
+        tv.setTextColor(getThemedColor(Theme.key_windowBackgroundWhiteBlueHeader));
+        tv.setPadding(dp(16), dp(8), dp(16), dp(4));
+        tv.setAllCaps(true);
+        return tv;
     }
 
     public LinearLayout accountView(int account, boolean selected) {

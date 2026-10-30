@@ -103,6 +103,10 @@ public class NotificationsController extends BaseController implements Notificat
 
     public static final String EXTRA_VOICE_REPLY = "extra_voice_reply";
     public static String OTHER_NOTIFICATIONS_CHANNEL = null;
+    // Dedicated channel for the always-on keep-alive (push) foreground service.
+    // Uses IMPORTANCE_MIN so the mandatory foreground notification is as hidden as
+    // Android allows: no status-bar icon, collapsed at the bottom of the shade.
+    public static String PUSH_SERVICE_NOTIFICATIONS_CHANNEL = null;
 
     private static final DispatchQueue notificationsQueue = new DispatchQueue("notificationsQueue");
     private final ArrayList<MessageObject> pushMessages = new ArrayList<>();
@@ -286,6 +290,36 @@ public class NotificationsController extends BaseController implements Notificat
             notificationChannel.enableLights(false);
             notificationChannel.enableVibration(false);
             notificationChannel.setSound(null, null);
+            try {
+                systemNotificationManager.createNotificationChannel(notificationChannel);
+            } catch (Exception e) {
+                FileLog.e(e);
+            }
+        }
+    }
+
+    // Channel for the keep-alive push service. IMPORTANCE_MIN keeps the required
+    // foreground-service notification minimal (no status-bar icon, collapsed),
+    // separate from OTHER_NOTIFICATIONS_CHANNEL so other services stay unaffected.
+    public static void checkPushServiceNotificationsChannel() {
+        if (Build.VERSION.SDK_INT < 26) {
+            return;
+        }
+        if (systemNotificationManager == null) {
+            systemNotificationManager = (NotificationManager) ApplicationLoader.applicationContext.getSystemService(Context.NOTIFICATION_SERVICE);
+        }
+        SharedPreferences preferences = null;
+        if (PUSH_SERVICE_NOTIFICATIONS_CHANNEL == null) {
+            preferences = ApplicationLoader.applicationContext.getSharedPreferences("Notifications", Activity.MODE_PRIVATE);
+            PUSH_SERVICE_NOTIFICATIONS_CHANNEL = preferences.getString("PushServiceKey", "PushService");
+        }
+        NotificationChannel notificationChannel = systemNotificationManager.getNotificationChannel(PUSH_SERVICE_NOTIFICATIONS_CHANNEL);
+        if (notificationChannel == null) {
+            notificationChannel = new NotificationChannel(PUSH_SERVICE_NOTIFICATIONS_CHANNEL, "Background connection", NotificationManager.IMPORTANCE_MIN);
+            notificationChannel.enableLights(false);
+            notificationChannel.enableVibration(false);
+            notificationChannel.setSound(null, null);
+            notificationChannel.setShowBadge(false);
             try {
                 systemNotificationManager.createNotificationChannel(notificationChannel);
             } catch (Exception e) {

@@ -38,6 +38,8 @@ import androidx.core.graphics.ColorUtils;
 
 import org.telegram.PhoneFormat.PhoneFormat;
 import org.telegram.messenger.AndroidUtilities;
+import org.telegram.thecat.TheCatServers;
+import org.telegram.ui.Components.AlertsCreator;
 import org.telegram.messenger.ApplicationLoader;
 import org.telegram.messenger.FileLog;
 import org.telegram.messenger.LocaleController;
@@ -551,6 +553,14 @@ public class ActionIntroActivity extends BaseFragment implements LocationControl
                     break;
                 }
                 case ACTION_TYPE_CHANGE_PHONE_NUMBER: {
+                    if (TheCatServers.serverHasEmailSignup(currentAccount)) {
+                        // This server has no real SMS delivery and uses email as the
+                        // account identity instead of a phone number (see
+                        // account.sendChangePhoneCode's matching server-side block) —
+                        // pre-empt the confusing RPC error with a clear message here.
+                        AlertsCreator.showSimpleAlert(this, LocaleController.getString(R.string.PhoneNumberChangeNotSupportedTitle), LocaleController.getString(R.string.PhoneNumberChangeNotSupported));
+                        break;
+                    }
                     AlertDialog.Builder builder = new AlertDialog.Builder(getParentActivity());
                     builder.setTitle(LocaleController.getString(R.string.PhoneNumberChangeTitle));
                     builder.setMessage(LocaleController.getString(R.string.PhoneNumberAlert));

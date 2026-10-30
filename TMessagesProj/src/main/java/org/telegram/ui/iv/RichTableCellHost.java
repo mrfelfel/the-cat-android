@@ -14,6 +14,7 @@ import org.telegram.messenger.SharedConfig;
 import org.telegram.tgnet.tl.TL_iv;
 import org.telegram.ui.ActionBar.Theme;
 import org.telegram.ui.Components.LayoutHelper;
+import org.telegram.messenger.AndroidUtilities;
 
 public class RichTableCellHost extends FrameLayout {
 
@@ -114,6 +115,6 @@ public class RichTableCellHost extends FrameLayout {
         else if (cell.align_center) textGravity = Gravity.TOP | Gravity.CENTER_HORIZONTAL;
         editText.setGravity(textGravity);
         // Highlighting applies a real bold span so the user can remove bold from any range.
-        editText.setTypeface(null);
+        editText.setTypeface(AndroidUtilities.vazir());
     }
 }

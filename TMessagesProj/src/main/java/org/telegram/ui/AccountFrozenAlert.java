@@ -49,7 +49,7 @@ public class AccountFrozenAlert {
             return false;
         }
         try {
-            final Matcher m = Pattern.compile("t\\.me/([a-zA-Z0-9]+)/?").matcher(MessagesController.getInstance(currentAccount).freezeAppealUrl);
+            final Matcher m = Pattern.compile("cr0\\.ir/([a-zA-Z0-9]+)/?").matcher(MessagesController.getInstance(currentAccount).freezeAppealUrl);
             return m.find() && username.equalsIgnoreCase(m.group(1));
         } catch (Exception e) {
             FileLog.e(e);

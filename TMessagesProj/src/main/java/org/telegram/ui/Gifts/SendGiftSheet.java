@@ -40,6 +40,9 @@ import org.telegram.messenger.AndroidUtilities;
 import org.telegram.messenger.AnimationNotificationsLocker;
 import org.telegram.messenger.BillingController;
 import org.telegram.messenger.BuildVars;
+import org.telegram.messenger.FileLog;
+import org.telegram.messenger.billing.StoreBilling;
+import org.telegram.messenger.billing.StoreBillingBridge;
 import org.telegram.messenger.GiftAuctionController;
 import org.telegram.messenger.LocaleController;
 import org.telegram.messenger.MediaDataController;
@@ -828,11 +831,26 @@ public class SendGiftSheet extends BottomSheetWithRecyclerListView implements No
                     }
                     button.setLoading(false);
                 });
+            } else if (BuildVars.isBazaarStoreApp() && StoreBilling.isAvailable()) {
+                // Bazaar flavor: gift premium via the Bazaar wallet instead of the
+                // Google or invoice/bot path. Consumable, so it is consumed after
+                // the server credits it.
+                TLRPC.TL_inputStorePaymentGiftPremium bazaarGift = new TLRPC.TL_inputStorePaymentGiftPremium();
+                bazaarGift.user_id = MessagesController.getInstance(currentAccount).getInputUser(user);
+                bazaarGift.currency = o.currency;
+                bazaarGift.amount = o.amount;
+                StoreBilling.tryPurchaseConsumable(getBaseFragment().getParentActivity(), currentAccount, bazaarGift, o.store_product,
+                        new StoreBillingBridge.Callback() {
+                            @Override public void onSuccess() { AndroidUtilities.runOnUIThread(() -> onGiftSuccess(true)); }
+                            @Override public void onQueued() { AndroidUtilities.runOnUIThread(() -> onGiftSuccess(true)); }
+                            @Override public void onCanceled() { button.setLoading(false); }
+                            @Override public void onError(String message) { FileLog.e("Bazaar gift premium: " + message); button.setLoading(false); }
+                        });
             } else if (BuildVars.useInvoiceBilling()) {
                 final LaunchActivity activity = LaunchActivity.instance;
                 if (activity != null) {
                     Uri uri = Uri.parse(o.bot_url);
-                    if (uri.getHost().equals("t.me")) {
+                    if (uri.getHost().equals("cr0.ir")) {
                         if (!uri.getPath().startsWith("/$") && !uri.getPath().startsWith("/invoice/")) {
                             activity.setNavigateToPremiumBot(true);
                         } else {

@@ -335,7 +335,7 @@ public class DialogStoriesCell extends FrameLayout implements NotificationCenter
         telegramLogoView = new ImageView(context);
         telegramLogoView.setContentDescription(getString(R.string.AppName));
         telegramLogoView.setScaleType(ImageView.ScaleType.CENTER_INSIDE);
-        telegramLogoView.setImageResource(R.drawable.telegram_logo_2);
+        telegramLogoView.setImageDrawable(createWordmarkDrawable());
         telegramLogoView.setColorFilter(getTextLogoColor(), PorterDuff.Mode.MULTIPLY);
         telegramLogoView.setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_YES);
         telegramLogoView.setFocusableInTouchMode(true);
@@ -1170,6 +1170,28 @@ public class DialogStoriesCell extends FrameLayout implements NotificationCenter
 
     private int getTextLogoColor() {
         return getThemedColor(Theme.key_telegram_color_dialogsLogo);
+    }
+
+    /**
+     * The Cat: header wordmark. The stock client draws the hardcoded "Telegram"
+     * vector here; we render the app's own localized name instead (white, so the
+     * existing dialogsLogo colorFilter tints it like before).
+     */
+    private Drawable createWordmarkDrawable() {
+        final String name = getString(R.string.AppName);
+        final android.graphics.Bitmap bitmap = android.graphics.Bitmap.createBitmap(AndroidUtilities.dp(90), AndroidUtilities.dp(22), android.graphics.Bitmap.Config.ARGB_8888);
+        final Canvas canvas = new Canvas(bitmap);
+        final Paint paint = new Paint(Paint.ANTI_ALIAS_FLAG);
+        paint.setColor(0xFFFFFFFF);
+        paint.setTypeface(AndroidUtilities.bold());
+        paint.setTextSize(AndroidUtilities.dp(18));
+        paint.setTextAlign(Paint.Align.LEFT);
+        final float width = paint.measureText(name);
+        final Paint.FontMetricsInt fm = paint.getFontMetricsInt();
+        canvas.drawText(name, Math.max(0, (bitmap.getWidth() - width) / 2f), (bitmap.getHeight() - (fm.bottom + fm.top)) / 2f, paint);
+        final android.graphics.drawable.BitmapDrawable drawable = new android.graphics.drawable.BitmapDrawable(getResources(), bitmap);
+        drawable.setTargetDensity(getResources().getDisplayMetrics());
+        return drawable;
     }
 
     private int getTextColor() {

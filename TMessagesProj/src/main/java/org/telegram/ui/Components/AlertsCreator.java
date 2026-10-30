@@ -94,6 +94,7 @@ import org.telegram.messenger.MessagesController;
 import org.telegram.messenger.MessagesStorage;
 import org.telegram.messenger.NotificationCenter;
 import org.telegram.messenger.NotificationsController;
+import org.telegram.messenger.time.JalaliCalendar;
 import org.telegram.messenger.OneUIUtilities;
 import org.telegram.messenger.R;
 import org.telegram.messenger.SecretChatHelper;
@@ -3275,6 +3276,7 @@ public class AlertsCreator {
 
         NumberTextView checkTextView = new NumberTextView(context);
         EditText editTextView = new EditText(context);
+        editTextView.setTypeface(AndroidUtilities.vazir());
         editTextView.setTextColor(Theme.getColor(Theme.key_voipgroup_actionBarItems));
         editTextView.setHint(peerId > 0 ? LocaleController.getString(R.string.UserBio) : LocaleController.getString(R.string.DescriptionPlaceholder));
         editTextView.setTextSize(TypedValue.COMPLEX_UNIT_DIP, 16);
@@ -3420,6 +3422,7 @@ public class AlertsCreator {
         dialogView.setOrientation(LinearLayout.VERTICAL);
 
         EditText firstNameEditTextView = new EditText(context);
+        firstNameEditTextView.setTypeface(AndroidUtilities.vazir());
         firstNameEditTextView.setTextColor(Theme.getColor(Theme.key_voipgroup_actionBarItems));
         firstNameEditTextView.setTextSize(TypedValue.COMPLEX_UNIT_DIP, 16);
         firstNameEditTextView.setMaxLines(1);
@@ -3436,6 +3439,7 @@ public class AlertsCreator {
         EditText lastNameEditTextView = null;
         if (peerId > 0) {
             lastNameEditTextView = new EditText(context);
+            lastNameEditTextView.setTypeface(AndroidUtilities.vazir());
             lastNameEditTextView.setTextColor(Theme.getColor(Theme.key_voipgroup_actionBarItems));
             lastNameEditTextView.setTextSize(TypedValue.COMPLEX_UNIT_DIP, 16);
             lastNameEditTextView.setMaxLines(1);
@@ -4230,40 +4234,73 @@ public class AlertsCreator {
 
     public static long checkFormattedDateInput(ButtonWithCounterView button, NumberPicker dayPicker, NumberPicker monthPicker, NumberPicker hourPicker, NumberPicker minutePicker ) {
         final long systemTime = System.currentTimeMillis();
-        final Calendar calendar = Calendar.getInstance();
-        calendar.setTimeInMillis(systemTime);
+        final boolean jalali = JalaliCalendar.isEnabled();
+        final int offset = monthPicker.getValue() - FMT_DATE_MONTH_PICKER_HALF_SIZE;
+        final int year;
+        final int month;
+        if (jalali) {
+            final int[] now = JalaliCalendar.toJalali(systemTime);
+            final int total = now[0] * 12 + (now[1] - 1) + offset;
+            year = Math.floorDiv(total, 12);
+            month = Math.floorMod(total, 12);
+        } else {
+            final Calendar calendar = Calendar.getInstance();
+            calendar.setTimeInMillis(systemTime);
+            year = calendar.get(Calendar.YEAR) + offset / 12;
+            month = offset % 12;
+        }
 
-        final int currentYear = calendar.get(Calendar.YEAR);
-
-        final int year = currentYear + (monthPicker.getValue() - FMT_DATE_MONTH_PICKER_HALF_SIZE) / 12;
-        final int month = (monthPicker.getValue() - FMT_DATE_MONTH_PICKER_HALF_SIZE) % 12;
-
-        calendar.clear();
-        calendar.set(Calendar.YEAR, year);
-        calendar.set(Calendar.MONTH, month);
-
+        final int monthDays;
+        final long monthStartMillis;
+        if (jalali) {
+            monthDays = JalaliCalendar.monthLength(year, month + 1);
+            monthStartMillis = 0; // unused in jalali branch
+        } else {
+            final Calendar calendar = Calendar.getInstance();
+            calendar.clear();
+            calendar.set(Calendar.YEAR, year);
+            calendar.set(Calendar.MONTH, month);
+            monthDays = calendar.getActualMaximum(Calendar.DAY_OF_MONTH);
+            monthStartMillis = calendar.getTimeInMillis();
+        }
         dayPicker.setMinValue(1);
-        dayPicker.setMaxValue(calendar.getActualMaximum(Calendar.DAY_OF_MONTH));
+        dayPicker.setMaxValue(monthDays);
 
-        final int day = dayPicker.getValue();
+        final int day = Math.min(dayPicker.getValue(), monthDays);
         final int hour = hourPicker.getValue();
         final int minute = minutePicker.getValue();
 
-        calendar.set(Calendar.DAY_OF_MONTH, day);
-        calendar.set(Calendar.HOUR_OF_DAY, hour);
-        calendar.set(Calendar.MINUTE, minute);
-
-        final long selectedTime = calendar.getTimeInMillis();
-        calendar.setTimeInMillis(selectedTime);
+        final long selectedTime;
+        if (jalali) {
+            final int[] g = JalaliCalendar.toGregorian(year, month + 1, day);
+            final Calendar calendar = Calendar.getInstance();
+            calendar.clear();
+            calendar.set(Calendar.YEAR, g[0]);
+            calendar.set(Calendar.MONTH, g[1] - 1);
+            calendar.set(Calendar.DAY_OF_MONTH, g[2]);
+            calendar.set(Calendar.HOUR_OF_DAY, hour);
+            calendar.set(Calendar.MINUTE, minute);
+            selectedTime = calendar.getTimeInMillis();
+        } else {
+            final Calendar calendar = Calendar.getInstance();
+            calendar.setTimeInMillis(monthStartMillis);
+            calendar.set(Calendar.DAY_OF_MONTH, day);
+            calendar.set(Calendar.HOUR_OF_DAY, hour);
+            calendar.set(Calendar.MINUTE, minute);
+            selectedTime = calendar.getTimeInMillis();
+        }
 
         if (button != null) {
             int num;
             if (day == 0) {
                 num = 0;
-            } else if (currentYear == year) {
-                num = 1;
+            } else if (jalali) {
+                final int[] now = JalaliCalendar.toJalali(systemTime);
+                num = now[0] == year ? 1 : 2;
             } else {
-                num = 2;
+                final Calendar calendar = Calendar.getInstance();
+                calendar.setTimeInMillis(systemTime);
+                num = calendar.get(Calendar.YEAR) == year ? 1 : 2;
             }
             num += 9;
             button.setText(LocaleController.getInstance().getFormatterScheduleSend(num).format(selectedTime));
@@ -5049,7 +5086,7 @@ public class AlertsCreator {
         linearLayout.setWeightSum(1.0f);
         container.addView(linearLayout, LayoutHelper.createLinear(LayoutHelper.MATCH_PARENT, LayoutHelper.WRAP_CONTENT, 1f, 0, 0, 12, 0, 12));
 
-        Calendar calendar = Calendar.getInstance();
+        Calendar calendar = JalaliCalendar.getInstance();
         int minYear = calendar.get(Calendar.YEAR) - 149;
         calendar.setTimeInMillis(System.currentTimeMillis());
         int thisDay = calendar.get(Calendar.DAY_OF_MONTH);
@@ -5061,7 +5098,11 @@ public class AlertsCreator {
             if (yearPicker.getValue() == undefinedYear) {
                 dayPicker.setMinValue(1);
                 try {
-                    dayPicker.setMaxValue(YearMonth.of(2024, 1 + monthPicker.getValue()).lengthOfMonth());
+                    if (JalaliCalendar.isEnabled()) {
+                        dayPicker.setMaxValue(JalaliCalendar.monthLength(thisYear, 1 + monthPicker.getValue()));
+                    } else {
+                        dayPicker.setMaxValue(YearMonth.of(2024, 1 + monthPicker.getValue()).lengthOfMonth());
+                    }
                 } catch (Exception e) {
                     FileLog.e(e);
                     dayPicker.setMaxValue(31);
@@ -5077,7 +5118,11 @@ public class AlertsCreator {
                 } else {
                     dayPicker.setMinValue(1);
                     try {
-                        dayPicker.setMaxValue(YearMonth.of(yearPicker.getValue(), 1 + monthPicker.getValue()).lengthOfMonth());
+                        if (JalaliCalendar.isEnabled()) {
+                            dayPicker.setMaxValue(JalaliCalendar.monthLength(yearPicker.getValue(), 1 + monthPicker.getValue()));
+                        } else {
+                            dayPicker.setMaxValue(YearMonth.of(yearPicker.getValue(), 1 + monthPicker.getValue()).lengthOfMonth());
+                        }
                     } catch (Exception e) {
                         FileLog.e(e);
                         dayPicker.setMaxValue(31);
@@ -5086,7 +5131,11 @@ public class AlertsCreator {
             } else {
                 dayPicker.setMinValue(1);
                 try {
-                    dayPicker.setMaxValue(YearMonth.of(yearPicker.getValue(), 1 + monthPicker.getValue()).lengthOfMonth());
+                    if (JalaliCalendar.isEnabled()) {
+                        dayPicker.setMaxValue(JalaliCalendar.monthLength(yearPicker.getValue(), 1 + monthPicker.getValue()));
+                    } else {
+                        dayPicker.setMaxValue(YearMonth.of(yearPicker.getValue(), 1 + monthPicker.getValue()).lengthOfMonth());
+                    }
                 } catch (Exception e) {
                     FileLog.e(e);
                     dayPicker.setMaxValue(31);
@@ -5109,7 +5158,7 @@ public class AlertsCreator {
         dayPicker.setMinValue(1);
         dayPicker.setMaxValue(31);
         dayPicker.setWrapSelectorWheel(false);
-        dayPicker.setFormatter(value -> "" + value);
+        dayPicker.setFormatter(value -> JalaliCalendar.isEnabled() ? JalaliCalendar.persianDigits("" + value) : "" + value);
         final NumberPicker.OnScrollListener onScrollListener = (view, state) -> {
             if (state == NumberPicker.OnScrollListener.SCROLL_STATE_IDLE) check.run();
         };
@@ -5120,6 +5169,9 @@ public class AlertsCreator {
         monthPicker.setWrapSelectorWheel(false);
         linearLayout.addView(monthPicker, LayoutHelper.createLinear(0, 54 * 5, 0.5f));
         monthPicker.setFormatter(value -> {
+            if (JalaliCalendar.isEnabled()) {
+                return JalaliCalendar.getMonthName(1 + value);
+            }
             switch (value) {
                 case 0: return LocaleController.getString(R.string.January);
                 case 1: return LocaleController.getString(R.string.February);
@@ -5143,17 +5195,31 @@ public class AlertsCreator {
         yearPicker.setMinValue(minYear);
         yearPicker.setMaxValue(undefinedYear);
         yearPicker.setWrapSelectorWheel(false);
-        yearPicker.setFormatter(value -> value == undefinedYear ? "—" : String.format("%02d", value));
+        yearPicker.setFormatter(value -> value == undefinedYear ? "—" : JalaliCalendar.persianDigits(String.format("%02d", value)));
         linearLayout.addView(yearPicker, LayoutHelper.createLinear(0, 54 * 5, 0.25f));
         yearPicker.setOnScrollListener(onScrollListener);
 
         if (currentBirthday != null) {
-            dayPicker.setValue(currentBirthday.day);
-            monthPicker.setValue(currentBirthday.month - 1);
-            if ((currentBirthday.flags & 1) != 0) {
-                yearPicker.setValue(currentBirthday.year);
+            if (JalaliCalendar.isEnabled()) {
+                if ((currentBirthday.flags & 1) != 0) {
+                    int[] j = JalaliCalendar.toJalali(currentBirthday.year, currentBirthday.month, currentBirthday.day);
+                    dayPicker.setValue(j[2]);
+                    monthPicker.setValue(j[1] - 1);
+                    yearPicker.setValue(j[0]);
+                } else {
+                    int[] j = JalaliCalendar.toJalaliYearless(currentBirthday.month, currentBirthday.day);
+                    dayPicker.setValue(j[1]);
+                    monthPicker.setValue(j[0] - 1);
+                    yearPicker.setValue(undefinedYear);
+                }
             } else {
-                yearPicker.setValue(undefinedYear);
+                dayPicker.setValue(currentBirthday.day);
+                monthPicker.setValue(currentBirthday.month - 1);
+                if ((currentBirthday.flags & 1) != 0) {
+                    yearPicker.setValue(currentBirthday.year);
+                } else {
+                    yearPicker.setValue(undefinedYear);
+                }
             }
         } else {
             dayPicker.setValue(calendar.get(Calendar.DAY_OF_MONTH));
@@ -5226,11 +5292,27 @@ public class AlertsCreator {
         container.addView(buttonTextView, LayoutHelper.createLinear(LayoutHelper.MATCH_PARENT, 48, Gravity.LEFT | Gravity.BOTTOM, 16, showRemoveYear ? 0 : 15, 16, showDelete ? 0 : 16));
         buttonTextView.setOnClickListener(v -> {
             TL_account.TL_birthday b = new TL_account.TL_birthday();
-            b.day   = dayPicker.getValue();
-            b.month = 1 + monthPicker.getValue();
-            if (yearPicker.getValue() != undefinedYear) {
-                b.flags |= 1;
-                b.year = yearPicker.getValue();
+            if (JalaliCalendar.isEnabled()) {
+                int jm = 1 + monthPicker.getValue();
+                int jd = dayPicker.getValue();
+                if (yearPicker.getValue() != undefinedYear) {
+                    int[] g = JalaliCalendar.toGregorian(yearPicker.getValue(), jm, jd);
+                    b.day = g[2];
+                    b.month = g[1];
+                    b.flags |= 1;
+                    b.year = g[0];
+                } else {
+                    int[] g = JalaliCalendar.toGregorianYearless(jm, jd);
+                    b.day = g[1];
+                    b.month = g[0];
+                }
+            } else {
+                b.day = dayPicker.getValue();
+                b.month = 1 + monthPicker.getValue();
+                if (yearPicker.getValue() != undefinedYear) {
+                    b.flags |= 1;
+                    b.year = yearPicker.getValue();
+                }
             }
             builder.getDismissRunnable().run();
             whenSelectedBirthday.run(b);
@@ -5284,7 +5366,7 @@ public class AlertsCreator {
         dayPicker.setMinValue(1);
         dayPicker.setMaxValue(31);
         dayPicker.setWrapSelectorWheel(false);
-        dayPicker.setFormatter(value -> "" + value);
+        dayPicker.setFormatter(value -> JalaliCalendar.isEnabled() ? JalaliCalendar.persianDigits("" + value) : "" + value);
 
         final NumberPicker monthPicker = new NumberPicker(context, resourcesProvider);
         monthPicker.setTextColor(datePickerColors.textColor);
@@ -5295,6 +5377,14 @@ public class AlertsCreator {
         monthPicker.setValue(FMT_DATE_MONTH_PICKER_HALF_SIZE);
         monthPicker.setWrapSelectorWheel(false);
         monthPicker.setFormatter(value -> {
+            if (JalaliCalendar.isEnabled()) {
+                final int[] now = JalaliCalendar.toJalali(currentTime);
+                final int total = now[0] * 12 + (now[1] - 1) + (value - FMT_DATE_MONTH_PICKER_HALF_SIZE);
+                final int jy = Math.floorDiv(total, 12);
+                final int jm = Math.floorMod(total, 12) + 1;
+                final String name = JalaliCalendar.getMonthName(jm);
+                return jy == now[0] ? name : name + " " + JalaliCalendar.persianDigits(String.valueOf(jy));
+            }
             calendar.clear();
             calendar.set(Calendar.YEAR, currentYear);
             calendar.set(Calendar.MONTH, Calendar.JANUARY);
@@ -5334,8 +5424,14 @@ public class AlertsCreator {
 
         minutePicker.setValue(calendar.get(Calendar.MINUTE));
         hourPicker.setValue(calendar.get(Calendar.HOUR_OF_DAY));
-        dayPicker.setValue(calendar.get(Calendar.DAY_OF_MONTH));
-        monthPicker.setValue(FMT_DATE_MONTH_PICKER_HALF_SIZE + calendar.get(Calendar.MONTH));
+        if (JalaliCalendar.isEnabled()) {
+            final int[] now = JalaliCalendar.toJalali(currentTime);
+            dayPicker.setValue(now[2]);
+            monthPicker.setValue(FMT_DATE_MONTH_PICKER_HALF_SIZE + now[1] - 1);
+        } else {
+            dayPicker.setValue(calendar.get(Calendar.DAY_OF_MONTH));
+            monthPicker.setValue(FMT_DATE_MONTH_PICKER_HALF_SIZE + calendar.get(Calendar.MONTH));
+        }
 
         final Text sep1 = new Text(formatString(R.string.formatDateAtTime, "", "").trim(), 16)
             .setMaxWidth(dp(100))
@@ -8811,6 +8907,7 @@ public class AlertsCreator {
         dialogView.setClipChildren(false);
 
         EditText editTextView = new EditText(context);
+        editTextView.setTypeface(AndroidUtilities.vazir());
         editTextView.setTextColor(Theme.getColor(Theme.key_windowBackgroundWhiteBlackText));
         editTextView.setHint(LocaleController.getString(R.string.SuggestedMessageDeclineReasonHint));
         editTextView.setHintTextColor(Theme.getColor(Theme.key_windowBackgroundWhiteHintText));

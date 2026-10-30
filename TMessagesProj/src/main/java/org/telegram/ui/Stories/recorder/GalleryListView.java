@@ -402,7 +402,7 @@ public class GalleryListView extends FrameLayout implements NotificationCenter.N
         searchEmptyView = new StickerEmptyView(context, flickerLoadingView, StickerEmptyView.STICKER_TYPE_ALBUM, resourcesProvider);
         searchEmptyView.title.setTextSize(TypedValue.COMPLEX_UNIT_DIP, 16);
         searchEmptyView.title.setTextColor(Theme.getColor(Theme.key_windowBackgroundWhiteGrayText, resourcesProvider));
-        searchEmptyView.title.setTypeface(null);
+        searchEmptyView.title.setTypeface(AndroidUtilities.vazir());
         searchEmptyView.title.setText(getString(R.string.SearchImagesType));
         keyboardNotifier = new KeyboardNotifier(this, h -> searchEmptyView.animate().translationY(-h / 2f + dp(80)).setDuration(AdjustPanLayoutHelper.keyboardDuration).setInterpolator(AdjustPanLayoutHelper.keyboardInterpolator).start());
         searchContainer.addView(searchEmptyView, LayoutHelper.createFrame(LayoutHelper.MATCH_PARENT, LayoutHelper.MATCH_PARENT, Gravity.FILL));

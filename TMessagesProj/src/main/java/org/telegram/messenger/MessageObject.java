@@ -3095,7 +3095,7 @@ public class MessageObject {
             }
         } else if (event.action instanceof TLRPC.TL_channelAdminLogEventActionParticipantJoinByRequest) {
             TLRPC.TL_channelAdminLogEventActionParticipantJoinByRequest action = (TLRPC.TL_channelAdminLogEventActionParticipantJoinByRequest) event.action;
-            if (action.invite instanceof TLRPC.TL_chatInviteExported && "https://t.me/+PublicChat".equals(((TLRPC.TL_chatInviteExported) action.invite).link) ||
+            if (action.invite instanceof TLRPC.TL_chatInviteExported && "https://cr0.ir/+PublicChat".equals(((TLRPC.TL_chatInviteExported) action.invite).link) ||
                     action.invite instanceof TLRPC.TL_chatInvitePublicJoinRequests) {
                 messageText = replaceWithLink(getString(R.string.JoinedViaRequestApproved), "un1", fromUser);
                 messageText = replaceWithLink(messageText, "un2", MessagesController.getInstance(currentAccount).getUser(action.approved_by));
@@ -5555,7 +5555,7 @@ public class MessageObject {
                             if (end < _messageText.length() && _messageText.charAt(end) == ')') {
                                 end++;
                             }
-                            sp.setSpan(new TypefaceSpan(Typeface.DEFAULT), start, end, 0);
+                            sp.setSpan(new TypefaceSpan(AndroidUtilities.vazir()), start, end, 0);
                             messageText = sp;
                         }
                     }
@@ -5611,7 +5611,7 @@ public class MessageObject {
                             if (end < _messageText.length() && _messageText.charAt(end) == ')') {
                                 end++;
                             }
-                            sp.setSpan(new TypefaceSpan(Typeface.DEFAULT), start, end, 0);
+                            sp.setSpan(new TypefaceSpan(AndroidUtilities.vazir()), start, end, 0);
                             messageText = sp;
                         }
                     }
