@@ -1,133 +1,133 @@
-# گزارش: پرداخت درون‌برنامه‌ای کافه‌بازار برای The Cat
+# Report: Cafe Bazaar In-App Billing for The Cat
 
-> وضعیت: **طراحی / در انتظار پیاده‌سازی**
-> دامنه: کلاینت (Android) + سرور (TESSMTPROTO)
-> هدف: خرید Telegram Premium و ستاره (Stars) از طریق کافه‌بازار، به‌جای گوگل‌پلی (که در ایران فیلتر/ناسازگاره)
-
----
-
-## ۱. چرا این کار لازمه
-
-خرید درون‌برنامه‌ای فعلی از **Google Play Billing** استفاده می‌کنه. مشکل:
-- سرویس‌های گوگل روی موبایل‌دیتای ایران فیلتر یا ناپایدارن
-- کاربر ایرانی عملاً قادر به خرید پرمیوم/ستاره نیست
-
-کافه‌بازار جایگزین داخلیه که:
-- روی کیف پول / درگاه‌های داخلی کار می‌کنه
-- کاربر ایرانی بدون VPN پرداخت می‌کنه
+> Status: **Design / awaiting implementation**
+> Scope: client (Android) + server (TESSMTPROTO)
+> Goal: purchase Telegram Premium and Stars through Cafe Bazaar instead of Google Play (which is filtered/unreliable in Iran)
 
 ---
 
-## ۲. معماری فعلی (گوگل‌پلی) — مرجع
+## 1. Why this is needed
 
-خرید در تلگرام **دو کانال جداست**:
+The current in-app purchase path uses **Google Play Billing**. The problem:
+- Google services are filtered or unreliable on Iranian mobile data
+- Iranian users effectively cannot buy Premium/Stars
+
+Cafe Bazaar is the domestic alternative that:
+- works with domestic wallets and payment gateways
+- lets Iranian users pay without a VPN
+
+---
+
+## 2. Current architecture (Google Play) — reference
+
+Purchases in Telegram have **two separate channels**:
 
 ```
-┌──────────────┐   خرید/پول    ┌──────────────┐
-│   کلاینت     │ ←───────────→ │ Google Play  │
-│ (BillingClient)              │   (Billing)  │
-└──────┬───────┘               └──────────────┘
-       │ رسید خام (originalJson)
+┌──────────────┐  purchase/money  ┌──────────────┐
+│    Client    │ ←──────────────→ │ Google Play  │
+│(BillingClient)                  │  (Billing)   │
+└──────┬───────┘                  └──────────────┘
+       │ raw receipt (originalJson)
        │ + purpose
        ▼  MTProto
-┌──────────────┐   تأیید HTTP  ┌──────────────┐
-│ سرور تلگرام  │ ←───────────→ │ Google Play  │
-│              │               │  Server API  │
-└──────────────┘               └──────────────┘
+┌──────────────┐  HTTP verify     ┌──────────────┐
+│ Telegram     │ ←──────────────→ │ Google Play  │
+│ server       │                  │ Server API   │
+└──────────────┘                  └──────────────┘
 ```
 
-### جریان قدم‌به‌قدم (کد کلاینت)
+### Step-by-step flow (client code)
 
-1. کلاینت `BillingClient.launchBillingFlow` → دیالوگ خرید گوگل باز می‌شه
-2. گوگل پول رو برمی‌داره و `Purchase` برمی‌گردونه (`purchaseToken` + `originalJson`)
-3. کلاینت این رسید رو از مسیر **MTProto** به سرور می‌فرسته — `TL_payments_assignPlayMarketTransaction`:
+1. Client: `BillingClient.launchBillingFlow` → Google's purchase dialog opens
+2. Google takes the money and returns a `Purchase` (`purchaseToken` + `originalJson`)
+3. Client sends this receipt to the server over **MTProto** — `TL_payments_assignPlayMarketTransaction`:
 
 ```java
 // TMessagesProj/.../BillingController.java  (onPurchasesUpdatedInternal)
 TL_payments_assignPlayMarketTransaction req = new TL_payments_assignPlayMarketTransaction();
 req.receipt = new TL_dataJSON();
-req.receipt.data = purchase.getOriginalJson();   // رسید خامِ گوگل
+req.receipt.data = purchase.getOriginalJson();   // raw Google receipt
 req.purpose  = opayload.second;                  // InputStorePaymentPurpose
 accountInstance.getConnectionsManager().sendRequest(req, callback);
 ```
 
-4. **سرور** رسید رو با Google Play Server API تأیید (verify) می‌کنه
-5. در صورت صحت، پرمیوم/ستاره رو فعال می‌کنه و `Updates` برمی‌گردونه
+4. **Server** verifies the receipt against the Google Play Server API
+5. On success it activates Premium/Stars and returns `Updates`
 
-### نکات کلیدی
-- **کلاینت هرگز مستقیم با گوگل تأیید نمی‌کنه** — فقط رسید رو به سرور می‌فرسته
-- **تأیید صحت پرداخت سمت سرور انجام می‌شه** (anti-fraud)
-- `purpose` مشخص می‌کنه پول بابت چی خرج شده
+### Key points
+- **The client never verifies with Google directly** — it only forwards the receipt to the server
+- **Payment verification happens server-side** (anti-fraud)
+- `purpose` states what the money bought
 
-### نوع‌های `InputStorePaymentPurpose`
+### `InputStorePaymentPurpose` types
 
-| TL class | محصول |
+| TL class | Product |
 |----------|--------|
-| `TL_inputStorePaymentPremiumSubscription` | اشتراک پرمیوم (اشتراکی) |
-| `TL_inputStorePaymentStarsTopup` | شارژ ستاره (مصرفی) |
-| `TL_inputStorePaymentGiftPremium` | هدیه پرمیوم |
-| `TL_inputStorePaymentPremiumGiftCode` | کد هدیه پرمیوم |
-| `TL_inputStorePaymentStarsGift` | هدیه ستاره |
+| `TL_inputStorePaymentPremiumSubscription` | Premium subscription (recurring) |
+| `TL_inputStorePaymentStarsTopup` | Stars top-up (consumable) |
+| `TL_inputStorePaymentGiftPremium` | Premium gift |
+| `TL_inputStorePaymentPremiumGiftCode` | Premium gift code |
+| `TL_inputStorePaymentStarsGift` | Star gift |
 
 ---
 
-## ۳. معماری پیشنهادی (کافه‌بازار)
+## 3. Proposed architecture (Cafe Bazaar)
 
-همون دو-کانالی حفظ می‌شه، فقط «گوگل» با «بازار» عوض می‌شه:
+The same two-channel shape is kept; only "Google" is replaced with "Bazaar":
 
 ```
-┌──────────────┐   خرید/پول    ┌──────────────┐
-│   کلاینت     │ ←───────────→ │ کافه‌بازار    │
-│  (Poolakey)  │               │   (app)      │
-└──────┬───────┘               └──────────────┘
-       │ رسید بازار (PurchaseEntity JSON)
+┌──────────────┐  purchase/money  ┌──────────────┐
+│    Client    │ ←──────────────→ │ Cafe Bazaar  │
+│  (Poolakey)  │                  │   (app)      │
+└──────┬───────┘                  └──────────────┘
+       │ Bazaar receipt (PurchaseEntity JSON)
        │ + purpose
        ▼  MTProto
-┌──────────────┐   تأیید HTTP  ┌──────────────┐
-│ سرور Cat     │ ←───────────→ │ کافه‌بازار    │
-│  (TESSMTPROTO)  │               │ Server API   │
-└──────────────┘               └──────────────┘
+┌──────────────┐  HTTP verify     ┌──────────────┐
+│ Cat server   │ ←──────────────→ │ Cafe Bazaar  │
+│ (TESSMTPROTO)│                  │ Server API   │
+└──────────────┘                  └──────────────┘
 ```
 
-**کلاینت (Android):** `BillingClient` → `Poolakey`. رسید رو هم به‌جای `originalJson` گوگل، `PurchaseEntity` بازار می‌فرسته.
+**Client (Android):** `BillingClient` → `Poolakey`. The receipt sent is the Bazaar `PurchaseEntity` instead of Google's `originalJson`.
 
-**سرور (TESSMTPROTO):** باید رسید بازار رو تأیید کنه — **این بخش اصلی کار سروره.**
+**Server (TESSMTPROTO):** must verify the Bazaar receipt — **this is the main server-side work.**
 
 ---
 
-## ۴. سمت سرور (TESSMTPROTO) — چه چیزی باید پیاده بشه
+## 4. Server side (TESSMTPROTO) — what must be implemented
 
-> این بخش مهم‌ترین قسمت گزارشه. کلاینت بدون این بخش فقط پول رو می‌گیره ولی نمی‌تونه چیزی فعال کنه.
-> **وضعیت کلاینت: پیاده‌سازی شد** (فلاو `TMessagesProj_AppBazaar`، فقط پرمیوم). کلاینت رسید رو می‌فرسته و منتظر `Updates` می‌مونه؛ سرور فعلاً متد رو نداره (placeholder).
+> This is the most important part of the report. Without it the client takes the money but cannot activate anything.
+> **Client status: implemented** (flavor `TMessagesProj_AppBazaar`, Premium only). The client sends the receipt and waits for `Updates`; the server does not have the method yet (placeholder).
 
-### ۴.۱. متد MTProto جدید — امضای دقیق
+### 4.1. New MTProto method — exact signature
 
-کلاینت از این کلاس استفاده می‌کنه ([TLRPC.java](TMessagesProj/src/main/java/org/telegram/tgnet/TLRPC.java) `TL_payments_assignBazaarTransaction`):
+The client uses this class ([TLRPC.java](../TMessagesProj/src/main/java/org/telegram/tgnet/TLRPC.java) `TL_payments_assignBazaarTransaction`):
 
 ```
 payments.assignBazaarTransaction#62617a01 receipt:JSON purpose:InputStorePaymentPurpose = Updates;
 ```
 
-- **constructor id** = `0x62617a01` (محلی و غیر-upstream — سرور باید همین رو ثبت کنه)
-- `receipt`: رشته‌ی JSON رسید بازار (فرمت دقیق در بخش ۴.۳)
-- `purpose`: همون `InputStorePaymentPurpose` موجود (`TL_inputStorePaymentPremiumSubscription` برای پرمیوم)
+- **constructor id** = `0x62617a01` (local, non-upstream — the server must register exactly this)
+- `receipt`: JSON string of the Bazaar receipt (exact format in section 4.3)
+- `purpose`: the existing `InputStorePaymentPurpose` (`TL_inputStorePaymentPremiumSubscription` for Premium)
 
-> نکته: کلاینت بعد از ارسال، منتظر `TLRPC.Updates` می‌مونه. اگه سرور خطا برگردونه، کاربر پیام «Payment could not be confirmed: ...» می‌بینه و **هیچ پرمیومی فعال نمی‌شه** (تأیید نهایی فقط سمت سرور).
+> Note: after sending, the client waits for `TLRPC.Updates`. If the server returns an error, the user sees "Payment could not be confirmed: ..." and **no Premium is activated** (final confirmation is server-side only).
 
-### ۴.۲. جریان از دید سرور
+### 4.2. Server-side flow
 
 ```
-1. کلاینت → payments.assignBazaarTransaction (receipt + purpose)
-2. سرور رسید رو با کلید عمومی RSA بازار تأیید می‌کنه
-3. سرور فیلدها رو چک می‌کنه (productId / packageName / amount / ضد-replay)
-4. سرور پرمیوم رو بر اساس purpose فعال می‌کنه
-5. سرور → Updates (همون آپدیت‌هایی که گوگل برمی‌گردونه)
-6. کلاینت processUpdates می‌کنه و UI پرمیوم رو refresh می‌کنه
+1. Client → payments.assignBazaarTransaction (receipt + purpose)
+2. Server verifies the receipt with Bazaar's RSA public key
+3. Server checks fields (productId / packageName / amount / anti-replay)
+4. Server activates Premium based on purpose
+5. Server → Updates (same updates Google would return)
+6. Client runs processUpdates and refreshes the Premium UI
 ```
 
-### ۴.۳. فرمت دقیق `receipt` (JSON)
+### 4.3. Exact `receipt` format (JSON)
 
-کلاینت این JSON رو در فیلد `receipt` می‌فرسته ([BazaarBillingBridge.buildReceiptJson](TMessagesProj_AppBazaar/src/main/java/org/telegram/messenger/billing/BazaarBillingBridge.java)):
+The client sends this JSON in the `receipt` field ([BazaarBillingBridge.buildReceiptJson](../TMessagesProj_AppBazaar/src/main/java/org/telegram/messenger/billing/BazaarBillingBridge.java)):
 
 ```json
 {
@@ -137,253 +137,251 @@ payments.assignBazaarTransaction#62617a01 receipt:JSON purpose:InputStorePayment
   "packageName":   "com.thecat.messenger",
   "purchaseTime":  1730000000000,
   "purchaseState": "Purchased",       // PurchaseState.Purchased
-  "payload":       "<hex purpose>",   // همون obfuscated purpose (اختیاری برای سرور)
-  "dataJson":      "{...}",           // payload خامِ امضاشده‌ی بازار
-  "signature":     "MEUCIQ..."        // امضای RSA بازار روی dataJson
+  "payload":       "<hex purpose>",   // the obfuscated purpose (optional for server)
+  "dataJson":      "{...}",           // raw signed Bazaar payload
+  "signature":     "MEUCIQ..."        // Bazaar RSA signature over dataJson
 }
 ```
 
-**فیلدهای کلیدی برای تأیید:**
-- `dataJson` + `signature`: با کلید عمومی RSA بازار تأیید امضا کن (الگوریتم: `SHA1withRSA` روی بایت‌های UTF-8 رشته‌ی `dataJson`)
-- `productId`: با SKU محصول مورد انتظار یکی باشه
-- `packageName`: باید `com.thecat.messenger` باشه (جلوگیری از replay بین اپ‌ها)
-- `purchaseState`: باید `Purchased` باشه
-- `purchaseToken` / `orderId`: برای ضد-replay استفاده کن (هر کدوم فقط یک‌بار بپذیر)
+**Key fields for verification:**
+- `dataJson` + `signature`: verify with Bazaar's RSA public key (algorithm: `SHA1withRSA` over the UTF-8 bytes of the `dataJson` string)
+- `productId`: must match the expected product SKU
+- `packageName`: must be `com.thecat.messenger` (prevents replay across apps)
+- `purchaseState`: must be `Purchased`
+- `purchaseToken` / `orderId`: use for anti-replay (accept each exactly once)
 
-### ۴.۴. SKU های پرمیوم (نگاشت کلاینت)
+### 4.4. Premium SKUs (client mapping)
 
-کلاینت بر اساس `months` انتخاب می‌کنه ([BazaarBillingBridge.skuForOption](TMessagesProj_AppBazaar/src/main/java/org/telegram/messenger/billing/BazaarBillingBridge.java)):
+The client selects by `months` ([BazaarBillingBridge.skuForOption](../TMessagesProj_AppBazaar/src/main/java/org/telegram/messenger/billing/BazaarBillingBridge.java)):
 
-| دوره | SKU پیش‌فرض | purpose |
+| Period | Default SKU | purpose |
 |------|-------------|---------|
-| ماهانه (۱ ماه) | `thecat_premium_monthly` | `TL_inputStorePaymentPremiumSubscription` |
-| سالانه (۱۲ ماه) | `thecat_premium_yearly` | `TL_inputStorePaymentPremiumSubscription` |
+| Monthly (1 month) | `thecat_premium_monthly` | `TL_inputStorePaymentPremiumSubscription` |
+| Yearly (12 months) | `thecat_premium_yearly` | `TL_inputStorePaymentPremiumSubscription` |
 
-> اگه سرور در `TL_premiumSubscriptionOption.store_product` مقدار بذاره، کلاینت **اون SKU** رو به‌جای جدول بالا استفاده می‌کنه. پس می‌تونی از سمت سرور SKU دلخواه (مثلاً ۳ ماهه، ۶ ماهه) هم تحمیل کنی.
+> If the server sets `TL_premiumSubscriptionOption.store_product`, the client uses **that SKU** instead of the table above. So you can also force a custom SKU (e.g. 3-month, 6-month) from the server.
 
-### ۴.۵. تأیید صحت (Server-Side Verification) — چک‌لیست
+### 4.5. Server-side verification — checklist
 
-سرور بعد از دریافت receipt باید:
+After receiving the receipt the server must:
 
-1. **کلید عمومی RSA برنامه** رو از پنل بازار بگیر (سربرگ پرداخت درون‌برنامه‌ای → کلید RSA). برای هر برنامه ثابت و یکتا ست.
+1. **Get the app's RSA public key** from the Bazaar panel (In-App Billing header → RSA key). It is fixed and unique per app.
 
-2. **تأیید امضای `dataJson`**: با کلید عمومی RSA صحت `signature` رو روی `dataJson` چک کن.
+2. **Verify the `dataJson` signature**: check `signature` over `dataJson` with the RSA public key.
 
-3. **(توصیه‌شده) استعلام مستقیم**: در صورت امکان، صحت خرید رو از **Bazaar Developer API** هم بگیر (جلوگیری از جعل/replay). مستندات: <https://developers.cafebazaar.ir/fa/guidelines/in-app-billing>
+3. **(Recommended) Direct query**: when possible, also confirm the purchase via the **Bazaar Developer API** (prevents forgery/replay). Docs: <https://developers.cafebazaar.ir/fa/guidelines/in-app-billing>
 
-4. **اعتبارسنجی فیلدها**:
-   - `productId` ∈ SKU های مجاز پرمیوم
+4. **Field validation**:
+   - `productId` ∈ allowed Premium SKUs
    - `packageName == com.thecat.messenger`
    - `purchaseState == Purchased`
-   - مبلغ (`amount` داخل `dataJson`) با قیمت تعریف‌شده در پنل بازار بخونه
+   - amount (`amount` inside `dataJson`) matches the price configured in the Bazaar panel
 
-5. **ضد-replay**: هر `purchaseToken`/`orderId` رو **فقط یک‌بار** بپذیر (یه جدول/cache از تراکنش‌های مصرف‌شده نگه دار). اگه قبلاً دیدیش، ردش کن.
+5. **Anti-replay**: accept each `purchaseToken`/`orderId` **only once** (keep a table/cache of consumed transactions). If already seen, reject.
 
-6. **فعال‌سازی**: بعد از تأیید، پرمیوم رو بر اساس `purpose` فعال کن (دقیقاً همون منطقی که برای `assignPlayMarketTransaction` داری) و **Updates** برگردون.
+6. **Activation**: after verification, activate Premium according to `purpose` (exactly the logic you already have for `assignPlayMarketTransaction`) and return **Updates**.
 
-### ۴.۶. کلید RSA سمت کلاینت (SecurityCheck)
+### 4.6. Client-side RSA key (SecurityCheck)
 
-کلاینت یه بررسی امضای محلی هم می‌تونه داشته باشه (فلگ `BAZAAR_RSA_PUBLIC_KEY` در `BazaarBillingBridge`). الان خالیه (بررسی محلی غیرفعال)، چون **تأیید نهایی سمت سرور انجام می‌شه**. اگه خواستی بررسی محلی رو هم فعال کنی، همون کلید عمومی RSA پنل بازار رو اونجا بذار — ولی این جایگزین تأیید سرور نیست، فقط یه لایه‌ی اضافه‌ست.
+The client can also do a local signature check (flag `BAZAAR_RSA_PUBLIC_KEY` in `BazaarBillingBridge`). It is currently empty (local check disabled) because **final verification is server-side**. If you want the local check too, put the Bazaar panel's RSA public key there — but this does not replace server verification, it is only an extra layer.
 
-### ۴.۷. مدیریت خریدهای مصرفی (ستاره — فاز بعدی)
+### 4.7. Consumable purchases (Stars — next phase)
 
-- ستاره‌ها محصول **مصرفی (INAPP)** هستن
-- بعد از فعال‌سازی موفق، سرور باید به کلاینت بگه `consume` کنه (یا کلاینت خودش consume کنه) تا کاربر بتونه دوباره بخره
-- پرمیوم **اشتراکیه** و consume نمی‌شه (همون‌طور که در `BazaarBillingBridge` فقط از `subscribeProduct` استفاده شده)
+- Stars are a **consumable (INAPP)** product
+- After successful activation the server should tell the client to `consume` (or the client consumes itself) so the user can buy again
+- Premium is **subscription-based** and is never consumed (as in `BazaarBillingBridge`, only `subscribeProduct` is used)
 
-### ۴.۴. جلوگیری از Replay / تقلب
+### 4.4. Replay / fraud prevention
 
-- هر `purchaseToken`/شناسه‌ی تراکنش بازار رو **یک‌بار** بپذیر (یه جدول یا cache از تراکنش‌های مصرف‌شده نگه دار)
-- اگه قبلاً دیدیش، ردش کن
-- ترجیحاً تراکنش رو با شماره‌ی سفارش (`orderId`) هم لاگ کن
+- Accept each `purchaseToken`/Bazaar transaction id **once** (keep a table or cache of consumed transactions)
+- If already seen, reject
+- Preferably also log the transaction with its order id (`orderId`)
 
 ---
 
-## ۵. سمت کلاینت (Android) — خلاصه
+## 5. Client side (Android) — summary
 
-- **flavor جدید بازار**: یه ماژول/فلاور جدا (مثلاً `TMessagesProj_AppBazaar`) با `applicationId` ثبت‌شده در بازار
-- **افزودن Poolakey**:
+- **New Bazaar flavor**: a separate module/flavor (e.g. `TMessagesProj_AppBazaar`) with the `applicationId` registered at Bazaar
+- **Add Poolakey**:
   ```gradle
   implementation "com.github.cafebazaar.Poolakey:poolakey:<latest>"
   // + maven { url 'https://jitpack.io' }
   ```
-- **جایگزینی کنترلر**: به‌جای `BillingController` (گوگل)، یه `BazaarBillingController` با `Payment`/`Poolakey`
-  - `payment.connect` → اتصال به بازار
-  - `purchaseProduct`/`subscribeProduct` → شروع خرید
-  - بعد از `purchaseSucceed`، `PurchaseEntity` رو به سرور بفرست (متد MTProto جدید)
-- **کلید RSA** از پنل بازار در `SecurityCheck.Enable`
-- **تأیید نهایی سمت سرور** — کلاینت فقط رسید رو می‌فرسته، تأیید با سروره
+- **Replace the controller**: instead of `BillingController` (Google), a `BazaarBillingController` using `Payment`/`Poolakey`
+  - `payment.connect` → connect to Bazaar
+  - `purchaseProduct`/`subscribeProduct` → start purchase
+  - after `purchaseSucceed`, send the `PurchaseEntity` to the server (new MTProto method)
+- **RSA key** from the Bazaar panel in `SecurityCheck.Enable`
+- **Final verification is server-side** — the client only sends the receipt
 
-> نکته: اگه `applicationId` بازار همون `com.thecat.messenger` باشه، می‌شه همین standalone رو دوبلیکیت کرد و فقط لایه‌ی billing عوض کرد. ولی اگه پکیج‌نیم جدا می‌خوای، flavor مستقل بساز.
+> Note: if Bazaar's `applicationId` is the same `com.thecat.messenger`, you can duplicate the standalone flavor and only swap the billing layer. If you want a separate package name, build an independent flavor.
 
 ---
 
-## ۶. نگاشت محصولات (SKU)
+## 6. Product mapping (SKU)
 
-| محصول | نوع بازار | purpose MTProto |
+| Product | Bazaar type | MTProto purpose |
 |--------|-----------|-----------------|
-| پرمیوم ماهانه | اشتراک ۳۰ روزه | `TL_inputStorePaymentPremiumSubscription` |
-| پرمیوم سالانه | اشتراک ۳۶۵ روزه | `TL_inputStorePaymentPremiumSubscription` |
-| شارژ ستاره (مثلاً ۱۰۰) | مصرفی (INAPP) | `TL_inputStorePaymentStarsTopup` |
-| هدیه پرمیوم | مصرفی | `TL_inputStorePaymentGiftPremium` |
+| Monthly Premium | 30-day subscription | `TL_inputStorePaymentPremiumSubscription` |
+| Yearly Premium | 365-day subscription | `TL_inputStorePaymentPremiumSubscription` |
+| Stars top-up (e.g. 100) | consumable (INAPP) | `TL_inputStorePaymentStarsTopup` |
+| Premium gift | consumable | `TL_inputStorePaymentGiftPremium` |
 
-> SKUها رو در **پنل بازار** (سربرگ پرداخت درون‌برنامه‌ای) تعریف کن. شناسه باید با حروف کوچک/عدد شروع بشه و بعد از تعریف قابل تغییر نیست.
-
----
-
-## ۷. چک‌لیست پیاده‌سازی
-
-### سرور (TESSMTPROTO) — [ ] در انتظار
-- [ ] متد MTProto `payments.assignBazaarTransaction#62617a01` (بخش ۴.۱)
-- [ ] دریافت و ذخیره‌ی کلید عمومی RSA بازار
-- [ ] تأیید امضای `dataJson` با کلید RSA (بخش ۴.۳/۴.۵)
-- [ ] (توصیه‌شده) استعلام مستقیم از Bazaar Developer API
-- [ ] اعتبارسنجی productId / packageName / purchaseState / amount
-- [ ] جدول/کش ضد-replay برای purchaseToken / orderId
-- [ ] فعال‌سازی پرمیوم بر اساس purpose + برگرداندن Updates
-- [ ] لاگ شماره سفارش (orderId)
-
-### کلاینت (Android) — [x] پرمیوم + ستاره + هدیه پیاده‌شده
-- [x] ماژول فلاو بازار `TMessagesProj_AppBazaar` (applicationId مشترک `APP_PACKAGE`)
-- [x] افزودن Poolakey ۲.۲.۰ + jitpack
-- [x] لایه‌ی انتزاعی `StoreBillingBridge` / `StoreBilling` در کتابخانه‌ی مشترک
-- [x] `BazaarBillingBridge` — پرمیوم (subscribe) + محصولات مصرفی (purchaseProduct + consume بعد از تأیید سرور)
-- [x] صف آفلاین `BazaarReceiptQueue` (ارسال خودکار با backoff + consume بعد از تأیید نهایی)
-- [x] صفحه‌ی «پرداخت‌های معلق» (دیباگ/عیب‌یابی)
-- [x] هوک انتخاب استور در پرمیوم + ستاره + هدیه
-- [x] TL `TL_payments_assignBazaarTransaction` + ارسال رسید بازار به سرور
-- [ ] تست با اشتراک/محصولات آزمایشی بازار
-
-### پنل بازار — [ ] در انتظار operator
-- [ ] ثبت برنامه با applicationId `com.thecat.messenger`
-- [ ] تعریف SKU اشتراک پرمیوم: `thecat_premium_monthly` و `thecat_premium_yearly`
-- [ ] دریافت کلید عمومی RSA (و قراردادن در `BazaarBillingBridge.BAZAAR_RSA_PUBLIC_KEY` در صورت فعال‌سازی بررسی محلی)
-- [ ] (فاز بعدی) تعریف SKU های ستاره (مصرفی)
+> Define the SKUs in the **Bazaar panel** (In-App Billing header). The id must start with a lowercase letter/digit and cannot be changed after definition.
 
 ---
 
-## ۷.۱. بیلد و انتشار (دو فلاو)
+## 7. Implementation checklist
 
-این پروژه **دو APK جدا** تولید می‌کنه که `applicationId` و keystore مشترک دارن، ولی لایه‌ی پرداختشون فرق داره:
+### Server (TESSMTPROTO) — [ ] pending
+- [ ] MTProto method `payments.assignBazaarTransaction#62617a01` (section 4.1)
+- [ ] Fetch and store Bazaar's RSA public key
+- [ ] Verify the `dataJson` signature with the RSA key (sections 4.3/4.5)
+- [ ] (Recommended) Direct query to the Bazaar Developer API
+- [ ] Validate productId / packageName / purchaseState / amount
+- [ ] Anti-replay table/cache for purchaseToken / orderId
+- [ ] Activate Premium per purpose + return Updates
+- [ ] Log the orderId
 
-| فلاو | ماژول | buildType | لایه‌ی پرداخت | اسکریپت |
+### Client (Android) — [x] Premium + Stars + gifts implemented
+- [x] Bazaar flavor module `TMessagesProj_AppBazaar` (shared `APP_PACKAGE` applicationId)
+- [x] Poolakey 2.2.0 + jitpack added
+- [x] `StoreBillingBridge` / `StoreBilling` abstraction layer in the shared library
+- [x] `BazaarBillingBridge` — Premium (subscribe) + consumables (purchaseProduct + consume after server confirmation)
+- [x] Offline queue `BazaarReceiptQueue` (auto-send with backoff + consume after final confirmation)
+- [x] "Pending purchases" screen (debug/diagnostics)
+- [x] Store-selection hook in Premium + Stars + gifts
+- [x] TL `TL_payments_assignBazaarTransaction` + sending the Bazaar receipt to the server
+- [ ] Test with Bazaar test subscriptions/products
+
+### Bazaar panel — [ ] pending operator
+- [ ] Register the app with applicationId `com.thecat.messenger`
+- [ ] Define Premium subscription SKUs: `thecat_premium_monthly` and `thecat_premium_yearly`
+- [ ] Get the RSA public key (and put it in `BazaarBillingBridge.BAZAAR_RSA_PUBLIC_KEY` if enabling the local check)
+- [ ] (Next phase) Define Star SKUs (consumable)
+
+---
+
+## 7.1. Build and release (two flavors)
+
+This project produces **two separate APKs** that share the same `applicationId` and keystore but differ in the payment layer:
+
+| Flavor | Module | buildType | Payment layer | Script |
 |------|-------|-----------|----------------|---------|
-| Standalone | `:TMessagesProj_AppStandalone` | `release` | گوگل‌پلی / invoice-ربات | `scripts/release-apk.sh` |
-| **بازار** | `:TMessagesProj_AppBazaar` | `bazaar` | **Poolakey / کافه‌بازار** | `scripts/release-apk-bazaar.sh` |
+| Standalone | `:TMessagesProj_AppStandalone` | `release` | Google Play / invoice bot | `scripts/release-apk.sh` |
+| **Bazaar** | `:TMessagesProj_AppBazaar` | `bazaar` | **Poolakey / Cafe Bazaar** | `scripts/release-apk-bazaar.sh` |
 
-### اسکریپت‌ها (macOS)
+### Scripts (macOS)
 ```bash
-# APK مستقل (گوگل/invoice) → dist/TheCat-<ver>-ZeroHub.apk
+# Standalone APK (Google/invoice) → dist/TheCat-<ver>-ZeroHub.apk
 scripts/release-apk.sh
 
-# APK بازار (پرداخت کافه‌بازار) → dist/TheCat-<ver>-Bazaar-ZeroHub.apk
+# Bazaar APK (Cafe Bazaar payments) → dist/TheCat-<ver>-Bazaar-ZeroHub.apk
 scripts/release-apk-bazaar.sh
 
-# هر کدوم با --skip-build → فقط دوباره امضا + verify (بدون بیلد مجدد)
+# Either script with --skip-build → only re-sign + verify (no rebuild)
 scripts/release-apk-bazaar.sh --skip-build
 ```
 
-هر اسکریپت کارهای زیر رو انجام میده: بیلد release → **امضای مجدد تضمینی** با `apksigner` (امضای خود Gradle قابل‌اعتماد نیست) → verify v1/v2/v3 → کپی به `dist/`. خروجی نهایی با گواهی **ZeroHub** امضا شده.
+Each script: build release → **guaranteed re-sign** with `apksigner` (Gradle's own signing is not trusted here) → verify v1/v2/v3 → copy to `dist/`. The final output is signed with the **ZeroHub** certificate.
 
-### نکته‌ی R8 / proguard (فلاوی بازار)
-اولین بیلد release بازار با خطای R8 شکست می‌خوره:
+### R8 / proguard note (Bazaar flavor)
+The first Bazaar release build fails with an R8 error:
 ```
 Missing class org.telegram.tgnet.TLRPC$TL_payments_assignBazaarTransaction
 ```
-این **false-positive** هست — کلاس واقعاً کامپایل و در APK هست. چون فقط فلاوی بازار بهش ارجاع میده (`BazaarReceiptQueue`) و فلاوی standalone از مسیر رسید بازار استفاده نمی‌کنه، R8 موقع minify اون رو resolve نمی‌کنه. راه‌حل: قانون `-dontwarn` در [TMessagesProj_AppBazaar/proguard-rules.pro](TMessagesProj_AppBazaar/proguard-rules.pro) (خودِ R8 همین رو در `missing_rules.txt` تولید کرده).
+This is a **false positive** — the class is compiled and present in the APK. Only the Bazaar flavor references it (`BazaarReceiptQueue`) and the standalone flavor never takes the Bazaar receipt path, so R8 does not resolve it during minify. Fix: a `-dontwarn` rule in [TMessagesProj_AppBazaar/proguard-rules.pro](../TMessagesProj_AppBazaar/proguard-rules.pro) (R8 itself generated it in `missing_rules.txt`).
 
-### ⚠️ رفتار بدون سرور
-APK بازار **بدون پیاده‌سازی سرور** هم بیلد و نصب می‌شه، ولی **پرمیوم/ستاره فعال نمی‌کنه**: کلاینت پول رو از کیف پول بازار می‌گیره، رسید رو می‌فرسته، چون سرور متد `assignBazaarTransaction` رو نداره رسید در **صف آفلاین** ذخیره و خودکار دوباره فرستاده می‌شه. کاربر پیام «Payment received…» می‌بینه و خریدش در **صفحه‌ی «پرداخت‌های معلق»** (منوی side-menu) قابل‌ردیابیه. فعال‌شدن واقعی فقط بعد از پیاده‌سازی سرور (بخش ۴/۵ همین گزارش + [BAZAAR_SERVER_TODO.md](BAZAAR_SERVER_TODO.md)) و تعریف SKU در پنل بازار اتفاق می‌افته.
-
-
----
-
-## ۸. ملاحظات مهم
-
-1. **کار اصلی سمت سروره.** کلاینت نسبتاً ساده‌ست (تعویض SDK). ولی بدون تأیید رسید بازار روی سرور، پرداخت امن نیست و قابل جعله.
-
-2. **قوانین بازار**: برنامه‌های اشتراک‌فروش باید از سرویس پرداخت خود بازار استفاده کنن و لینک پرداخت خارج از بازار ندن. (اگه پرمیوم جایی خارج از بازار هم فروخته بشه، قیمتش نباید بیشتر از داخل بازار باشه.)
-
-3. **اشتراک همزمان**: بازار فعلاً فقط **یه اشتراک فعال همزمان** به هر کاربر از هر اپ میده. اگه چند سطح پرمیوم داری، منطق upgrade رو خودت مدیریت کن.
-
-4. **تأیید سمت سرور ضروریه**: حتی اگه کلاینت امضا رو چک کنه، حتماً سرور هم تأیید کنه (کلاینت قابل دستکارئه).
-
-5. **محصولات مصرفی**: ستاره‌ها رو حتماً بعد از فعال‌سازی `consume` کن، وگرنه کاربر نمی‌تونه دوباره بخره.
+### ⚠️ Behavior without the server
+The Bazaar APK **builds and installs without the server implementation**, but **does not activate Premium/Stars**: the client takes the money from the Bazaar wallet, sends the receipt, and since the server has no `assignBazaarTransaction` method the receipt is stored in the **offline queue** and re-sent automatically. The user sees "Payment received…" and can track the purchase in the **"Pending purchases" screen** (side menu). Real activation only happens after the server is implemented (sections 4/5 of this report + [BAZAAR_SERVER_TODO.md](BAZAAR_SERVER_TODO.md)) and SKUs are defined in the Bazaar panel.
 
 ---
 
-## ۹. مراجع
+## 8. Important notes
 
-- مستندات رسمی بازار (IAB): <https://developers.cafebazaar.ir/fa/guidelines/in-app-billing>
-- معرفی اشتراک: <https://developers.cafebazaar.ir/fa/guidelines/in-app-billing/subscription>
-- کتابخانه پولکی: <https://developers.cafebazaar.ir/fa/guidelines/in-app-billing/poolakey>
-- نمونه کد پولکی: <https://github.com/PHELAT/Poolakey>
-- نمونه اشتراک: <https://github.com/cafebazaar/TrivialDrive>
+1. **The main work is server-side.** The client is relatively simple (SDK swap). But without server-side verification of Bazaar receipts the payment is insecure and forgeable.
+
+2. **Bazaar rules**: subscription-selling apps must use Bazaar's own payment service and must not link to external payment. (If Premium is also sold outside Bazaar, its price must not be higher than inside Bazaar.)
+
+3. **Single active subscription**: Bazaar currently allows only **one active subscription per user per app**. If you have multiple Premium tiers, manage the upgrade logic yourself.
+
+4. **Server verification is mandatory**: even if the client checks the signature, the server must verify too (the client can be tampered with).
+
+5. **Consumable products**: always `consume` Stars after activation, otherwise the user cannot buy again.
 
 ---
 
-# پیوست: نقشه‌ی کامل سیستم‌های پرداخت تلگرام
+## 9. References
 
-> برای اینکه روشن بشه دقیقاً **کدام بخش** باید با کافه‌بازار جایگزین بشه و کدام‌ها دست‌نخورده می‌مونن.
+- Official Bazaar IAB docs: <https://developers.cafebazaar.ir/fa/guidelines/in-app-billing>
+- Subscription intro: <https://developers.cafebazaar.ir/fa/guidelines/in-app-billing/subscription>
+- Poolakey library: <https://developers.cafebazaar.ir/fa/guidelines/in-app-billing/poolakey>
+- Poolakey code samples: <https://github.com/PHELAT/Poolakey>
+- Subscription sample: <https://github.com/cafebazaar/TrivialDrive>
 
-تلگرام **۴ سیستم پرداخت جدا** دارد. درک تفاوت اونا حیاتیه:
+---
 
-## سیستم ۱ — پرداخت استور (Google Play / App Store)
+# Appendix: complete map of Telegram's payment systems
 
-- **کاربرد:** خرید اشتراک پرمیوم، خرید (شارژ) ستاره
-- **مسیر:**
+> To show exactly **which part** must be replaced with Cafe Bazaar and which parts stay untouched.
+
+Telegram has **4 separate payment systems**. Understanding the difference is critical:
+
+## System 1 — Store payments (Google Play / App Store)
+
+- **Use:** buying Premium subscription, buying (topping up) Stars
+- **Path:**
   ```
-  کلاینت → استور (پول رو برمی‌داره) → سرور تلگرام (MTProto) → تأیید با استور
+  Client → Store (takes the money) → Telegram server (MTProto) → verify with Store
   ```
-- متد MTProto: `payments.assignPlayMarketTransaction`
-- **این دقیقاً همون بخشیه که باید با کافه‌بازار جایگزین بشه** (بخش‌های ۳ تا ۵ این گزارش)
+- MTProto method: `payments.assignPlayMarketTransaction`
+- **This is exactly the part that must be replaced with Cafe Bazaar** (sections 3–5 of this report)
 
-## سیستم ۲ — ارز داخلی تلگرام (Stars / XTR) ⭐
+## System 2 — Telegram's internal currency (Stars / XTR) ⭐
 
-- **ستاره یه ارز داخلی خود تلگرامه** (مثل سکه‌ی بازی)، نه پول واقعی
-- **یک‌بار** با استور (سیستم ۱) **خریداری/شارژ** می‌شه
-- بعد **کاملاً داخل تلگرام خرج** می‌شه — **دیگه استور دخیل نیست، فقط MTProto**
-- کاربردها: هدیه، بوست کانال، ارتقای هدیه، پرداخت داخلی
-- **نتیجه برای بازار:** فقط «شارژ اولیه‌ی ستاره» به بازار مربوطه. خرج بعدی ستاره ربطی به بازار نداره
+- **Stars are Telegram's own in-app currency** (like a game coin), not real money
+- They are **bought/topped up once** via the Store (System 1)
+- After that they are **spent entirely inside Telegram** — **the Store is no longer involved, only MTProto**
+- Uses: gifts, channel boosts, upgrade gifts, internal payments
+- **Implication for Bazaar:** only the **initial Stars top-up** relates to Bazaar. Later Star spending has nothing to do with Bazaar
 
-## سیستم ۳ — پرداخت ربات / درگاه شخص ثالث (`PaymentFormActivity`)
+## System 3 — Bot / third-party gateway payments (`PaymentFormActivity`)
 
-- **کاربرد:** ربات‌هایی که محصول یا سرویس واقعی می‌فروشن (فروشگاه، رزرو، و...)
-- ربات یه `payments.getPaymentForm` می‌ده. تلگرام دو شاخه داره:
-  - اگه `native_provider` برابر **stripe** یا **smartglocal** باشه → تلگرام **فرم کارت** رو خودش (بومی) رندر می‌کنه
-  - **هر درگاه دیگه‌ای** → **WebView** باز می‌شه و `paymentForm.url` (لینک درگاه تاجر) لود می‌شه
-- **پول مستقیم به حسابِ تاجر می‌رسه** — تلگرام فقط واسطه‌ست، نه گیرنده
-- تأیید نهایی با `payments.sendPaymentForm`
-- **ربطی به بازار نداره** — مال پرداخت‌های تجاری ثالثه
+- **Use:** bots selling real goods or services (shops, bookings, …)
+- A bot provides `payments.getPaymentForm`. Telegram has two branches:
+  - if `native_provider` is **stripe** or **smartglocal** → Telegram renders the **card form** natively
+  - **any other gateway** → a **WebView** opens and loads `paymentForm.url` (the merchant's payment link)
+- **Money goes straight to the merchant's account** — Telegram is only the middleman, not the recipient
+- Final confirmation via `payments.sendPaymentForm`
+- **No relation to Bazaar** — this is third-party commerce payments
 
-## سیستم ۴ — هدیه (Gifts) 🎁
+## System 4 — Gifts 🎁
 
-هدیه دو شکل داره و **منبع پولشون فرق داره**:
+Gifts come in two forms with **different money sources**:
 
-### الف) هدیه‌ی ستاره (Star Gift) — از موجودی ستاره
+### A) Star Gift — from the Stars balance
 ```
-[یک‌بار]  خرید ستاره با استور  →  شارژ حساب ستاره      ← سیستم ۱ (بازار)
-[چندبار]  ارسال هدیه با موجودی →  خرج ستاره‌ی داخلی     ← سیستم ۲ (MTProto فقط)
+[once]    buy Stars via Store   → top up Stars balance   ← System 1 (Bazaar)
+[repeated] send gift from balance → spend internal Stars  ← System 2 (MTProto only)
 ```
-- کاربر قبلاً ستاره خریده و موجودی داره
-- موقع هدیه: `TL_inputInvoiceStarGift` → `payments.getPaymentForm` (نوع `paymentFormStars`) → `payments.sendPaymentForm`
-- **پول از موجودی ستاره‌ی داخلی کم می‌شه، نه از کیف پول بازار/گوگل**
-- گیرنده می‌تونه قبول کنه، ارتقا بده، یا به کس دیگه‌ای انتقال بده (`TL_inputInvoiceStarGiftTransfer`)
+- The user already bought Stars and has a balance
+- On gift: `TL_inputInvoiceStarGift` → `payments.getPaymentForm` (type `paymentFormStars`) → `payments.sendPaymentForm`
+- **Money comes from the internal Stars balance, not the Bazaar/Google wallet**
+- The recipient can accept, upgrade, or transfer it (`TL_inputInvoiceStarGiftTransfer`)
 
-### ب) هدیه‌ی پرمیوم (Premium Gift) — از استور
-- معمولاً از مسیر **استور** (سیستم ۱) خریداری می‌شه → یعنی **پول واقعی**
-- `TL_inputStorePaymentGiftPremium` → استور → سرور
-- **این یکی به بازار مربوطه** (چون پول واقعیه)
+### B) Premium Gift — from the Store
+- usually bought through the **Store** (System 1) → i.e. **real money**
+- `TL_inputStorePaymentGiftPremium` → Store → server
+- **This one relates to Bazaar** (because it is real money)
 
-## جدول جمع‌بندی
+## Summary table
 
-| سیستم | پول از کجا | تأیید | مرتبط با بازار؟ |
+| System | Where the money comes from | Verification | Bazaar-related? |
 |-------|-----------|-------|-----------------|
-| پرمیوم / شارژ ستاره | استور (گوگل) | MTProto + استور | ✅ **آره — اینو عوض کن** |
-| خرج ستاره (هدیه/بوست) | موجودی ستاره‌ی داخلی | فقط MTProto | ❌ نه — ارز داخلیه |
-| پرداخت ربات/تاجر | درگاه تاجر (وب) | MTProto (`sendPaymentForm`) | ❌ نه — درگاه ثالث |
-| هدیه‌ی پرمیوم | استور | MTProto + استور | ⚠️ بله (پول واقعی) |
-| هدیه‌ی ستاره | موجودی ستاره | فقط MTProto | ❌ بعد از شارژ، نه |
+| Premium / Stars top-up | Store (Google) | MTProto + Store | ✅ **yes — replace this** |
+| Star spending (gifts/boosts) | Internal Stars balance | MTProto only | ❌ no — internal currency |
+| Bot/merchant payments | Merchant gateway (web) | MTProto (`sendPaymentForm`) | ❌ no — third-party gateway |
+| Premium gift | Store | MTProto + Store | ⚠️ yes (real money) |
+| Star gift | Stars balance | MTProto only | ❌ no, after top-up |
 
-**نتیجه‌ی کلیدی:** با کافه‌بازار فقط **«خرید اولیه‌ی ستاره» و «پرمیوم/هدیه‌ی پرمیوم»** پوشش داده می‌شه. هر خرج بعدیِ ستاره (هدیه، بوست) از موجودی داخلی انجام می‌شه و **دیگه به بازار/گوگل وصل نمی‌شه** — پس تجربه‌ی کاربر بعد از یک‌بار شارژ، کاملاً روان و آفلاین-از-استوره.
-
+**Key conclusion:** Cafe Bazaar only covers **"initial Stars top-up" and "Premium/Premium gifts"**. Every later Star spend (gifts, boosts) happens from the internal balance and **never touches Bazaar/Google again** — so after a single top-up the user experience is smooth and store-free.

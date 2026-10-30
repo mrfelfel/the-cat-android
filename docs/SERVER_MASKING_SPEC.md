@@ -1,111 +1,110 @@
-# سند مشخصات سرور — پوشش‌سازی امضای MTProto (backward-compatible)
+# Server specification — MTProto traffic masking (backward-compatible)
 
-> مخاطب: سمت سرور — **TESSMTPROTO** (پروتکل اختصاصی خودساخت، بر پایهٔ دقیق MTProto؛ طبق اعلام کاربر 2026-10-31. اسم‌های قدیمی مثل «gram srv» در مستندات غلط بودند و باید حذف شوند). هدف: (۱) **کلاینت‌های قدیمی بدون تغییر کار کنند**، (۲) یک **امضای مخصوص خودمان** تعریف شود که سرور هم بپذیرد، (۳) در بلندمدت ترافیک شبیه TLS واقعی به نظر برسد.
-> مرجع رفتار کلاینت: `TMessagesProj/jni/tgnet/Connection.cpp` (خطوط 459–560 نوشتن مقدمه، 149–165 داخل `ConnectionSocket.cpp` برای hello).
-
----
-
-## ۰. خلاصهٔ یک‌خطی
-
-کلاینت قدیمی مقدمهٔ ۶۴ بایتی می‌فرستد که در آن `bytes[56..59] = ef ef ef ef` ثابت است و سرور با همین ۴ بایت، فریمینگ EF را انتخاب می‌کند؛ این ۴ بایت ثابت **خودِ امضایی است که DPI با آن ترافیک را می‌کشد**. پچ اصلی سرور: به‌جای «فقط ef بپذیر»، «هر selector ای را فریم EF حساب کن» — با این کار کلاینت جدید می‌تواند آن ۴ بایت را رندوم کند، کلاینت قدیمی دست‌نخورده می‌ماند، و امنیت MTProto (کلید AES درون مقدمه + handshake) هیچ تغییری نمی‌کند.
+> Audience: the server side — **TESSMTPROTO** (a proprietary, self-built protocol based precisely on MTProto; per the user, 2026-10-31. Older names like "gram srv" in the docs were wrong and have been removed). Goals: (1) **old clients keep working unchanged**, (2) define **our own signature** that the server also accepts, (3) in the long run make traffic look like real TLS.
+> Reference for client behavior: `TMessagesProj/jni/tgnet/Connection.cpp` (lines 459–560 for intro construction; `ConnectionSocket.cpp` lines 149–165 for the hello).
 
 ---
 
-## ۱. کلاینت قدیمی دقیقاً چه می‌فرستد (نباید بشکند)
+## 0. One-line summary
 
-هر اتصال با یک پکت ۶۴ بایتی (مقدمه / obfuscated2 intro) شروع می‌شود:
+Old clients send a 64-byte intro in which `bytes[56..59] = ef ef ef ef` is fixed, and the server picks the EF framing from those 4 bytes; **that fixed 4-byte selector is the signature DPI uses to kill the traffic**. The core server patch: instead of "only accept ef", treat **any selector** as EF framing — then a new client can randomize those 4 bytes, old clients remain untouched, and MTProto security (AES key inside the intro + handshake) does not change at all.
 
-| بخش | مقدار در کلاینت فعلی |
+---
+
+## 1. What an old client actually sends (must not break)
+
+Every connection starts with a 64-byte packet (the obfuscated2 intro):
+
+| Part | Value in the current client |
 |---|---|
-| `bytes[0..55]` | تصادفی (پس از حذف الگوهای منع‌شده: کلمات HTTP مثل `GET `/`POST`/`HEAD`، و مقادیر `eeeeeeee`/`dddddddd` و…) |
-| `bytes[56..59]` | **`ef ef ef ef` ثابت** ← امضای شناخته‌شده (`Connection.cpp:529`) |
-| `bytes[60..63]` | تصادفی (یا datacenterId اگر secret فعال باشد — ما نداریم) |
-| بعد از مقدمه | فریمینگ **EF**: طول هر پکت به‌صورت `len/4` (۱ بایت تا ۱۲۷، ورودی ۴ بایتی بعد)، **بدون پدینگ تصادفی اضافه**؛ کل جریان با AES-CTR کلیدشده از خود مقدمه رمز است |
+| `bytes[0..55]` | random (after excluding forbidden patterns: HTTP words like `GET `/`POST`/`HEAD`, and the values `eeeeeeee`/`dddddddd`, …) |
+| `bytes[56..59]` | **fixed `ef ef ef ef`** ← the known signature (`Connection.cpp:529`) |
+| `bytes[60..63]` | random (or datacenterId when a secret is active — we have none) |
+| after the intro | **EF** framing: each packet's length as `len/4` (1 byte up to 127, 4-byte input after), **no extra random padding**; the whole stream is AES-CTR keyed from the intro itself |
 
-نکتهٔ امنیتی مهم: بعد از همین ۶۴ بایت، جریان XOR/CTR است و DPI داخلش را **نمی‌بیند**. یعنی کل سطح حملهٔ امضا = همین مقدمه. اینکه پکت‌ها فقط با این ساختار کشته می‌شوند (و نه بعد از رمزگشایی) با گزارش «قطع مداوم + تلاش هر ۱ ثانیه» هم‌خوان است: کلاینت موقع handshake شکست‌خورده هر ثانیه دوباره می‌زند (`Connection.cpp:711-718`) و همان امضا هر بار کشته می‌شود.
+Security note: after these 64 bytes the stream is XOR/CTR and DPI **cannot see inside it**. The entire signature surface = this intro. The fact that packets are killed by this structure only (and never after decryption) matches the reported symptom — "constant disconnect + 1-second retries": during a failed handshake the client retries every second (`Connection.cpp:711-718`) and the same signature is killed each time.
 
-## ۲. اصول backward compatibility (نباید‌ها)
+## 2. Backward-compatibility principles (must-nots)
 
-1. **هر مقدمه‌ای که selector آن `ef ef ef ef` است باید عیناً مثل امروز پردازش شود** — فریمینگ v1/EF دست‌نخورده بماند (بایت‌به‌بایت).
-2. **هیچ اتصالی به‌خاطر selector ناشناخته reject نشود** — ریجکت = قطع کلاینت قدیمی/جدیدِ در حال آزمون.
-3. **لایه‌های بالاتر دست نمی‌خورند:** کلید RSA سرور، auth_key، پینگ، `getDifference` — همه تغییرات **زیر** این مقدمه‌اند؛ سرور اصلاً نباید منطق auth را لمس کند.
-4. **ترتیب استقرار: سرور اول، کلاینت بعد.** سرور اول هر دو حالت را بپذیرد، بعد کلاینت جدید بیاید. اگر سرور برگردد (rollback) به نسخهٔ قدیمی، کلاینت جدید باید **fallback به ef** داشته باشد (این الزام سمت کلاینت است — در نسخهٔ جدید گنجانده می‌شود).
-5. یک **feature flag** سمت سرور برای خاموش کردن فریمینگ جدید در چند ثانیه، بدون دست زدن به مسیر ef.
+1. **Any intro whose selector is `ef ef ef ef` must be processed exactly as today** — v1/EF framing stays byte-for-byte identical.
+2. **Never reject a connection because of an unknown selector** — rejecting = breaking old/new clients in trial.
+3. **Upper layers stay untouched:** server RSA key, auth_key, ping, `getDifference` — all changes live **below** the intro; the auth logic must not be touched.
+4. **Deployment order: server first, client after.** The server accepts both modes first, then the new client ships. If the server rolls back, the new client must **fall back to ef** (this is a client-side requirement — included in the new version).
+5. Keep a server-side **feature flag** to disable the new framing within seconds without touching the ef path.
 
-## ۳. پچ فوری سرور (پایهٔ همه٤ طرح‌ها)
+## 3. Core server patch (the base of all four ideas)
 
 ```text
-قبل:
+Before:
   if (intro[56..59] == ef ef ef ef) → parse EF
-  else → reject / خطای ناشناخته
+  else → reject / unknown error
 
-بعد:
-  if (intro[56..59] == ef ef ef ef) → parse EF        # کلاینت قدیمی، بدون تغییر
-  else                             → parse EF          # هر selector دیگری هم EF
-  # + شاخه‌های طرح‌های جدید (پایین) به‌تدریج اضافه شود
+After:
+  if (intro[56..59] == ef ef ef ef) → parse EF        # old clients, unchanged
+  else                             → parse EF          # any other selector is EF too
+  # + branches for the new schemes (below) added gradually
 ```
 
-**چرا امنیت را کم نمی‌کند:** selector بخشی از کلید AES نیست؛ کلید از کل ۶۴ بایت مشتق می‌شود و طرفین همان را دارند. هر کسی بتواند مقدمه بفرستد، در هر حال می‌توانست — موفقیت handshake واقعی را MTProto داخل رمز تعیین می‌کند، نه این ۴ بایت. یعنی «پذیرش هر selector» فقط مرز پردازش را باز می‌کند، چیزی را باز نمی‌کند.
+**Why this does not weaken security:** the selector is not part of the AES key; the key derives from all 64 bytes, which both sides share. Anyone who can send an intro could send one before anyway — real handshake success is decided by the MTProto layer inside the encryption, not by these 4 bytes. "Accept any selector" only opens the parse boundary; it opens nothing else.
 
-**متدولوژی پیاده‌سازی پیشنهادی:** تابع `classify(intro)` را از خواندنِ selector جدا کنید: `classify` برای ef → v1؛ برای بقیه → v1 یا v2 بر اساس قاعده طرح (پایین)؛ parse همیشه طبق خروجی `classify`. لاگ شمارشی هم کنارش (بخش ۶).
+**Suggested implementation shape:** split selector reading into a `classify(intro)` function: `classify` → ef means v1; anything else → v1 or v2 per the scheme rule (below); parse always follows `classify`'s output. Add counting logs next to it (section 6).
 
-## ۴. طرح‌های امضای مخصوص خودمان (ایده‌ها، از ارزان به گران)
+## 4. Our own signature schemes (ideas, cheapest to most expensive)
 
-### طرح A — selector رندوم (کم‌هزینه‌ترین؛ پیشنهاد فوری)
-- **کلاینت:** `bytes[56..59]` را به ۴ بایت تصادفی تبدیل کند (۳ خط: شاخهٔ EF در خط 528–529).
-- **سرور:** همان پچ بخش ۳.
-- **نتیجه:** قاعدهٔ عمومی DPI که `ef ef ef ef` را می‌جوید بی‌اثر می‌شود. کلاینت قدیمی ef می‌فرستد و سرور همچنان می‌پذیرد.
-- **حدود:** فقط قواعد ثابت‌بایتی را می‌کشد؛ رفتار کلی (طول/زمان‌بندی) قابل تشخیص است. اما همان رفتارِ قاتل گزارش فعلی است.
+### Scheme A — random selector (cheapest; immediate pick)
+- **Client:** turn `bytes[56..59]` into 4 random bytes (3 lines: the EF branch at lines 528–529).
+- **Server:** the core patch in section 3.
+- **Result:** the public DPI rule that matches `ef ef ef ef` becomes ineffective. Old clients still send ef and the server still accepts it.
+- **Limits:** only defeats fixed-byte rules; general behavior (length/timing) remains observable. But that behavior is exactly what kills the current reports.
 
-### طرح B — EF-v2: طول مبهم‌شده + پدینگ
-- مشکل امضایی EF پس از رندوم کردن selector: پیشوند `len/4` (مقادیر کوچک و بدون پدینگ → الگوی طول قابل استخراج).
-- **v2:** طول هر پکت را با یک بایت مشتق‌شده از خود مقدمه مبهم کنید: `wire = (len/4) XOR mask` که `mask = intro[7] ^ 0xA5` (یا هر تابع deterministic دیگر روی intro) — هر دو طرف همان intro را دارند، پس بدون هیچ handshake اضافه‌ای مشتق می‌شود. به‌علاوه پدینگ تصادفی ۰ تا ۲۵۶ بایتی مثل بقیهٔ فریمینگ‌ها.
-- **سرور:** اگر `classify` گفت v2 → با همان قاعده بشکند/بپیچد.
-- **قدیمی:** ef → v1 بدون پدینگ/ماسک دست‌نخورده.
+### Scheme B — EF-v2: masked length + padding
+- Remaining EF fingerprint after randomizing the selector: the `len/4` prefix (small values, no padding → extractable length pattern).
+- **v2:** mask each packet's length with a byte derived from the intro itself: `wire = (len/4) XOR mask`, where `mask = intro[7] ^ 0xA5` (or any deterministic function of the intro) — both sides hold the same intro, so it derives with zero extra handshake. Plus 0–256 bytes of random padding like the other framings.
+- **Server:** when `classify` says v2 → wrap/unwrap with that rule.
+- **Old clients:** ef → v1 with no padding/mask, untouched.
 
-### طرح C — انتخاب framing از درون مقدمه (بدون magic ثابت)
-- به‌جای magic قابل کشف: `framing = f(intro)` — مثلاً `f = (intro[3] & 1) ? v2 : v1`. کلاینت جدید هر وقت v2 خواست intro را با bit مناسب می‌سازد؛ سرور فقط همین قاعده را حساب می‌کند. هیچ ۴ بایت ثابتی در کار نیست (جدا از efِ قدیمی که همان اول چک می‌شود).
-- ترکیب با B: قدیمی = ef→v1؛ جدید = هر selector دیگر با `f` → v1/v2.
+### Scheme C — choose framing from inside the intro (no fixed magic)
+- Instead of a discoverable magic: `framing = f(intro)` — e.g. `f = (intro[3] & 1) ? v2 : v1`. The new client sets the suitable bit whenever it wants v2; the server just computes the same function. No fixed 4 bytes anywhere (besides legacy ef, checked first).
+- Combined with B: legacy = ef→v1; new = any other selector resolved by `f` → v1/v2.
 
-### طرح D — پوشش fake-TLS (بلندمدت، قوی‌ترین)
-- کلاینت ما **از قبل** hello دارد: کلاس `TlsHello` در `ConnectionSocket.cpp:149` (شامل GREASE، SNI، پارامترهای TLS). سرور باید framing نوع TLS را بفهمد: پذیرش ClientHello، سپس unwrap رکوردهای TLS (`17 03 03 ...`) و پردازش MTProto داخلش — یعنی همان کاری که `mtproto-proxy` با secretهای `\xdd`/`\xee` می‌کند.
-- **TESSMTPROTO خودساخت است** (نه mtproto-proxy-مشتق) ⇒ کد آمادهٔ mtproxy برای این بخش قابل وام‌گرفتن مستقیم نیست؛ record-layer (پذیرش ClientHello + unwrap رکوردهای `17 03 03 ...`) باید **داخل خود TESSMTPROTO** پیاده شود.
-- **راه میانی بدون دست زدن به هستهٔ TESSMTPROTO:** یک جلوی `mtproto-proxy` با پورت 443 و گواهی واقعی LE جلوی سرور — از بیرون TLS واقعی به نظر می‌رسد و جلو می‌تواند ترافیک MTProto-پایه را به TESSMTPROTO forward کند (به شرطی که TESSMTPROTO حالت plain/obfuscated استاندارد MTProto را بپذیرد — که می‌پذیرد، چون کلاینت امروز همین را می‌فرستد).
-- پیش‌نیاز کلاینت: **فیکس یک‌خطی GREASE** در `ConnectionSocket.cpp:158` (باگ `grease[i] == grease[i+1]` → باید `grease[i-1]`؛ همان فیکس upstream) وگرنه hello دارای extension تکراری و out-of-bounds است — دقیقاً چیزی که middlebox سخت‌گیر می‌کشدش.
-- گزینهٔ میانی بدون تغییر سرور خودی: یک **جلوی mtproto-proxy با پورت 443 و گواهی واقعی LE** جلوی سرور — ترافیک از بیرون TLS واقعی به نظر می‌رسد (کلاینت fake-TLS هم با گواهی واقعی سازگار است).
+### Scheme D — fake-TLS masking (long-term, strongest)
+- Our client **already has** a hello: class `TlsHello` in `ConnectionSocket.cpp:149` (GREASE, SNI, TLS parameters). The server must understand TLS framing: accept a ClientHello, then unwrap TLS records (`17 03 03 ...`) and process the MTProto inside — exactly what `mtproto-proxy` does with `\xdd`/`\xee` secrets.
+- **TESSMTPROTO is self-built** (not mtproxy-derived) ⇒ mtproxy's code cannot be borrowed directly for this part; the record layer (ClientHello acceptance + record unwrap) must be implemented **inside TESSMTPROTO**.
+- **Middle path without touching the TESSMTPROTO core:** put an `mtproto-proxy` front with port 443 and a real LE certificate in front of the server — from outside the traffic looks like real TLS, and the front can forward MTProto-based traffic to TESSMTPROTO (assuming TESSMTPROTO accepts plain/obfuscated standard MTProto — it does, since that is what today's client sends).
+- **Client prerequisites:** the **one-line GREASE fix** in `ConnectionSocket.cpp:158` (the `grease[i] == grease[i+1]` bug → must be `grease[i-1]`; same fix as upstream) — otherwise the hello has duplicate extensions and an out-of-bounds read, exactly what a strict middlebox kills.
 
-### طرح E — چندپورت + آینه (مکمل، بدون تغییر پروتکل)
-- سرور روی چند پورت listener داشته باشد (30001 + مثلاً 443/8443/پورت تصادفی) و catnet registry همه را منتشر کند. کلاینت قدیمی از 30001 کار می‌کند (compat کامل). این فقط در برابر **انسداد پورت** کمک می‌کند، نه بازرسی payload — پس جایگزین A–D نیست، مکمل آن‌هاست.
+### Scheme E — multiple ports + mirrors (complementary, no protocol change)
+- The server should listen on several ports (30001 + e.g. 443/8443/a random port) and the catnet registry should publish all of them. Old clients keep using 30001 (full compatibility). This only helps against **port blocking**, not payload inspection — so it complements A–D, it does not replace them.
 
-## ۵. ترتیب استقرار پیشنهادی
+## 5. Suggested deployment order
 
-| مرحله | سرور | کلاینت |
+| Stage | Server | Client |
 |---|---|---|
-| ۰ | چک‌لیست عملیات (بخش ۷) + شمارنده‌های لاگ (بخش ۶) | تست VPN برای تأیید مقصر بودن DPI |
-| ۱ | پچ بخش ۳ (پذیرش هر selector + flag) | — قدیمی‌ها بدون تغییر تست شوند |
-| ۲ | — | طرح A (selector رندوم) + fallback به ef در صورت شکست |
-| ۳ | EF-v2 (طرح B/C) | همان‌ها |
-| ۴ | framing TLS یا جلوی mtproxy (طرح D) | فیکس GREASE + انتخاب type |
+| 0 | operations checklist (section 7) + log counters (section 6) | VPN test to confirm DPI is the culprit |
+| 1 | core patch (section 3: accept any selector + flag) | — old clients tested unchanged |
+| 2 | — | Scheme A (random selector) + ef fallback on failure |
+| 3 | EF-v2 (scheme B/C) | same |
+| 4 | TLS framing or mtproxy front (scheme D) | GREASE fix + type selection |
 
-**معیار موفقیت هر مرحله:** (الف) شمارندهٔ اتصال‌های selector قدیمی (`ef`) نباید بعد از deploy سرور افت کند؛ (ب) نرخ reconnect کلاینت‌ها (طوفان ۱ ثانیه‌ای) باید بعد از مرحله٢ به‌شکل محسوسی بیفتد.
+**Success metric per stage:** (a) the count of legacy-selector (`ef`) connections must not drop after the server deploy; (b) the client reconnect rate (the 1-second storm) must visibly collapse after stage 2.
 
-## ۶. پایش و تست
+## 6. Monitoring and testing
 
-- **شمارنده‌های لاگ سرور:** تعداد اتصال به تفکیک کلاس selector (`ef` / `دیگر`)، و تفکیک «به auth رسید» در مقابل «در همان parse مقدمه مرد». قبل/بعدِ deploy مقایسه شود.
-- **تست‌وکتور:** یک capture اتصال کلاینت قدیمی (همان ۶۴ بایت اول) قبل از deploy بگیرید؛ بعد از deploy همان بایت‌ها را به سرور جدید replay کنید — باید دقیقاً پذیرفته شود.
-- **سناریوی rollback:** feature flag خاموش → رفتار عین قبل؛ هیچ کلاینت قدیمی نباید حتی یک اتصالش قطع شود.
-- **از سمت شبکه:** تست VPN کاربر گزارش‌دهنده — اگر با VPN وصل می‌شود، تأیید می‌شود payload-DPI مقصر است و مرحله٢ درمانش است.
+- **Server log counters:** connection counts by selector class (`ef` / other), and by "reached auth" vs "died during intro parse". Compare before/after deploy.
+- **Test vectors:** capture one old-client connection (the first 64 bytes) before deploy; after deploy replay those bytes to the new server — they must be accepted exactly.
+- **Rollback scenario:** feature flag off → behavior exactly as before; no old client should lose a single connection.
+- **Network side:** the reporting user's VPN test — if it connects over VPN, payload-DPI is confirmed as the culprit and stage 2 is the cure.
 
-## ۷. چک‌لیست عملیات سرور (قبل از هر کد)
+## 7. Server operations checklist (before any code)
 
-- **idle timeout ≥ 600s** (پینگ کلاینت ~۱۸۰s است؛ کوتاه‌تر = قطع دوره‌ای).
-- **پاسخ فوری و مطمئن به ping** (نادیده گرفتن ping = چرخهٔ قطع ~۲۰–۴۰ ثانیه).
-- **پایداری پروسه:** هر ری‌استارت یعنی reconnect + `getDifference` برای همهٔ کلاینت‌ها؛ در لاگ دنبال کرش/restart بگردید.
-- در لاگ دنبال: **accept بدون تکمیل init** و **هندشیک DH تکراری از یک IP** (امضای طوفان ۱ ثانیه‌ای کلاینت همین‌جاست).
+- **idle timeout ≥ 600s** (client ping is ~180s; shorter = periodic disconnects).
+- **Prompt, reliable ping replies** (ignoring pings = ~20–40s disconnect cycles).
+- **Process stability:** every restart means reconnect + `getDifference` for all clients; look for crashes/restarts in the logs.
+- Look in the logs for: **accept without completed init** and **repeated DH handshakes from one IP** (the signature of the client's 1-second storm).
 
-## ۸. پرسش‌های باز (برای شروع کار سرور)
+## 8. Open questions (to start server work)
 
-1. ~~`gram srv` چیست؟~~ **پاسخ داده شد (2026-10-31): TESSMTPROTO — پروتکل اختصاصی خودساخت، بر پایهٔ دقیق MTProto.** پیامد برای طرح D: پیادهٔ‌سازی record-layer کار جدید داخل TESSMTPROTO است، یا از گزینهٔ جلوی mtproto-proxy (بالا) استفاده می‌شود.
-2. پردازش selector الان دقیقاً در کدام تابع است و آیا غیر از `ef` چیزی را قبول می‌کند؟
-3. آیا گزارش‌های قطع با یک آپدیت/ری‌استارت اخیر سرور شروع شد؟
-4. گواهی/دامنه برای طرح D موجود است؟ (برای گزینهٔ 443 با گواهی واقعی.)
+1. ~~What is "gram srv"?~~ **Answered (2026-10-31): TESSMTPROTO — a proprietary, self-built protocol based precisely on MTProto.** Consequence for scheme D: implementing the record layer is new work inside TESSMTPROTO, or the mtproto-proxy front option (above) is used.
+2. Where exactly does selector parsing happen today, and does it accept anything other than `ef`?
+3. Did the disconnect reports start together with a recent server update/restart?
+4. Is a domain/certificate available for scheme D? (For the port-443 option with a real certificate.)

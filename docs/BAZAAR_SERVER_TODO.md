@@ -1,45 +1,45 @@
-# راهنمای پیاده‌سازی سرور — پرداخت بازار (Cafe Bazaar)
+# Server implementation guide — Bazaar (Cafe Bazaar) payments
 
-> **وضعیت کلاینت:** آماده و کامپایل‌شده (فلاو `TMessagesProj_AppBazaar`) — پرمیوم، شارژ ستاره، هدیه پرمیوم و هدیه ستاره همه پیاده‌شن. مسیر خرید بازار روی APK اخیر **وریفای‌شده** (بایت‌کد بررسی شده؛ `StoreBilling.isAvailable()` زنده‌ست و خرید واقعاً به پل Poolakey می‌رسه).
+> **Client status:** ready and compiled (flavor `TMessagesProj_AppBazaar`) — Premium, Stars top-up, Premium gift and Star gift are all implemented. The Bazaar purchase path on the recent APK is **verified** (bytecode inspected; `StoreBilling.isAvailable()` is live and purchases really reach the Poolakey bridge).
 >
-> **وضعیت سرور:** نداره. **اولویت فوری:** سرور `store_product` رو در پاسخ `payments.getStarsTopupOptions` برنمی‌گردونه — کلاینت الان با پیام `This item is not available for purchase yet.` رد می‌شه (خرید ستاره بدون SKU بازار). بعد از اون، متد تأیید رسید (بخش ۱) لازمه تا پولِ گرفته‌شده فعال بشه.
+> **Server status:** none. **Immediate priority:** the server does not return `store_product` in `payments.getStarsTopupOptions` — the client is currently rejected with `This item is not available for purchase yet.` (Stars purchase without a Bazaar SKU). After that, the receipt-confirmation method (section 1) is needed so paid money can be activated.
 >
-> این فایل عمداً «چی باید بسازی» رو قدم‌به‌قدم می‌ده تا مستقیم اجرا بشه.
+> This file deliberately gives "what you must build" step by step so it can be executed directly.
 
 ---
 
-## ۰. خلاصه‌ی یک‌خطی
+## 0. One-line summary
 
-دو کار: (۱) در پاسخ `payments.getStarsTopupOptions` (و gift options) روی هر option فیلد `store_product` رو با SKU محصول مصرفی بازار پُر کن؛ (۲) یک متد MTProto جدید `payments.assignBazaarTransaction` بساز که رسید امضاشده‌ی بازار رو رمزگشایی/تأیید کنه، در برابر **replay** محافظت کنه، محصول رو بر اساس `purpose` فعال کنه و `Updates` برگردونه.
+Two tasks: (1) in the `payments.getStarsTopupOptions` response (and gift options), fill the `store_product` field of every option with the Bazaar consumable SKU; (2) create a new MTProto method `payments.assignBazaarTransaction` that decodes/verifies the signed Bazaar receipt, protects against **replay**, activates the product according to `purpose`, and returns `Updates`.
 
 ---
 
-## ۱. امضای متد (دقیقاً همین)
+## 1. Method signature (exactly this)
 
 ```
 payments.assignBazaarTransaction#62617a01 receipt:JSON purpose:InputStorePaymentPurpose = Updates;
 ```
 
-| قسمت | مقدار |
+| Part | Value |
 |------|-------|
-| نام | `payments.assignBazaarTransaction` |
+| name | `payments.assignBazaarTransaction` |
 | constructor id | `0x62617a01` |
-| `receipt` | نوع `JSON` (یعنی همون `dataJSON` — یه رشته‌ی JSON خام) |
-| `purpose` | نوع `InputStorePaymentPurpose` (موجود در لایه) |
-| پاسخ | `Updates` |
+| `receipt` | type `JSON` (i.e. the `dataJSON` — a raw JSON string) |
+| `purpose` | type `InputStorePaymentPurpose` (exists in the layer) |
+| response | `Updates` |
 
-نمونه‌ی TL-scheme:
+TL-scheme sample:
 ```tl
 payments.assignBazaarTransaction#62617a01 receipt:JSON purpose:InputStorePaymentPurpose = Updates;
 ```
 
-> **نکته:** این constructor یه مقدار محلی/غیر-upstream هست. کلاینت همین `0x62617a01` رو می‌فرسته ([TLRPC.java `TL_payments_assignBazaarTransaction`](TMessagesProj/src/main/java/org/telegram/tgnet/TLRPC.java)). اگه constructor رو عوض کردی، **باید کلاینت رو هم همگام کنی** وگرنه سرور متد رو نمی‌شناسه.
+> **Note:** this constructor is a local/non-upstream value. The client sends exactly `0x62617a01` ([TLRPC.java `TL_payments_assignBazaarTransaction`](../TMessagesProj/src/main/java/org/telegram/tgnet/TLRPC.java)). If you change the constructor you **must sync the client too**, otherwise the server will not recognize the method.
 
 ---
 
-## ۲. فرمت `receipt` (JSON) که کلاینت می‌فرسته
+## 2. `receipt` format (JSON) the client sends
 
-کلاینت این JSON رو در `receipt` می‌ذاره ([BazaarBillingBridge.buildReceiptJson](TMessagesProj_AppBazaar/src/main/java/org/telegram/messenger/billing/BazaarBillingBridge.java)):
+The client puts this JSON in `receipt` ([BazaarBillingBridge.buildReceiptJson](../TMessagesProj_AppBazaar/src/main/java/org/telegram/messenger/billing/BazaarBillingBridge.java)):
 
 ```json
 {
@@ -55,73 +55,73 @@ payments.assignBazaarTransaction#62617a01 receipt:JSON purpose:InputStorePayment
 }
 ```
 
-### توضیح فیلدها
+### Field explanation
 
-| فیلد | چیه | برای چی |
+| Field | What it is | What for |
 |------|-----|---------|
-| `dataJson` | payload خامِ امضاشده‌ی بازار (خودِ رسیدِ Bazaar) | **بدون این و `signature` تأیید ممکن نیست** |
-| `signature` | امضای RSA بازار روی `dataJson` (base64) | تأیید صحت |
-| `productId` | SKU خریداری‌شده | چک کردن محصول مجاز |
-| `packageName` | پکیج‌نیم اپ | جلوگیری از replay بین اپ‌ها |
-| `orderId` / `purchaseToken` | شناسه‌های یکتای تراکنش | **ضد-replay** |
-| `purchaseState` | وضعیت (باید `Purchased` باشه) | رد کردن خرید لغو شده |
-| `purchaseTime` | زمان (ms) | لاگ / محدوده‌ی زمانی |
-| `payload` | همون purpose-HEX که کلاینت فرستاد | اختیاری؛ purpose از فیلد `purpose` متد هم میاد |
+| `dataJson` | Bazaar's raw signed payload (the Bazaar receipt itself) | **verification is impossible without this and `signature`** |
+| `signature` | Bazaar's RSA signature over `dataJson` (base64) | authenticity check |
+| `productId` | purchased SKU | check the product is allowed |
+| `packageName` | app package name | prevent replay across apps |
+| `orderId` / `purchaseToken` | unique transaction ids | **anti-replay** |
+| `purchaseState` | state (must be `Purchased`) | reject cancelled purchases |
+| `purchaseTime` | time (ms) | logging / time window |
+| `payload` | the same HEX purpose the client sent | optional; purpose also comes from the method's `purpose` field |
 
-> اگه `dataJson` خالی بود، کلاینت در جایگزین خودش `originalJson` بازار رو به‌عنوان `receipt` فرستاده — یعنی `receipt` گاهی مستقیم همون payload امضاشده‌ست. منطق تأیید باید هر دو حالت رو تحمل کنه: اول سعی کن `dataJson`+`signature` داخل JSON باشه؛ نبود، کل JSON رو به‌عنوان payload خام در نظر بگیر.
+> If `dataJson` is empty, the client's fallback sends Bazaar's `originalJson` directly as `receipt` — i.e. `receipt` is sometimes the raw signed payload itself. Verification logic must tolerate both: first try `dataJson`+`signature` inside the JSON; if absent, treat the whole JSON as the raw payload.
 
 ---
 
-## ۳. الگوریتم تأیید (Verification)
+## 3. Verification algorithm
 
-### ۳.۱ کلید عمومی RSA
-از **پنل بازار** بگیر: سربرگ «پرداخت درون‌برنامه‌ای» → «کلید RSA».
+### 3.1 RSA public key
+Take it from the **Bazaar panel**: "In-App Billing" header → "RSA key".
 `https://pishkhan.cafebazaar.ir/apps/<packageName>/in-app-billing`
 
-این کلید برای هر برنامه ثابت و یکتا ست. برای `com.thecat.messenger`.
+The key is fixed and unique per app. For `com.thecat.messenger`.
 
-### ۳.۲ تأیید امضا
-الگوریتم: **`SHA1withRSA`** (استاندارد بازار) روی بایت‌های UTF-8 رشته‌ی `dataJson`، با کلید عمومی RSA، و مقایسه با `signature` (base64-decode شده).
+### 3.2 Signature verification
+Algorithm: **`SHA1withRSA`** (Bazaar's standard) over the UTF-8 bytes of the `dataJson` string, with the RSA public key, compared against `signature` (base64-decoded).
 
-شبه‌کد:
+Pseudocode:
 ```
-key = loadRsaPublicKey(PANEL_PUBLIC_KEY)          // формат X.509 / SubjectPublicKeyInfo
+key = loadRsaPublicKey(PANEL_PUBLIC_KEY)          // X.509 / SubjectPublicKeyInfo format
 sig = Base64.decode(receipt.signature)
 ok  = Signature("SHA1withRSA").verify(dataJson.getBytes(UTF_8), sig, key)
 if (!ok) → reject("BAD_SIGNATURE")
 ```
 
-> بعضی پیاده‌سازی‌ها `SHA1withRSA` رو برای payload بلند با SHA256 اشتباه می‌کنن. **دقیقاً SHA1withRSA** رو استفاده کن، چون همون چیزیه که IAB بازار استفاده می‌کنه.
+> Some implementations wrongly use SHA256 instead of `SHA1withRSA` for long payloads. Use **exactly SHA1withRSA**, because that is what Bazaar's IAB uses.
 
-### ۳.۳ استعلام مستقیم (توصیه‌شده، تقویت در برابر جعل)
-امضا به‌تنهایی کافیه ولی برای جلوگیری از replay/جعل پیشرفته، در صورت امکان تأیید رو از **Bazaar Developer API** هم بگیر:
-`<https://developers.cafebazaar.ir/fa/guidelines/in-app-billing>`
+### 3.3 Direct query (recommended, anti-forgery hardening)
+The signature alone is enough, but to prevent advanced replay/forgery, when possible also confirm via the **Bazaar Developer API**:
+<https://developers.cafebazaar.ir/fa/guidelines/in-app-billing>
 
-این کار رو **بعد از تأیید امضا** انجام بده (فقط برای رسیدهایی که امضاشون درست بود) تا بار زیادی به API بازار نزنی.
+Do this **after signature verification** (only for receipts whose signature was valid) so you do not overload Bazaar's API.
 
-### ۳.۴ اعتبارسنجی فیلدها (چک‌لیست)
-همه‌ی این‌ها باید رد بشن، وگرنه `reject`:
-- [ ] `signature` روی `dataJson` درست باشه (بند ۳.۲)
+### 3.4 Field validation (checklist)
+All of these must pass, otherwise `reject`:
+- [ ] `signature` over `dataJson` is valid (section 3.2)
 - [ ] `packageName == "com.thecat.messenger"`
-- [ ] `purchaseState == "Purchased"` (یا معادلش در payload خام)
-- [ ] `productId` یکی از SKU های مجاز پرمیوم باشه:
+- [ ] `purchaseState == "Purchased"` (or its equivalent in the raw payload)
+- [ ] `productId` is one of the allowed Premium SKUs:
       `thecat_premium_monthly` | `thecat_premium_yearly`
-      (یا هر `store_product` که خودت در promo فرستادی)
-- [ ] مبلغ (`amount` داخل `dataJson`) با قیمت تعریف‌شده در پنل بازار بخونه
+      (or any `store_product` you sent yourself in the promo)
+- [ ] amount (`amount` inside `dataJson`) matches the price configured in the Bazaar panel
 
 ---
 
-## ۴. ضد-replay — **مهم‌ترین بخش (چون کلاینت صف آفلاین داره)**
+## 4. Anti-replay — **most important section (because the client has an offline queue)**
 
-### ۴.۱ چرا الان حیاتیه
-کلاینت یه **صف outbox پایدار** داره ([BazaarReceiptQueue](TMessagesProj_AppBazaar/src/main/java/org/telegram/messenger/billing/BazaarReceiptQueue.java)):
-- اگه سرور آفلاینه/متد رو نداره، رسید ذخیره و خودکار با backoff دوباره فرستاده می‌شه.
-- یعنی **رسیدها ممکنه با تأخیر، چندبار، و خارج از ترتیب برسن.**
-- پس سرور باید هر تراکنش رو **دقیقاً یک‌بار** بپذیره، وگرنه یه خرید ممکنه چند بار پرمیوم فعال کنه.
+### 4.1 Why it is critical now
+The client has a **persistent outbox queue** ([BazaarReceiptQueue](../TMessagesProj_AppBazaar/src/main/java/org/telegram/messenger/billing/BazaarReceiptQueue.java)):
+- If the server is down / lacks the method, receipts are stored and automatically re-sent with backoff.
+- Meaning **receipts can arrive late, multiple times, and out of order.**
+- So the server must accept each transaction **exactly once**, otherwise one purchase could activate Premium several times.
 
-### ۴.۲ قواعد
-- هر `purchaseToken` (ترجیحاً) یا `orderId` رو **فقط یک‌بار** بپذیر.
-- یه جدول/cache دائم نگه دار، مثلاً:
+### 4.2 Rules
+- Accept each `purchaseToken` (preferred) or `orderId` **only once**.
+- Keep a permanent table/cache, e.g.:
 
 ```sql
 CREATE TABLE bazaar_transactions (
@@ -135,135 +135,135 @@ CREATE TABLE bazaar_transactions (
 );
 ```
 
-- **ترتیب عملیات:**
-  1. تأیید امضا + فیلدها
-  2. **چک کن آیا `purchaseToken` قبلاً پردازش شده؟** اگه آره → رد کن (`DUPLICATE`)؛ **ولی** اگه برای همون purpose قبلاً فعال شده، می‌تونی `Updates` خالی/موفق برگردونی تا کلاینت صف رو پاک کنه (idempotent).
-  3. در غیر این صورت: پرمیوم رو فعال کن، سپس `purchaseToken` رو INSERT کن.
-- **commit تراکنشی:** فعال‌سازی پرمیوم و ثبت توکن باید در **یک تراکنش DB** باشن، تا اگه وسطش کراشید، نه پرمیوم بدون ثبت فعال بشه نه ثبت بدون پرمیوم.
+- **Operation order:**
+  1. Verify signature + fields
+  2. **Check whether `purchaseToken` was already processed?** If yes → reject (`DUPLICATE`); **but** if it was already activated for the same purpose, you may return empty/successful `Updates` so the client clears its queue (idempotent).
+  3. Otherwise: activate Premium, then INSERT the `purchaseToken`.
+- **Transactional commit:** activation and token insert must be in **one DB transaction**, so a crash in the middle cannot activate Premium without recording or record without activating.
 
-> اگه `DUPLICATE` برگردونی و کلاینت خطا ببینه، اون رسید برای همیشه در صف می‌مونه و هر بار دوباره می‌فرسته. پس بهترین کار: برای تکرارِ همون تراکنشِ موفق، **`Updates` (موفق) برگردون** تا کلاینت پاکش کنه، ولی **پرمیوم رو دوباره فعال نکن**.
-
----
-
-## ۵. فعال‌سازی + پاسخ
-
-بعد از تأیید کامل:
-1. بر اساس `purpose` پرمیوم رو فعال کن (دقیقاً همون منطقی که برای `assignPlayMarketTransaction` داری).
-   - `TL_inputStorePaymentPremiumSubscription` → فعال‌سازی اشتراک پرمیوم (بر اساس `months` محصول: ماهانه/سالانه)
-2. آپدیت‌های لازم (مثلاً `updateUserPremium` / ستاره‌های مربوطه) رو در یه `Updates` جمع کن.
-3. **`Updates`** رو برگردون.
-
-کلاینت:
-- `response instanceof Updates` → `processUpdates` + refresh UI پرمیوم + **پاک کردن اون رسید از صف**.
-- هر پاسخ دیگه (خطا/timeout) → رسید در صف **می‌مونه** و بعداً دوباره فرستاده می‌شه.
+> If you return `DUPLICATE` and the client sees an error, that receipt stays in the queue forever and is re-sent every time. Best practice: for a repeat of an already-successful transaction, **return `Updates` (success)** so the client clears it, but **do not activate Premium again**.
 
 ---
 
-## ۶. انواع purpose (پرمیوم + ستاره + هدیه — همه از سمت کلاینت پیاده‌شده)
+## 5. Activation + response
 
-| purpose | محصول | نوع | وضعیت کلاینت |
+After full verification:
+1. Activate Premium according to `purpose` (exactly the logic you already have for `assignPlayMarketTransaction`).
+   - `TL_inputStorePaymentPremiumSubscription` → activate the Premium subscription (based on the product's `months`: monthly/yearly)
+2. Collect the necessary updates (e.g. `updateUserPremium` / related stars) into one `Updates`.
+3. Return the **`Updates`**.
+
+Client:
+- `response instanceof Updates` → `processUpdates` + refresh Premium UI + **remove that receipt from the queue**.
+- Any other response (error/timeout) → the receipt **stays** in the queue and is re-sent later.
+
+---
+
+## 6. purpose types (Premium + Stars + gifts — all implemented client-side)
+
+| purpose | Product | Type | Client status |
 |---------|--------|-----|--------------|
-| `TL_inputStorePaymentPremiumSubscription` | اشتراک پرمیوم | اشتراکی (SUBS) | ✅ پیاده‌شده |
-| `TL_inputStorePaymentStarsTopup` | شارژ ستاره | **مصرفی (INAPP)** | ✅ پیاده‌شده |
-| `TL_inputStorePaymentGiftPremium` | هدیه پرمیوم | **مصرفی (INAPP)** | ✅ پیاده‌شده |
-| `TL_inputStorePaymentStarsGift` | هدیه ستاره | **مصرفی (INAPP)** | ✅ پیاده‌شده |
+| `TL_inputStorePaymentPremiumSubscription` | Premium subscription | subscription (SUBS) | ✅ implemented |
+| `TL_inputStorePaymentStarsTopup` | Stars top-up | **consumable (INAPP)** | ✅ implemented |
+| `TL_inputStorePaymentGiftPremium` | Premium gift | **consumable (INAPP)** | ✅ implemented |
+| `TL_inputStorePaymentStarsGift` | Star gift | **consumable (INAPP)** | ✅ implemented |
 
-فرمت `receipt` برای همه یکیه؛ فقط `purpose` فرق داره. پس سرور رو از اول **مشترک** برای همه بنویس.
+The `receipt` format is identical for all; only `purpose` differs. So write the server path **shared** across all of them from the start.
 
-### ۶.۱ تفاوت مصرفی vs اشتراکی برای سرور
-- **پرمیوم (اشتراکی):** بعد از تأیید، اشتراک رو فعال/تمدید کن. **consume اصلاً ربطی به سرور نداره** (اشتراک مصرف نمی‌شه).
-- **ستاره/هدیه (مصرفی):** بعد از تأیید، موجودی/هدیه رو صادر کن. **کلاینت خودش بعد از دریافت `Updates` محصول رو consume می‌کنه** تا کاربر بتونه دوباره بخره. سرور لازم نیست به کلاینت دستور consume بده — کلاینت بعد از تأییدِ موفق consume می‌کنه (و اگه در صف آفلاین باشه، بعد از تأییدِ نهاییِ flush هم consume می‌کنه).
+### 6.1 Consumable vs subscription difference for the server
+- **Premium (subscription):** after verification, activate/renew the subscription. **`consume` has nothing to do with the server** (subscriptions are not consumed).
+- **Stars/gift (consumable):** after verification, issue the balance/gift. **The client itself consumes the product after receiving `Updates`** so the user can buy again. The server does not need to command a consume — the client consumes after successful confirmation (and if it was in the offline queue, also after the final flush confirmation).
 
-> نکته‌ی ضد-replay برای مصرفی‌ها حیاتی‌تره: چون consume فقط بعد از تأیید سرور انجام می‌شه، اگه سرور همون رسید رو دوبار بپذیره، هم موجودی دوبار صادر می‌شه هم consume دوبار انجام. پس **هر `purchaseToken` دقیقاً یک‌بار** بپذیر (بخش ۴).
+> Anti-replay note for consumables is even more critical: since consume only happens after server confirmation, if the server accepts the same receipt twice, both the balance is issued twice and consume runs twice. So accept **every `purchaseToken` exactly once** (section 4).
 
 ---
 
-## ۷. SKU های پرمیوم
+## 7. Premium SKUs
 
-کلاینت بر اساس `months` انتخاب می‌کنه ([BazaarBillingBridge.skuForOption](TMessagesProj_AppBazaar/src/main/java/org/telegram/messenger/billing/BazaarBillingBridge.java)):
+The client selects by `months` ([BazaarBillingBridge.skuForOption](../TMessagesProj_AppBazaar/src/main/java/org/telegram/messenger/billing/BazaarBillingBridge.java)):
 
-| دوره | SKU پیش‌فرض |
+| Period | Default SKU |
 |------|-------------|
-| ماهانه (۱ ماه) | `thecat_premium_monthly` |
-| سالانه (۱۲ ماه) | `thecat_premium_yearly` |
+| Monthly (1 month) | `thecat_premium_monthly` |
+| Yearly (12 months) | `thecat_premium_yearly` |
 
-> اگه در `TL_premiumSubscriptionOption.store_product` مقدار بذاری، کلاینت **اون SKU** رو استفاده می‌کنه. پس می‌تونی SKU دلخواه (۳ ماهه، ۶ ماهه، ...) هم از سمت سرور تحمیل کنی.
+> If you set `TL_premiumSubscriptionOption.store_product`, the client uses **that SKU**. So you can also force custom SKUs (3-month, 6-month, …) from the server.
 
-این SKU ها رو باید در **پنل بازار** به‌عنوان **اشتراک** تعریف کنی.
+These SKUs must be defined in the **Bazaar panel** as a **subscription**.
 
-### ۷.۱ SKU های ستاره و هدیه (مصرفی)
-برای ستاره/هدیه، کلاینت SKU رو **مستقیم از `store_product`** روی option می‌خونه (نه جدول ماهانه). یعنی سرور در `TL_starsTopupOption.store_product` / `TL_starsGiftOption.store_product` / `TL_premiumGiftOption.store_product` شناسه‌ی محصول بازار رو می‌ذاره و کلاینت همون رو می‌خره.
+### 7.1 Star and gift SKUs (consumable)
+For Stars/gifts, the client reads the SKU **directly from `store_product`** on the option (not the monthly table). That is, the server puts the Bazaar product id in `TL_starsTopupOption.store_product` / `TL_starsGiftOption.store_product` / `TL_premiumGiftOption.store_product` and the client buys exactly that.
 
-پس SKU های مصرفی رو توی **پنل بازار** به‌عنوان **محصول (INAPP)** تعریف کن و همون شناسه‌ها رو سرور در option ها بفرست. مثال:
+So define the consumable SKUs in the **Bazaar panel** as a **product (INAPP)** and send those ids from the server in the options. Example:
 
-| محصول | نوع پنل بازار | SKU (مثال، سرور تعیین می‌کنه) |
+| Product | Bazaar panel type | SKU (example, server decides) |
 |--------|---------------|------------------------------|
-| شارژ ستاره | مصرفی (INAPP) | `thecat_stars_100`, `thecat_stars_200`, ... |
-| هدیه ستاره | مصرفی (INAPP) | `thecat_stars_gift_50`, ... |
-| هدیه پرمیوم | مصرفی (INAPP) | `thecat_premium_gift_1m`, `thecat_premium_gift_12m`, ... |
+| Stars top-up | consumable (INAPP) | `thecat_stars_100`, `thecat_stars_200`, ... |
+| Star gift | consumable (INAPP) | `thecat_stars_gift_50`, ... |
+| Premium gift | consumable (INAPP) | `thecat_premium_gift_1m`, `thecat_premium_gift_12m`, ... |
 
-> اگه `store_product` روی یه option خالی باشه، کلاینت اون گزینه رو «خریدنی از استور» نمی‌دونه و به مسیر invoice/ربات میره. پس برای اینکه ستاره/هدیه از کیف پول بازار فروخته بشه، **باید `store_product` پر باشه**.
+> If `store_product` is empty on an option, the client does not consider that option "store-purchasable" and falls back to the invoice/bot path. So for Stars/gifts to be sold from the Bazaar wallet, **`store_product` must be filled**.
 
-### ۷.۲ قرارداد ارز برای گزینه‌های ستاره (IRT / تومان)
+### 7.2 Currency contract for Star options (IRT / Toman)
 
-سرور در `TL_starsTopupOption` (و gift options) این‌طوری بفرسته:
+The server should send this in `TL_starsTopupOption` (and gift options):
 
-| فیلد | مقدار |
+| Field | Value |
 |------|-------|
-| `currency` | `"IRT"` (کد غیر-ISO که کلاینت مخصوصاً هندلش می‌کنه) |
-| `amount` | قیمت به **تومانِ کامل** (اعداد صحیح، بدون ریال و بدون اعشار) |
+| `currency` | `"IRT"` (the non-ISO code the client specifically handles) |
+| `amount` | price in **full Tomans** (integers, no Rials, no decimals) |
 
-مثال: بسته‌ی ۱۰۰۰ ستاره به قیمت ۲۵۰,۰۰۰ تومان → `stars=1000, currency="IRT", amount=250000`.
+Example: a 1000-star pack for 250,000 Tomans → `stars=1000, currency="IRT", amount=250000`.
 
-کلاینت `amount` رو با `LocaleController.formatNumber` فرمت و «تومان» رو از string resource اضافه می‌کنه (مثلاً `۲۵۰,۰۰۰ تومان`). از `IRR` استفاده نکن — کلاینت اون رو با ساختار ارزهای ISO (نماد + دو اعشار) نشون می‌ده که برای تومان غلطه.
+The client formats `amount` with `LocaleController.formatNumber` and appends "Toman" from a string resource (e.g. `250,000 Toman`). Do not use `IRR` — the client displays it with ISO currency structure (symbol + two decimals), which is wrong for Tomans.
 
-> نکته‌ی نمایش: در فلاوی بازار، کلاینت قیمت رو **مستقیم از همین فیلدهای سرور** نشون می‌ده (برعکس فلاوی گوگل‌پلی که قیمت رو از Play Billing می‌گیره). پس مبلغ اینجا همون چیزیه که کاربر می‌بینه و باید با قیمت ثبت‌شده در پنل بازار یکی باشه.
-
----
-
-## ۸. لاگ‌گیری (برای دیباگ عملیاتی)
-- هر تراکنش (موفق/ردشده) رو با `orderId` + `purchaseToken` + `userId` + دلیل رد لاگ کن.
-- کلاینت هم یه **صفحه‌ی «پرداخت‌های معلق»** داره (از منوی side-menu در فلاوی بازار) که رسیدهای منتظر و خطای آخرِ سرور رو نشون میده — برای عیب‌یابیِ اینکه چرا یه خرید فعال نشده.
+> Display note: in the Bazaar flavor the client shows the price **directly from these server fields** (unlike the Google Play flavor, which takes the price from Play Billing). So the amount here is exactly what the user sees and must match the price registered in the Bazaar panel.
 
 ---
 
-## ۹. چک‌لیست تحویل
-
-- [ ] متد `payments.assignBazaarTransaction#62617a01` در TL-scheme + handler سمت سرور
-- [ ] دریافت و پیکربندی کلید عمومی RSA بازار
-- [ ] تأیید امضا `SHA1withRSA` روی `dataJson`
-- [ ] (توصیه‌شده) استعلام مستقیم از Bazaar Developer API
-- [ ] اعتبارسنجی `productId` / `packageName` / `purchaseState` / مبلغ
-- [ ] جدول ضد-replay (`purchaseToken` یکتا) + تراکنش DB
-- [ ] فعال‌سازی بر اساس `purpose` + برگرداندن `Updates`:
-  - [ ] پرمیوم (اشتراکی)
-  - [ ] شارژ ستاره (مصرفی)
-  - [ ] هدیه پرمیوم (مصرفی)
-  - [ ] هدیه ستاره (مصرفی)
-- [ ] رفتار idempotent برای تکرارِ تراکنشِ موفق (پاک کردن صف کلاینت بدون فعال‌سازی مجدد)
-- [ ] تست: خرید آنلاین، خرید آفلاین (صف + ارسال خودکار بعد از برگشت)، و خرید تکراری (هم پرمیوم هم ستاره)
+## 8. Logging (for operational debugging)
+- Log every transaction (success/rejected) with `orderId` + `purchaseToken` + `userId` + rejection reason.
+- The client also has a **"Pending purchases" screen** (side menu in the Bazaar flavor) showing queued receipts and the server's last error — for diagnosing why a purchase was not activated.
 
 ---
 
-## ۱۰. سناریوهای تستی که سرور باید پاس کنه
+## 9. Delivery checklist
 
-1. **آنلاین:** کلاینت می‌فرسته → سرور تأیید → `Updates` → پرمیوم فعال + صف کلاینت خالی.
-2. **آفلاین:** سرور down → کلاینت رسید رو ذخیره می‌کنه و `onQueued` نشون میده (پول گرفته شده). بعد از up شدن سرور، کلاینت خودکار می‌فرسته → فعال می‌شه.
-3. **تکراری:** همون رسید دوبار برسه → بار اول فعال، بار دوم `Updates` بدون فعال‌سازی مجدد (idempotent). پرمیوم **دوبار** تمدید نمی‌شه.
-4. **جعلی:** `signature` غلط → رد.
-5. **پکیج اشتباه:** `packageName` غیر از `com.thecat.messenger` → رد.
+- [ ] Method `payments.assignBazaarTransaction#62617a01` in the TL-scheme + server-side handler
+- [ ] Fetch and configure Bazaar's RSA public key
+- [ ] Verify `SHA1withRSA` signature on `dataJson`
+- [ ] (Recommended) Direct query to the Bazaar Developer API
+- [ ] Validate `productId` / `packageName` / `purchaseState` / amount
+- [ ] Anti-replay table (`purchaseToken` unique) + DB transaction
+- [ ] Activation per `purpose` + return `Updates`:
+  - [ ] Premium (subscription)
+  - [ ] Stars top-up (consumable)
+  - [ ] Premium gift (consumable)
+  - [ ] Star gift (consumable)
+- [ ] Idempotent behavior for repeating a successful transaction (clear the client queue without re-activating)
+- [ ] Tests: online purchase, offline purchase (queue + auto-send after recovery), and duplicate purchase (both Premium and Stars)
 
 ---
 
-## ۱۱. ساخت APK تستی (فلاوی بازار)
+## 10. Test scenarios the server must pass
 
-برای تستِ سمت سرور، APK بازار رو بساز:
+1. **Online:** client sends → server verifies → `Updates` → Premium active + client queue empty.
+2. **Offline:** server down → client stores the receipt and shows `onQueued` (money taken). After the server is up, the client auto-sends → activated.
+3. **Duplicate:** same receipt arrives twice → first activates, second returns `Updates` without re-activating (idempotent). Premium is **not** renewed twice.
+4. **Forged:** wrong `signature` → reject.
+5. **Wrong package:** `packageName` other than `com.thecat.messenger` → reject.
+
+---
+
+## 11. Building a test APK (Bazaar flavor)
+
+To test the server side, build the Bazaar APK:
 ```bash
-scripts/release-apk-bazaar.sh          # بیلد + امضا + verify → dist/TheCat-<ver>-Bazaar-ZeroHub.apk
-scripts/release-apk-bazaar.sh --skip-build   # فقط امضای مجدد
+scripts/release-apk-bazaar.sh          # build + sign + verify → dist/TheCat-<ver>-Bazaar-ZeroHub.apk
+scripts/release-apk-bazaar.sh --skip-build   # re-sign only
 ```
-یا مستقیم با gradle: `./gradlew :TMessagesProj_AppBazaar:assembleAfatBazaar`
+Or directly with Gradle: `./gradlew :TMessagesProj_AppBazaar:assembleAfatBazaar`
 
-- **بدون سرورِ تأیید:** خرید از کیف پول بازار انجام می‌شه ولی فعال نمی‌شه؛ رسید در صف آفلاین می‌مونه و خودکار دوباره فرستاده می‌شه. برای دیدنش: منوی side-menu → «Pending purchases».
-- **بعد از پیاده‌سازی سرور:** همون خرید رو دوباره بزن (یا دکمه‌ی Resend all در صفحه‌ی بالا) تا رسیدِ مانده به سرور برسه و فعال بشه.
-- جزئیات دو فلاو و اسکریپت‌ها: بخش ۷.۱ [BAZAAR_IAB_REPORT.md](BAZAAR_IAB_REPORT.md).
+- **Without a verifying server:** the purchase happens from the Bazaar wallet but is not activated; the receipt stays in the offline queue and is re-sent automatically. To see it: side menu → "Pending purchases".
+- **After the server is implemented:** repeat the same purchase (or press "Resend all" on that screen) so the remaining receipt reaches the server and activates.
+- Details of both flavors and the scripts: section 7.1 of [BAZAAR_IAB_REPORT.md](BAZAAR_IAB_REPORT.md).
