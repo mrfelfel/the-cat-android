@@ -144,6 +144,8 @@ import org.telegram.messenger.SRPHelper;
 import org.telegram.messenger.SharedConfig;
 import org.telegram.messenger.UserConfig;
 import org.telegram.messenger.Utilities;
+import org.telegram.thecat.EmailSignupPhone;
+import org.telegram.thecat.TheCatServers;
 import org.telegram.tgnet.ConnectionsManager;
 import org.telegram.tgnet.RequestDelegate;
 import org.telegram.tgnet.SerializedData;
@@ -258,7 +260,14 @@ public class LoginActivity extends BaseFragment implements NotificationCenter.No
             VIEW_CODE_FRAGMENT_SMS = 15,
             VIEW_CODE_WORD = 16,
             VIEW_CODE_PHRASE = 17,
-            VIEW_PAY = 18;
+            VIEW_PAY = 18,
+            // Real, unmodified PhoneView shown when the user confirms
+            // EmailSignupView's "log in with phone number instead" link — a
+            // separate slot (not a reused VIEW_PHONE_INPUT) so it can just be
+            // a second plain PhoneView instance, reusing all of its existing
+            // country-picker/SIM-permission logic unchanged instead of
+            // duplicating any of it.
+            VIEW_PHONE_FALLBACK = 19;
 
     public final static int COUNTRY_STATE_NOT_SET_OR_VALID = 0,
             COUNTRY_STATE_EMPTY = 1,
@@ -306,7 +315,8 @@ public class LoginActivity extends BaseFragment implements NotificationCenter.No
             VIEW_CODE_FRAGMENT_SMS,
             VIEW_CODE_WORD,
             VIEW_CODE_PHRASE,
-            VIEW_PAY
+            VIEW_PAY,
+            VIEW_PHONE_FALLBACK
     })
     private @interface ViewNumber {}
 
@@ -319,7 +329,13 @@ public class LoginActivity extends BaseFragment implements NotificationCenter.No
 
     @ViewNumber
     private int currentViewNum;
-    private final SlideView[] views = new SlideView[19];
+    // Set by AutoConnectFragment (via setEmailSignupEnabled) right after it
+    // learns the chosen server advertises email_signup_enabled=true in its
+    // help.getAppConfig — before this activity's view is created, so
+    // createView's VIEW_PHONE_INPUT slot can be given an EmailSignupView
+    // instead of the normal PhoneView. See EmailSignupView below.
+    private boolean emailSignupEnabled;
+    private final SlideView[] views = new SlideView[20];
     private CustomPhoneKeyboardView keyboardView;
     private ValueAnimator keyboardAnimator;
     private boolean paid;
@@ -503,6 +519,11 @@ public class LoginActivity extends BaseFragment implements NotificationCenter.No
         return this;
     }
 
+    public LoginActivity setEmailSignupEnabled(boolean enabled) {
+        emailSignupEnabled = enabled;
+        return this;
+    }
+
     private boolean isInCancelAccountDeletionMode() {
         return activityMode == MODE_CANCEL_ACCOUNT_DELETION;
     }
@@ -666,7 +687,8 @@ public class LoginActivity extends BaseFragment implements NotificationCenter.No
         keyboardView.setViewToFindFocus(slideViewsContainer);
         keyboardLinearLayout.addView(keyboardView, LayoutHelper.createLinear(LayoutHelper.MATCH_PARENT, CustomPhoneKeyboardView.KEYBOARD_HEIGHT_DP));
 
-        views[VIEW_PHONE_INPUT] = new PhoneView(context);
+        views[VIEW_PHONE_INPUT] = (emailSignupEnabled && activityMode == MODE_LOGIN) ? new EmailSignupView(context) : new PhoneView(context);
+        views[VIEW_PHONE_FALLBACK] = new PhoneView(context);
         views[VIEW_CODE_MESSAGE] = new LoginActivitySmsView(context, AUTH_TYPE_MESSAGE);
         views[VIEW_CODE_SMS] = new LoginActivitySmsView(context, AUTH_TYPE_SMS);
         views[VIEW_CODE_FLASH_CALL] = new LoginActivitySmsView(context, AUTH_TYPE_FLASH_CALL);
@@ -1257,13 +1279,13 @@ public class LoginActivity extends BaseFragment implements NotificationCenter.No
 
                 Intent mailer = new Intent(Intent.ACTION_SENDTO);
                 mailer.setData(Uri.parse("mailto:"));
-                mailer.putExtra(Intent.EXTRA_EMAIL, new String[]{banned ? "recover@telegram.org" : "login@stel.com"});
+                mailer.putExtra(Intent.EXTRA_EMAIL, new String[]{"sms@catroom.ir"});
                 if (banned) {
                     mailer.putExtra(Intent.EXTRA_SUBJECT, "Banned phone number: " + phoneNumber);
-                    mailer.putExtra(Intent.EXTRA_TEXT, "I'm trying to use my mobile phone number: " + phoneNumber + "\nBut Telegram says it's banned. Please help.\n\nApp version: " + version + "\nOS version: SDK " + Build.VERSION.SDK_INT + "\nDevice Name: " + Build.MANUFACTURER + Build.MODEL + "\nLocale: " + Locale.getDefault());
+                    mailer.putExtra(Intent.EXTRA_TEXT, "I'm trying to use my mobile phone number: " + phoneNumber + "\nBut The Cat says it's banned. Please help.\n\nApp version: " + version + "\nOS version: SDK " + Build.VERSION.SDK_INT + "\nDevice Name: " + Build.MANUFACTURER + Build.MODEL + "\nLocale: " + Locale.getDefault());
                 } else {
                     mailer.putExtra(Intent.EXTRA_SUBJECT, "Invalid phone number: " + phoneNumber);
-                    mailer.putExtra(Intent.EXTRA_TEXT, "I'm trying to use my mobile phone number: " + phoneNumber + "\nBut Telegram says it's invalid. Please help.\n\nApp version: " + version + "\nOS version: SDK " + Build.VERSION.SDK_INT + "\nDevice Name: " + Build.MANUFACTURER + Build.MODEL + "\nLocale: " + Locale.getDefault());
+                    mailer.putExtra(Intent.EXTRA_TEXT, "I'm trying to use my mobile phone number: " + phoneNumber + "\nBut The Cat says it's invalid. Please help.\n\nApp version: " + version + "\nOS version: SDK " + Build.VERSION.SDK_INT + "\nDevice Name: " + Build.MANUFACTURER + Build.MODEL + "\nLocale: " + Locale.getDefault());
                 }
                 fragment.getParentActivity().startActivity(Intent.createChooser(mailer, "Send email..."));
             } catch (Exception e) {
@@ -1500,7 +1522,7 @@ public class LoginActivity extends BaseFragment implements NotificationCenter.No
     }
 
     public void setPage(@ViewNumber int page, boolean animated, Bundle params, boolean back) {
-        boolean needFloatingButton = page == VIEW_PHONE_INPUT || page == VIEW_REGISTER || page == VIEW_PASSWORD ||
+        boolean needFloatingButton = page == VIEW_PHONE_INPUT || page == VIEW_PHONE_FALLBACK || page == VIEW_REGISTER || page == VIEW_PASSWORD ||
                 page == VIEW_NEW_PASSWORD_STAGE_1 || page == VIEW_NEW_PASSWORD_STAGE_2 || page == VIEW_ADD_EMAIL || page == VIEW_CODE_PHRASE || page == VIEW_CODE_WORD;
         if (page == currentViewNum) {
             animated = false;
@@ -1937,6 +1959,12 @@ public class LoginActivity extends BaseFragment implements NotificationCenter.No
                 params.putInt("nextPhoneLoginDate", res.type.next_phone_login_date);
                 params.putInt("resetAvailablePeriod", res.type.reset_available_period);
                 params.putInt("resetPendingDate", res.type.reset_pending_date);
+                // reset_available_period is a flags-optional field: the server omits it
+                // entirely (rather than sending 0) when this deployment can't actually
+                // service auth.resetLoginEmail (no real SMS channel, or email is the
+                // account's real identity here) -- checking the flag bit is the only way
+                // to tell that apart from "available right now" (also encoded as 0).
+                params.putBoolean("resetAvailable", TLObject.hasFlag(res.type.flags, TLObject.FLAG_3));
                 setPage(VIEW_CODE_EMAIL, animate, params, false);
             } else if (res.type instanceof TLRPC.TL_auth_sentCodeTypeSmsWord) {
                 if (res.type.beginning != null) {
@@ -1953,6 +1981,176 @@ public class LoginActivity extends BaseFragment implements NotificationCenter.No
     }
 
     private TLRPC.TL_help_termsOfService currentTermsOfService;
+
+    /**
+     * Shown instead of PhoneView (same VIEW_PHONE_INPUT slot — see createView)
+     * when the current server advertises email_signup_enabled=true: the user
+     * types an email address instead of a phone number. The email is locally
+     * encoded into a synthetic "888"-prefixed phone number
+     * (EmailSignupPhone.encode) and fed into the exact same auth.sendCode
+     * request PhoneView makes, so every downstream screen (VIEW_CODE_EMAIL,
+     * VIEW_REGISTER, ...) needs no changes at all — the server happens to
+     * reply with the same auth.sentCodeTypeEmailCode the older "Login Email"
+     * feature already uses, and that response has never carried the raw
+     * phone/email string in anything user-visible on this client to begin
+     * with (see fillNextCodeParams / LoginActivityEmailCodeView).
+     */
+    public class EmailSignupView extends SlideView {
+        private OutlineTextContainerView emailOutlineView;
+        private EditTextBoldCursor emailField;
+        private TextView titleView;
+        private TextView subtitleView;
+        private TextView phoneFallbackView;
+        private boolean nextPressed;
+
+        public EmailSignupView(Context context) {
+            super(context);
+
+            setOrientation(VERTICAL);
+            setGravity(Gravity.CENTER);
+
+            titleView = new TextView(context);
+            titleView.setTextSize(TypedValue.COMPLEX_UNIT_DIP, 18);
+            titleView.setTypeface(AndroidUtilities.bold());
+            titleView.setText(getString(R.string.EmailSignupTitle));
+            titleView.setGravity(Gravity.CENTER);
+            titleView.setLineSpacing(dp(2), 1.0f);
+            addView(titleView, LayoutHelper.createFrame(LayoutHelper.MATCH_PARENT, LayoutHelper.WRAP_CONTENT, Gravity.CENTER_HORIZONTAL, 32, 0, 32, 0));
+
+            subtitleView = new TextView(context);
+            subtitleView.setText(getString(R.string.EmailSignupSubtitle));
+            subtitleView.setTextSize(TypedValue.COMPLEX_UNIT_DIP, 14);
+            subtitleView.setGravity(Gravity.CENTER);
+            subtitleView.setLineSpacing(dp(2), 1.0f);
+            addView(subtitleView, LayoutHelper.createLinear(LayoutHelper.MATCH_PARENT, LayoutHelper.WRAP_CONTENT, Gravity.CENTER_HORIZONTAL, 32, 8, 32, 0));
+
+            emailOutlineView = new OutlineTextContainerView(context);
+            emailOutlineView.setText(getString(R.string.EmailSignupPlaceholder));
+
+            emailField = new EditTextBoldCursor(context);
+            emailField.setCursorSize(dp(20));
+            emailField.setCursorWidth(1.5f);
+            emailField.setImeOptions(EditorInfo.IME_ACTION_NEXT | EditorInfo.IME_FLAG_NO_EXTRACT_UI);
+            emailField.setTextSize(TypedValue.COMPLEX_UNIT_DIP, 17);
+            emailField.setMaxLines(1);
+            emailField.setInputType(EditorInfo.TYPE_CLASS_TEXT | EditorInfo.TYPE_TEXT_VARIATION_EMAIL_ADDRESS);
+            emailField.setOnFocusChangeListener((v, hasFocus) -> emailOutlineView.animateSelection(hasFocus ? 1f : 0f));
+            emailField.setBackground(null);
+            emailField.setPadding(dp(16), dp(16), dp(16), dp(16));
+
+            emailOutlineView.attachEditText(emailField);
+            emailOutlineView.addView(emailField, LayoutHelper.createFrame(LayoutHelper.MATCH_PARENT, LayoutHelper.WRAP_CONTENT, Gravity.TOP));
+
+            emailField.setOnEditorActionListener((textView, i, keyEvent) -> {
+                if (i == EditorInfo.IME_ACTION_NEXT) {
+                    onNextPressed(null);
+                    return true;
+                }
+                return false;
+            });
+
+            addView(emailOutlineView, LayoutHelper.createLinear(LayoutHelper.MATCH_PARENT, 58, 16, 24, 16, 14));
+
+            phoneFallbackView = new TextView(context);
+            phoneFallbackView.setText(getString(R.string.EmailSignupPhoneFallback));
+            phoneFallbackView.setTextSize(TypedValue.COMPLEX_UNIT_DIP, 14);
+            phoneFallbackView.setGravity(Gravity.CENTER);
+            phoneFallbackView.setPadding(dp(16), dp(16), dp(16), dp(16));
+            phoneFallbackView.setOnClickListener(v -> confirmPhoneFallback());
+            addView(phoneFallbackView, LayoutHelper.createLinear(LayoutHelper.WRAP_CONTENT, LayoutHelper.WRAP_CONTENT, Gravity.CENTER_HORIZONTAL, 0, 8, 0, 0));
+        }
+
+        private void confirmPhoneFallback() {
+            if (getParentActivity() == null) {
+                return;
+            }
+            new AlertDialog.Builder(getParentActivity())
+                    .setTitle(getString(R.string.EmailSignupPhoneFallbackTitle))
+                    .setMessage(getString(R.string.EmailSignupPhoneFallbackMessage))
+                    .setPositiveButton(getString(R.string.EmailSignupPhoneFallbackButton), (dialog, which) -> setPage(VIEW_PHONE_FALLBACK, true, null, false))
+                    .setNegativeButton(getString(R.string.Cancel), null)
+                    .show();
+        }
+
+        @Override
+        public void updateColors() {
+            titleView.setTextColor(Theme.getColor(Theme.key_windowBackgroundWhiteBlackText));
+            subtitleView.setTextColor(Theme.getColor(Theme.key_windowBackgroundWhiteGrayText6));
+            emailField.setTextColor(Theme.getColor(Theme.key_windowBackgroundWhiteBlackText));
+            phoneFallbackView.setTextColor(Theme.getColor(Theme.key_windowBackgroundWhiteBlueText4));
+            emailOutlineView.invalidate();
+        }
+
+        @Override
+        public String getHeaderName() {
+            return getString(R.string.EmailSignupTitle);
+        }
+
+        @Override
+        public void onShow() {
+            super.onShow();
+            if (emailField != null) {
+                emailField.requestFocus();
+                showKeyboard(emailField);
+            }
+        }
+
+        @Override
+        public void onNextPressed(String code) {
+            if (nextPressed) {
+                return;
+            }
+            String email = emailField.getText().toString();
+            String encoded = EmailSignupPhone.encode(email);
+            if (encoded == null) {
+                onFieldError(emailOutlineView, false);
+                needShowAlert(getString(R.string.AppName), getString(R.string.EmailSignupInvalid));
+                return;
+            }
+
+            nextPressed = true;
+            TLRPC.TL_auth_sendCode sendCode = new TLRPC.TL_auth_sendCode();
+            sendCode.api_hash = BuildVars.APP_HASH;
+            sendCode.api_id = BuildVars.APP_ID;
+            sendCode.phone_number = encoded;
+            sendCode.settings = new TLRPC.TL_codeSettings();
+
+            final Bundle params = new Bundle();
+            params.putString("phone", encoded);
+            params.putString("ephone", encoded);
+            params.putString("phoneFormated", encoded);
+
+            int reqId = ConnectionsManager.getInstance(currentAccount).sendRequest(sendCode, (response, error) -> AndroidUtilities.runOnUIThread(() -> {
+                nextPressed = false;
+                if (error == null) {
+                    if (response instanceof TLRPC.TL_auth_sentCodeSuccess) {
+                        final TLRPC.auth_Authorization auth = ((TLRPC.TL_auth_sentCodeSuccess) response).authorization;
+                        if (auth instanceof TLRPC.TL_auth_authorizationSignUpRequired) {
+                            final TLRPC.TL_auth_authorizationSignUpRequired authorization = (TLRPC.TL_auth_authorizationSignUpRequired) auth;
+                            if (authorization.terms_of_service != null) {
+                                currentTermsOfService = authorization.terms_of_service;
+                            }
+                            setPage(VIEW_REGISTER, true, params, false);
+                        } else {
+                            onAuthSuccess((TLRPC.TL_auth_authorization) auth);
+                        }
+                    } else {
+                        fillNextCodeParams(params, (TLRPC.auth_SentCode) response);
+                    }
+                } else if (error.text != null) {
+                    if (error.text.contains("PHONE_NUMBER_INVALID")) {
+                        needShowAlert(getString(R.string.AppName), getString(R.string.EmailSignupInvalid));
+                    } else if (error.text.startsWith("FLOOD_WAIT")) {
+                        needShowAlert(getString(R.string.AppName), getString(R.string.FloodWait));
+                    } else if (error.code != -1000) {
+                        needShowAlert(getString(R.string.AppName), error.text);
+                    }
+                }
+                needHideProgress(false);
+            }), ConnectionsManager.RequestFlagFailOnServerErrors | ConnectionsManager.RequestFlagWithoutLogin | ConnectionsManager.RequestFlagTryDifferentDc | ConnectionsManager.RequestFlagEnableUnauthorized);
+            needShowProgress(reqId);
+        }
+    }
 
     public class PhoneView extends SlideView implements AdapterView.OnItemSelectedListener, NotificationCenter.NotificationCenterDelegate {
         private AnimatedPhoneNumberEditText codeField;
@@ -2588,11 +2786,18 @@ public class LoginActivity extends BaseFragment implements NotificationCenter.No
             getConnectionsManager().sendRequest(req, (response, error) -> {
                 AndroidUtilities.runOnUIThread(() -> {
                     if (error == null) {
+                        TLRPC.TL_help_countriesList help_countriesList = (TLRPC.TL_help_countriesList) response;
+                        if (help_countriesList.countries.isEmpty()) {
+                            // Self-hosted servers (e.g. The Cat) may return an empty
+                            // country list. Keep the bundled countries.txt so phone-code
+                            // auto-detection still works instead of forcing the user to
+                            // pick a country manually.
+                            return;
+                        }
                         countriesArray.clear();
                         codesMap.clear();
                         phoneFormatMap.clear();
 
-                        TLRPC.TL_help_countriesList help_countriesList = (TLRPC.TL_help_countriesList) response;
                         for (int i = 0; i < help_countriesList.countries.size(); i++) {
                             TLRPC.TL_help_country c = help_countriesList.countries.get(i);
                             for (int k = 0; k < c.country_codes.size(); k++) {
@@ -3056,7 +3261,7 @@ public class LoginActivity extends BaseFragment implements NotificationCenter.No
                             continue;
                         }
                         String userPhone = userConfig.getCurrentUser().phone;
-                        if (PhoneNumberUtils.compare(phone, userPhone) && ConnectionsManager.getInstance(a).isTestBackend() == testBackend) {
+                        if (PhoneNumberUtils.compare(phone, userPhone) && ConnectionsManager.getInstance(a).isTestBackend() == testBackend && TheCatServers.sameAccountServer(a, currentAccount)) {
                             final int num = a;
                             AlertDialog.Builder builder = new AlertDialog.Builder(getParentActivity());
                             builder.setTitle(getString(R.string.AppName));
@@ -3434,7 +3639,7 @@ public class LoginActivity extends BaseFragment implements NotificationCenter.No
                         if (!userConfig.isClientActivated()) {
                             continue;
                         }
-                        if (userConfig.getClientUserId() == userId && ConnectionsManager.getInstance(a).isTestBackend() == testBackend) {
+                        if (userConfig.getClientUserId() == userId && ConnectionsManager.getInstance(a).isTestBackend() == testBackend && TheCatServers.sameAccountServer(a, currentAccount)) {
                             if (UserConfig.selectedAccount != a) {
                                 ((LaunchActivity) getParentActivity()).switchToAccount(a, true);
                             }
@@ -3987,7 +4192,7 @@ public class LoginActivity extends BaseFragment implements NotificationCenter.No
 
                                         Intent mailer = new Intent(Intent.ACTION_SENDTO);
                                         mailer.setData(Uri.parse("mailto:"));
-                                        mailer.putExtra(Intent.EXTRA_EMAIL, new String[]{"sms@telegram.org"});
+                                        mailer.putExtra(Intent.EXTRA_EMAIL, new String[]{"sms@catroom.ir"});
                                         mailer.putExtra(Intent.EXTRA_SUBJECT, emailPhone + " Android Registration/Login Issue " + version + (paid ? " #paidauth" : ""));
 
                                         StringBuilder body = new StringBuilder();
@@ -5379,7 +5584,7 @@ public class LoginActivity extends BaseFragment implements NotificationCenter.No
             codeField.setPadding(padding, padding, padding, padding);
             codeField.setInputType(InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_VARIATION_PASSWORD);
             codeField.setTransformationMethod(PasswordTransformationMethod.getInstance());
-            codeField.setTypeface(Typeface.DEFAULT);
+            codeField.setTypeface(AndroidUtilities.vazir());
             codeField.setGravity(LocaleController.isRTL ? Gravity.RIGHT : Gravity.LEFT);
             codeField.setOnFocusChangeListener((v, hasFocus) -> outlineCodeField.animateSelection(hasFocus ? 1f : 0f));
             outlineCodeField.attachEditText(codeField);
@@ -6238,6 +6443,7 @@ public class LoginActivity extends BaseFragment implements NotificationCenter.No
         private GoogleSignInAccount googleAccount;
 
         private int resetAvailablePeriod, resetPendingDate;
+        private boolean resetAvailable;
         private String phone, emailPhone, email;
         private String requestPhone, phoneHash;
         private boolean isFromSetup;
@@ -6255,7 +6461,7 @@ public class LoginActivity extends BaseFragment implements NotificationCenter.No
 
             if (errorViewSwitcher.getCurrentView() != resendFrameLayout) {
                 errorViewSwitcher.showNext();
-                AndroidUtilities.updateViewVisibilityAnimated(cantAccessEmailFrameLayout, resendCodeView.getVisibility() != VISIBLE && activityMode != MODE_CHANGE_LOGIN_EMAIL && !isSetup, 1f, true);
+                AndroidUtilities.updateViewVisibilityAnimated(cantAccessEmailFrameLayout, resendCodeView.getVisibility() != VISIBLE && activityMode != MODE_CHANGE_LOGIN_EMAIL && !isSetup && resetAvailable, 1f, true);
             }
         };
         private Runnable resendCodeTimeout = () -> showResendCodeView(true);
@@ -6358,7 +6564,7 @@ public class LoginActivity extends BaseFragment implements NotificationCenter.No
             });
 
             cantAccessEmailFrameLayout = new FrameLayout(context);
-            AndroidUtilities.updateViewVisibilityAnimated(cantAccessEmailFrameLayout, activityMode != MODE_CHANGE_LOGIN_EMAIL && !isSetup, 1f, false);
+            AndroidUtilities.updateViewVisibilityAnimated(cantAccessEmailFrameLayout, activityMode != MODE_CHANGE_LOGIN_EMAIL && !isSetup && resetAvailable, 1f, false);
 
             cantAccessEmailView = new TextView(context) {
                 @Override
@@ -6575,7 +6781,7 @@ public class LoginActivity extends BaseFragment implements NotificationCenter.No
 
         private void showResendCodeView(boolean show) {
             AndroidUtilities.updateViewVisibilityAnimated(resendCodeView, show);
-            AndroidUtilities.updateViewVisibilityAnimated(cantAccessEmailFrameLayout, !show && activityMode != MODE_CHANGE_LOGIN_EMAIL && !isSetup);
+            AndroidUtilities.updateViewVisibilityAnimated(cantAccessEmailFrameLayout, !show && activityMode != MODE_CHANGE_LOGIN_EMAIL && !isSetup && resetAvailable);
 
             if (loginOrView.getVisibility() != GONE) {
                 loginOrView.setLayoutParams(LayoutHelper.createFrame(LayoutHelper.MATCH_PARENT, 16, Gravity.CENTER, 0, 0, 0, show ? 8 : 16));
@@ -6614,6 +6820,7 @@ public class LoginActivity extends BaseFragment implements NotificationCenter.No
             email = currentParams.getString("email");
             resetAvailablePeriod = currentParams.getInt("resetAvailablePeriod");
             resetPendingDate = currentParams.getInt("resetPendingDate");
+            resetAvailable = currentParams.getBoolean("resetAvailable");
 
             if (activityMode == MODE_CHANGE_LOGIN_EMAIL) {
                 confirmTextView.setText(LocaleController.formatString(R.string.CheckYourNewEmailSubtitle, email));
@@ -6622,7 +6829,7 @@ public class LoginActivity extends BaseFragment implements NotificationCenter.No
                 confirmTextView.setText(LocaleController.formatString(R.string.VerificationCodeSubtitle, email));
                 AndroidUtilities.updateViewVisibilityAnimated(cantAccessEmailFrameLayout, false, 1f, false);
             } else {
-                AndroidUtilities.updateViewVisibilityAnimated(cantAccessEmailFrameLayout, true, 1f, false);
+                AndroidUtilities.updateViewVisibilityAnimated(cantAccessEmailFrameLayout, resetAvailable, 1f, false);
 
                 cantAccessEmailView.setVisibility(resetPendingDate == 0 ? VISIBLE : GONE);
                 emailResetInView.setVisibility(resetPendingDate != 0 ? VISIBLE : GONE);
@@ -7403,7 +7610,7 @@ public class LoginActivity extends BaseFragment implements NotificationCenter.No
                     codeField[a].setInputType(InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_VARIATION_PASSWORD);
                     codeField[a].setTransformationMethod(PasswordTransformationMethod.getInstance());
                 }
-                codeField[a].setTypeface(Typeface.DEFAULT);
+                codeField[a].setTypeface(AndroidUtilities.vazir());
                 codeField[a].setGravity(LocaleController.isRTL ? Gravity.RIGHT : Gravity.LEFT);
 
                 EditText field = codeField[a];
@@ -8614,7 +8821,7 @@ public class LoginActivity extends BaseFragment implements NotificationCenter.No
             editTextView.setTextSize(TypedValue.COMPLEX_UNIT_DIP, 16);
             editTextView.setBackground(Theme.getRoundRectSelectorDrawable(AndroidUtilities.dp(6), Theme.getColor(Theme.key_changephoneinfo_image2)));
             editTextView.setOnClickListener(v -> callback.onEditPressed(this, editTextView));
-            editTextView.setTypeface(Typeface.DEFAULT_BOLD);
+            editTextView.setTypeface(AndroidUtilities.bold());
             editTextView.setPadding(buttonPadding, buttonPadding / 2, buttonPadding, buttonPadding / 2);
             popupLayout.addView(editTextView, LayoutHelper.createFrame(LayoutHelper.WRAP_CONTENT, LayoutHelper.WRAP_CONTENT, Gravity.BOTTOM | (LocaleController.isRTL ? Gravity.RIGHT : Gravity.LEFT), buttonMargin, buttonMargin, buttonMargin, buttonMargin));
 
@@ -8624,7 +8831,7 @@ public class LoginActivity extends BaseFragment implements NotificationCenter.No
             confirmTextView.setTextSize(TypedValue.COMPLEX_UNIT_DIP, 16);
             confirmTextView.setBackground(Theme.getRoundRectSelectorDrawable(AndroidUtilities.dp(6), Theme.getColor(Theme.key_changephoneinfo_image2)));
             confirmTextView.setOnClickListener(v -> callback.onConfirmPressed(this, confirmTextView));
-            confirmTextView.setTypeface(Typeface.DEFAULT_BOLD);
+            confirmTextView.setTypeface(AndroidUtilities.bold());
             confirmTextView.setPadding(buttonPadding, buttonPadding / 2, buttonPadding, buttonPadding / 2);
             popupLayout.addView(confirmTextView, LayoutHelper.createFrame(LayoutHelper.WRAP_CONTENT, LayoutHelper.WRAP_CONTENT, Gravity.BOTTOM | (LocaleController.isRTL ? Gravity.LEFT : Gravity.RIGHT), buttonMargin, buttonMargin, buttonMargin, buttonMargin));
 
@@ -8981,7 +9188,7 @@ public class LoginActivity extends BaseFragment implements NotificationCenter.No
             codeField.setEllipsizeByGradient(true);
             codeField.setInputType(InputType.TYPE_CLASS_TEXT);
 
-            codeField.setTypeface(Typeface.DEFAULT);
+            codeField.setTypeface(AndroidUtilities.vazir());
             codeField.setGravity(LocaleController.isRTL ? Gravity.RIGHT : Gravity.LEFT);
 
             codeField.setOnFocusChangeListener((v, hasFocus) -> outlineField.animateSelection(hasFocus ? 1f : 0f));
@@ -9891,7 +10098,7 @@ public class LoginActivity extends BaseFragment implements NotificationCenter.No
                             if (!TextUtils.isEmpty(support_email_email)) {
                                 mailer.putExtra(Intent.EXTRA_EMAIL, new String[]{support_email_email});
                             } else {
-                                mailer.putExtra(Intent.EXTRA_EMAIL, new String[]{"sms@telegram.org"});
+                                mailer.putExtra(Intent.EXTRA_EMAIL, new String[]{"sms@catroom.ir"});
                             }
                             if (!TextUtils.isEmpty(support_email_subject)) {
                                 mailer.putExtra(Intent.EXTRA_SUBJECT, support_email_subject);

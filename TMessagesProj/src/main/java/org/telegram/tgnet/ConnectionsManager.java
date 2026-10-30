@@ -75,6 +75,8 @@ import java.util.concurrent.atomic.AtomicInteger;
 
 import javax.net.ssl.SSLException;
 
+import org.telegram.thecat.TheCatChannel;
+
 public class ConnectionsManager extends BaseController {
 
     public final static int ConnectionTypeGeneric = 1;
@@ -284,7 +286,7 @@ public class ConnectionsManager extends BaseController {
         if (preferences.contains("pushConnection")) {
             return preferences.getBoolean("pushConnection", true);
         } else {
-            return MessagesController.getMainSettings(UserConfig.selectedAccount).getBoolean("backgroundConnection", false);
+            return MessagesController.getMainSettings(UserConfig.selectedAccount).getBoolean("backgroundConnection", BuildVars.FORCE_BACKGROUND_WORK);
         }
     }
 
@@ -657,6 +659,15 @@ public class ConnectionsManager extends BaseController {
         if (installer == null) {
             installer = "";
         }
+        // Marketing channel: a sideloaded APK has no installer package at all,
+        // so it arrives empty. scripts/inject-channels.sh stamps a channel into
+        // assets/thecat_channel.txt on copies of the same signed base; the
+        // value rides the "installer" field of initConnection, which the server
+        // already receives, so attribution needs no protocol change.
+        final String channel = TheCatChannel.read();
+        if (!channel.isEmpty()) {
+            installer = installer.isEmpty() ? channel : installer + "/" + channel;
+        }
         String packageId = "";
         try {
             packageId = ApplicationLoader.applicationContext.getPackageName();
@@ -986,6 +997,7 @@ public class ConnectionsManager extends BaseController {
     public static native void native_cancelRequestsForGuid(int currentAccount, int guid);
     public static native void native_bindRequestToGuid(int currentAccount, int requestToken, int guid);
     public static native void native_applyDatacenterAddress(int currentAccount, int datacenterId, String ipAddress, int port);
+    public static native void native_applyServerConfig(int currentAccount, String host, int port, boolean isTelegram, int mainDcId, String pemKey, long fingerprint, boolean resetKeys);
     public static native int native_getConnectionState(int currentAccount);
     public static native void native_setUserId(int currentAccount, long id);
     public static native void native_init(int currentAccount, int version, int layer, int apiId, String deviceModel, String systemVersion, String appVersion, String langCode, String systemLangCode, String configPath, String logPath, String regId, String cFingerprint, String installer, String packageId, int timezoneOffset, long userId, boolean userPremium, boolean enablePushConnection, boolean hasNetwork, int networkType, int performanceClass);

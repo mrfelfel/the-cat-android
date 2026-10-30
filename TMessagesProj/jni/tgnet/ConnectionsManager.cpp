@@ -135,6 +135,20 @@ ConnectionsManager::~ConnectionsManager() {
     pthread_mutex_destroy(&mutex);
 }
 
+// One case per slot up to MAX_ACCOUNT_COUNT -- each arm's function-local
+// static gives the same thread-safe lazy-init guarantee C++11 "magic
+// statics" always did here, just written out for all 50 slots instead of
+// the original 10. A missing case here for any instanceNum in range would
+// silently alias that account onto a neighboring one's native instance
+// (mismatched instanceNum vs. the JNIEnv/Java-side account it's actually
+// serving), corrupting native state -- this used to fall through to
+// instance9 for every instanceNum >= 10, which is exactly what broke once
+// MAX_ACCOUNT_COUNT was raised without extending this switch to match.
+static_assert(MAX_ACCOUNT_COUNT == 50,
+    "getInstance()'s switch below has one case per slot 0..49 -- if "
+    "MAX_ACCOUNT_COUNT changes, extend (or shrink) that switch to match, "
+    "then update this assert.");
+
 ConnectionsManager& ConnectionsManager::getInstance(int32_t instanceNum) {
     switch (instanceNum) {
         case 0:
@@ -150,9 +164,144 @@ ConnectionsManager& ConnectionsManager::getInstance(int32_t instanceNum) {
             static ConnectionsManager instance3(3);
             return instance3;
         case 4:
-        default:
             static ConnectionsManager instance4(4);
             return instance4;
+        case 5:
+            static ConnectionsManager instance5(5);
+            return instance5;
+        case 6:
+            static ConnectionsManager instance6(6);
+            return instance6;
+        case 7:
+            static ConnectionsManager instance7(7);
+            return instance7;
+        case 8:
+            static ConnectionsManager instance8(8);
+            return instance8;
+        case 9:
+            static ConnectionsManager instance9(9);
+            return instance9;
+        case 10:
+            static ConnectionsManager instance10(10);
+            return instance10;
+        case 11:
+            static ConnectionsManager instance11(11);
+            return instance11;
+        case 12:
+            static ConnectionsManager instance12(12);
+            return instance12;
+        case 13:
+            static ConnectionsManager instance13(13);
+            return instance13;
+        case 14:
+            static ConnectionsManager instance14(14);
+            return instance14;
+        case 15:
+            static ConnectionsManager instance15(15);
+            return instance15;
+        case 16:
+            static ConnectionsManager instance16(16);
+            return instance16;
+        case 17:
+            static ConnectionsManager instance17(17);
+            return instance17;
+        case 18:
+            static ConnectionsManager instance18(18);
+            return instance18;
+        case 19:
+            static ConnectionsManager instance19(19);
+            return instance19;
+        case 20:
+            static ConnectionsManager instance20(20);
+            return instance20;
+        case 21:
+            static ConnectionsManager instance21(21);
+            return instance21;
+        case 22:
+            static ConnectionsManager instance22(22);
+            return instance22;
+        case 23:
+            static ConnectionsManager instance23(23);
+            return instance23;
+        case 24:
+            static ConnectionsManager instance24(24);
+            return instance24;
+        case 25:
+            static ConnectionsManager instance25(25);
+            return instance25;
+        case 26:
+            static ConnectionsManager instance26(26);
+            return instance26;
+        case 27:
+            static ConnectionsManager instance27(27);
+            return instance27;
+        case 28:
+            static ConnectionsManager instance28(28);
+            return instance28;
+        case 29:
+            static ConnectionsManager instance29(29);
+            return instance29;
+        case 30:
+            static ConnectionsManager instance30(30);
+            return instance30;
+        case 31:
+            static ConnectionsManager instance31(31);
+            return instance31;
+        case 32:
+            static ConnectionsManager instance32(32);
+            return instance32;
+        case 33:
+            static ConnectionsManager instance33(33);
+            return instance33;
+        case 34:
+            static ConnectionsManager instance34(34);
+            return instance34;
+        case 35:
+            static ConnectionsManager instance35(35);
+            return instance35;
+        case 36:
+            static ConnectionsManager instance36(36);
+            return instance36;
+        case 37:
+            static ConnectionsManager instance37(37);
+            return instance37;
+        case 38:
+            static ConnectionsManager instance38(38);
+            return instance38;
+        case 39:
+            static ConnectionsManager instance39(39);
+            return instance39;
+        case 40:
+            static ConnectionsManager instance40(40);
+            return instance40;
+        case 41:
+            static ConnectionsManager instance41(41);
+            return instance41;
+        case 42:
+            static ConnectionsManager instance42(42);
+            return instance42;
+        case 43:
+            static ConnectionsManager instance43(43);
+            return instance43;
+        case 44:
+            static ConnectionsManager instance44(44);
+            return instance44;
+        case 45:
+            static ConnectionsManager instance45(45);
+            return instance45;
+        case 46:
+            static ConnectionsManager instance46(46);
+            return instance46;
+        case 47:
+            static ConnectionsManager instance47(47);
+            return instance47;
+        case 48:
+            static ConnectionsManager instance48(48);
+            return instance48;
+        case 49:
+        default:
+            static ConnectionsManager instance49(49);
+            return instance49;
     }
 }
 
@@ -1814,63 +1963,159 @@ uint8_t ConnectionsManager::getIpStratagy() {
 void ConnectionsManager::initDatacenters() {
     Datacenter *datacenter;
     if (!testBackend) {
-        if (datacenters.find(1) == datacenters.end()) {
-            datacenter = new Datacenter(instanceNum, 1);
-            datacenter->addAddressAndPort("149.154.175.50", 443, 0, "");
-            datacenter->addAddressAndPort("2001:b28:f23d:f001:0000:0000:0000:000a", 443, 1, "");
-            datacenters[1] = datacenter;
-        }
-
-        if (datacenters.find(2) == datacenters.end()) {
-            datacenter = new Datacenter(instanceNum, 2);
-            datacenter->addAddressAndPort("149.154.167.51", 443, 0, "");
-            datacenter->addAddressAndPort("95.161.76.100", 443, 0, "");
-            datacenter->addAddressAndPort("2001:67c:4e8:f002:0000:0000:0000:000a", 443, 1, "");
-            datacenters[2] = datacenter;
-        }
-
-        if (datacenters.find(3) == datacenters.end()) {
-            datacenter = new Datacenter(instanceNum, 3);
-            datacenter->addAddressAndPort("149.154.175.100", 443, 0, "");
-            datacenter->addAddressAndPort("2001:b28:f23d:f003:0000:0000:0000:000a", 443, 1, "");
-            datacenters[3] = datacenter;
-        }
-
-        if (datacenters.find(4) == datacenters.end()) {
-            datacenter = new Datacenter(instanceNum, 4);
-            datacenter->addAddressAndPort("149.154.167.91", 443, 0, "");
-            datacenter->addAddressAndPort("2001:67c:4e8:f004:0000:0000:0000:000a", 443, 1, "");
-            datacenters[4] = datacenter;
-        }
-
-        if (datacenters.find(5) == datacenters.end()) {
-            datacenter = new Datacenter(instanceNum, 5);
-            datacenter->addAddressAndPort("149.154.171.5", 443, 0, "");
-            datacenter->addAddressAndPort("2001:b28:f23f:f005:0000:0000:0000:000a", 443, 1, "");
-            datacenters[5] = datacenter;
+        struct DcEntry { const char *ip; int port; };
+        static const DcEntry prod[5] = {
+            {"149.154.175.50", 443},
+            {"149.154.167.51", 443},
+            {"149.154.175.100", 443},
+            {"149.154.167.91", 443},
+            {"149.154.171.5",  443}
+        };
+        for (int dcId = 1; dcId <= 5; dcId++) {
+            if (datacenters.find(dcId) == datacenters.end()) {
+                datacenter = new Datacenter(instanceNum, dcId);
+                datacenter->addAddressAndPort(prod[dcId - 1].ip, prod[dcId - 1].port, 0, "");
+                datacenters[dcId] = datacenter;
+            }
         }
     } else {
-        if (datacenters.find(1) == datacenters.end()) {
-            datacenter = new Datacenter(instanceNum, 1);
-            datacenter->addAddressAndPort("149.154.175.40", 443, 0, "");
-            datacenter->addAddressAndPort("2001:b28:f23d:f001:0000:0000:0000:000e", 443, 1, "");
-            datacenters[1] = datacenter;
-        }
-
-        if (datacenters.find(2) == datacenters.end()) {
-            datacenter = new Datacenter(instanceNum, 2);
-            datacenter->addAddressAndPort("149.154.167.40", 443, 0, "");
-            datacenter->addAddressAndPort("2001:67c:4e8:f002:0000:0000:0000:000e", 443, 1, "");
-            datacenters[2] = datacenter;
-        }
-
-        if (datacenters.find(3) == datacenters.end()) {
-            datacenter = new Datacenter(instanceNum, 3);
-            datacenter->addAddressAndPort("149.154.175.117", 443, 0, "");
-            datacenter->addAddressAndPort("2001:b28:f23d:f003:0000:0000:0000:000e", 443, 1, "");
-            datacenters[3] = datacenter;
+        struct DcEntry { const char *ip; int port; };
+        static const DcEntry test[3] = {
+            {"149.154.175.40",  443},
+            {"149.154.167.40",  443},
+            {"149.154.175.117", 443}
+        };
+        for (int dcId = 1; dcId <= 3; dcId++) {
+            if (datacenters.find(dcId) == datacenters.end()) {
+                datacenter = new Datacenter(instanceNum, dcId);
+                datacenter->addAddressAndPort(test[dcId - 1].ip, test[dcId - 1].port, 0, "");
+                datacenters[dcId] = datacenter;
+            }
         }
     }
+}
+
+void ConnectionsManager::applyServerConfig(std::string host, uint32_t port, bool isTelegram, uint32_t mainDcId, std::string pemKey, uint64_t fingerprint, bool resetKeys) {
+    scheduleTask([&, host, port, isTelegram, mainDcId, pemKey, fingerprint, resetKeys] {
+        // 1. Per-instance RSA key. Cleared thread_local cache so the next handshake
+        //    reloads it (Handshake::serverPublicKeys is shared across accounts).
+        //    fingerprint == 0 means the caller doesn't know it (custom server with
+        //    its own key) — compute it from the PEM, like the desktop client does.
+        customPublicKey = pemKey;
+        customPublicKeyFingerprint = (fingerprint != 0)
+                ? fingerprint
+                : Handshake::calculatePublicKeyFingerprint(pemKey);
+        Handshake::cleanupServerKeys();
+
+        // 2. Build the DC 1..5 address table for the chosen server.
+        struct DcEntry { const char *ip; int port; };
+        static const DcEntry prod[5] = {
+            {"149.154.175.50", 443},
+            {"149.154.167.51", 443},
+            {"149.154.175.100", 443},
+            {"149.154.167.91", 443},
+            {"149.154.171.5",  443}
+        };
+        if (isTelegram) {
+            // Telegram multi-DC: behave like stock Telegram. Ensure all 5 DCs exist
+            // and carry their home address, using ADD (never overwrite) so addresses
+            // learned via help.getConfig survive — otherwise media/stickers/reactions
+            // /custom emoji that live on DC3/4/5 cannot be downloaded. We seed BOTH
+            // the regular and the download/media address with the DC's IP so a media
+            // connection always has an endpoint even before getConfig responds.
+            //
+            // Exception: if the account was previously on a locked single-server
+            // backend (thecat/custom — see the else branch below),
+            // every dc_id 1..5 was force-mapped onto that one non-Telegram host via
+            // replaceAddresses. ADD would leave those poisoned entries in place
+            // alongside the new Telegram address, so DC1/3/4/5 could still silently
+            // resolve to the old server while the client believes it's on Telegram
+            // (this was the actual cause of "can't log into a Telegram account after
+            // using a custom server" — AuthKey/RSA and empty dc_options errors).
+            // Use the same REPLACE semantics the single-server branch uses instead.
+            bool wasLocked = serverOptionsLocked;
+            serverOptionsLocked = false;
+            for (int dcId = 1; dcId <= 5; dcId++) {
+                Datacenter *dc = getDatacenterWithId(dcId);
+                if (dc == nullptr) {
+                    dc = new Datacenter(instanceNum, dcId);
+                    datacenters[dcId] = dc;
+                }
+                if (resetKeys && wasLocked) {
+                    std::vector<TcpAddress> addrs;
+                    addrs.emplace_back(prod[dcId - 1].ip, prod[dcId - 1].port, 0, "");
+                    std::vector<TcpAddress> downloadAddrs;
+                    downloadAddrs.emplace_back(prod[dcId - 1].ip, prod[dcId - 1].port, TcpAddressFlagDownload, "");
+                    dc->replaceAddresses(addrs, 0);
+                    dc->replaceAddresses(downloadAddrs, TcpAddressFlagDownload);
+                } else {
+                    dc->addAddressAndPort(prod[dcId - 1].ip, prod[dcId - 1].port, 0, "");
+                    dc->addAddressAndPort(prod[dcId - 1].ip, prod[dcId - 1].port, TcpAddressFlagDownload, "");
+                }
+            }
+            if (resetKeys) {
+                // Fresh switch to Telegram: drop stale keys/sessions, home on DC2.
+                for (int dcId = 1; dcId <= 5; dcId++) {
+                    Datacenter *dc = getDatacenterWithId(dcId);
+                    dc->suspendConnections(true);
+                    dc->clearAuthKey(HandshakeTypeAll);
+                    dc->clearServerSalts(false);
+                    dc->clearServerSalts(true);
+                    dc->resetAddressAndPortNum();
+                    dc->recreateSessions(HandshakeTypeAll);
+                }
+                currentDatacenterId = (mainDcId > 0) ? mainDcId : 2;
+            } else if (currentDatacenterId == 0) {
+                currentDatacenterId = (mainDcId > 0) ? mainDcId : 2;
+            }
+            // On restore (resetKeys == false) leave saved addresses, sessions, keys
+            // and the home DC untouched so stock multi-DC media handling keeps working.
+        } else {
+            // Single-server backend: every dc_id resolves to the one machine, so
+            // file/media references to dc 2..5 still connect. Map both the regular and
+            // the download/media address to the single host:port, then lock so
+            // help.getConfig can't override it.
+            serverOptionsLocked = true;
+            for (int dcId = 1; dcId <= 5; dcId++) {
+                Datacenter *dc = getDatacenterWithId(dcId);
+                if (dc == nullptr) {
+                    dc = new Datacenter(instanceNum, dcId);
+                    datacenters[dcId] = dc;
+                }
+                std::vector<TcpAddress> addrs;
+                addrs.emplace_back(host, port, 0, "");
+                std::vector<TcpAddress> downloadAddrs;
+                downloadAddrs.emplace_back(host, port, 0, "");
+                dc->suspendConnections(true);
+                if (resetKeys) {
+                    dc->clearAuthKey(HandshakeTypeAll);
+                }
+                dc->replaceAddresses(addrs, 0);          // regular ipv4
+                dc->replaceAddresses(downloadAddrs, 2);  // download/media ipv4 -> same host
+                dc->resetAddressAndPortNum();
+                dc->recreateSessions(HandshakeTypeAll);
+            }
+            currentDatacenterId = (mainDcId > 0) ? mainDcId : 1;
+        }
+        movingToDatacenterId = DEFAULT_DATACENTER_ID;
+        saveConfig();
+
+        // 3. Reconnect on the current DC if it has no key yet.
+        Datacenter *cur = getDatacenterWithId(currentDatacenterId);
+        if (cur != nullptr && !cur->hasAuthKey(ConnectionTypeGeneric, 0) && !cur->isHandshakingAny()) {
+            cur->clearServerSalts(false);
+            cur->clearServerSalts(true);
+            cur->beginHandshake(HandshakeTypeAll, true);
+        }
+        // 4. Telegram: refresh the full multi-DC table (download/media endpoints and
+        //    address alternates for every DC) so media on non-home DCs loads.
+        if (isTelegram) {
+            updateDcSettings(0, false, false);
+        }
+        scheduleTask([&] {
+            processRequestQueue(0, 0);
+        });
+    });
 }
 
 void ConnectionsManager::attachConnection(ConnectionSocket *connection) {
@@ -3425,7 +3670,7 @@ void ConnectionsManager::updateDcSettings(uint32_t dcNum, bool workaround, bool 
                 info->addAddressAndPort(dcOption);
             }
 
-            if (!map.empty()) {
+            if (!map.empty() && !serverOptionsLocked) {
                 for (auto & iter : map) {
                     Datacenter *datacenter = getDatacenterWithId(iter.first);
                     DatacenterInfo *info = iter.second.get();
@@ -3442,6 +3687,7 @@ void ConnectionsManager::updateDcSettings(uint32_t dcNum, bool workaround, bool 
                         moveToDatacenter(iter.first);
                     }
                 }
+                initDatacenters();
                 saveConfig();
                 scheduleTask([&] {
                     processRequestQueue(AllConnectionTypes, 0);

@@ -38,6 +38,7 @@ import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
 import android.os.Parcelable;
+import android.os.PowerManager;
 import android.os.StatFs;
 import android.os.StrictMode;
 import android.os.SystemClock;
@@ -125,6 +126,8 @@ import org.telegram.messenger.MessageObject;
 import org.telegram.messenger.MessagesController;
 import org.telegram.messenger.MessagesStorage;
 import org.telegram.messenger.NotificationCenter;
+import org.telegram.thecat.TheCatServer;
+import org.telegram.thecat.TheCatServers;
 import org.telegram.messenger.NotificationsController;
 import org.telegram.messenger.OpenAttachedMenuBotReceiver;
 import org.telegram.messenger.PushListenerController;
@@ -259,7 +262,7 @@ import java.util.zip.ZipInputStream;
 public class LaunchActivity extends BasePermissionsActivity implements INavigationLayout.INavigationLayoutDelegate, NotificationCenter.NotificationCenterDelegate, DialogsActivity.DialogsActivityDelegate, IPipActivity {
     public final static String EXTRA_FORCE_NOT_INTERNAL_APPS = "force_not_internal_apps";
     public final static String EXTRA_FORCE_REQUEST = "force_request";
-    public final static Pattern PREFIX_T_ME_PATTERN = Pattern.compile("^(?:http(?:s|)://|)([A-z0-9-]+?)\\.t\\.me");
+    public final static Pattern PREFIX_LINK_PATTERN = Pattern.compile("^(?:http(?:s|)://|)([A-z0-9-]+?)\\.cr0\\.ir");
 
     public static boolean isActive;
     private static int activeInstanceCount;
@@ -1083,9 +1086,17 @@ public class LaunchActivity extends BasePermissionsActivity implements INavigati
     }
 
     private BaseFragment getClientNotActivatedFragment() {
+        // Resuming a mid-login flow - server already chosen, continue where we left off
         if (LoginActivity.loadCurrentState(false, currentAccount).getInt("currentViewNum", 0) != 0) {
             return new LoginActivity();
         }
+        // Adding a second account - skip intro, auto-connect to The Cat server
+        for (int a = 0; a < UserConfig.MAX_ACCOUNT_COUNT; a++) {
+            if (a != currentAccount && UserConfig.getInstance(a).isClientActivated()) {
+                return new AutoConnectFragment();
+            }
+        }
+        // Fresh install - show intro; server picker is triggered from "Start Messaging"
         return new IntroActivity();
     }
 
@@ -1232,6 +1243,49 @@ public class LaunchActivity extends BasePermissionsActivity implements INavigati
         updateCurrentConnectionState(currentAccount);
 
         switchingAccount = false;
+    }
+
+    /**
+     * Routes a self-hosted The Cat invite/username link to the account that owns its
+     * host. If that account is already active, proceed; otherwise offer to switch to it
+     * and re-handle the link.
+     */
+    private boolean routeTheCatLinkToTheCatAccount(int thecatAccount, Intent intent, int[] intentAccount, Browser.Progress progress) {
+        if (thecatAccount < 0 || thecatAccount == intentAccount[0]) {
+            return true; // already on the owning account
+        }
+        if (progress != null) {
+            progress.end();
+        }
+        final TheCatServer server = TheCatServers.getServerForAccount(thecatAccount);
+        final String name = (server != null && server.name != null) ? server.name : "TheCat";
+        final Intent reintent = new Intent(intent);
+        reintent.putExtra("currentAccount", thecatAccount);
+        try {
+            AlertDialog.Builder b = new AlertDialog.Builder(this);
+            b.setTitle(LocaleController.getString(R.string.AppName));
+            b.setMessage("This link belongs to your " + name + " account. Switch to it to open the link?");
+            b.setPositiveButton(LocaleController.getString(R.string.OK), (d, w) -> {
+                switchToAccount(thecatAccount, true);
+                AndroidUtilities.runOnUIThread(() -> handleIntent(reintent, false, false, false, null, true, true), 200);
+            });
+            b.setNegativeButton(LocaleController.getString(R.string.Cancel), null);
+            b.show();
+        } catch (Exception ignore) {
+        }
+        return false;
+    }
+
+    /** Shown when an thecat:// link targets a server the user has no account on. */
+    private void showTheCatOtherServerDialog(String host) {
+        try {
+            AlertDialog.Builder b = new AlertDialog.Builder(this);
+            b.setTitle(LocaleController.getString(R.string.AppName));
+            b.setMessage("This link belongs to a server you are not connected to" + (TextUtils.isEmpty(host) ? "." : (": " + host)));
+            b.setPositiveButton(LocaleController.getString(R.string.OK), null);
+            b.show();
+        } catch (Exception ignore) {
+        }
     }
 
     private void switchToAvailableAccountOrLogout() {
@@ -1959,14 +2013,47 @@ public class LaunchActivity extends BasePermissionsActivity implements INavigati
                                         progress.end();
                                     }
                                     return false;
+                                case "thecat": {
+                                    // The Cat self-hosted scheme: thecat://<host>/<rest>. The host
+                                    // identifies which server (me_url_prefix) the link belongs to.
+                                    // Reinterpret as https://<host>/<rest> and fall through to the
+                                    // http/https handler, which routes it to the owning account.
+                                    String thecatHost = data.getHost() != null ? data.getHost().toLowerCase() : "";
+                                    if (TheCatServers.findTheCatAccountForHost(thecatHost) < 0) {
+                                        // Not logged in to any account on this server.
+                                        if (progress != null) {
+                                            progress.end();
+                                        }
+                                        showTheCatOtherServerDialog(thecatHost);
+                                        intent.setAction(null);
+                                        return false;
+                                    }
+                                    data = Uri.parse("https://" + thecatHost
+                                            + (TextUtils.isEmpty(data.getPath()) ? "/" : data.getPath())
+                                            + (TextUtils.isEmpty(data.getQuery()) ? "" : "?" + data.getQuery()));
+                                    // fall through to case "http"/"https"
+                                }
                                 case "http":
                                 case "https": {
                                     String host = data.getHost().toLowerCase();
-                                    Matcher prefixMatcher = PREFIX_T_ME_PATTERN.matcher(host);
+                                    Matcher prefixMatcher = PREFIX_LINK_PATTERN.matcher(host);
                                     boolean isPrefix = prefixMatcher.find();
-                                    if (host.equals("telegram.me") || host.equals("t.me") || host.equals("telegram.dog") || isPrefix) {
-                                        if (isPrefix) {
-                                            data = Uri.parse("https://t.me/" + prefixMatcher.group(1) + (TextUtils.isEmpty(data.getPath()) ? "" : data.getPath()) + (TextUtils.isEmpty(data.getQuery()) ? "" : "?" + data.getQuery()));
+                                    // The Cat self-hosted invite/username link: the host matches an
+                                    // account's me_url_prefix and that server advertises thecat=true.
+                                    int thecatAccount = TheCatServers.findTheCatAccountForHost(host);
+                                    boolean isTheCat = thecatAccount >= 0;
+                                    if (host.equals("cr0.ir") || isPrefix || isTheCat) {
+                                        if (isTheCat) {
+                                            // Route on the The Cat account that owns this host (switch if needed).
+                                            if (!routeTheCatLinkToTheCatAccount(thecatAccount, intent, intentAccount, progress)) {
+                                                return false;
+                                            }
+                                            // Rewrite host -> t.me so the shared t.me path parser handles /+hash, /username, etc.
+                                            data = Uri.parse("https://cr0.ir" + (TextUtils.isEmpty(data.getPath()) ? "/" : data.getPath()) + (TextUtils.isEmpty(data.getQuery()) ? "" : "?" + data.getQuery()));
+                                        } else {
+                                            if (isPrefix) {
+                                                data = Uri.parse("https://cr0.ir/" + prefixMatcher.group(1) + (TextUtils.isEmpty(data.getPath()) ? "" : data.getPath()) + (TextUtils.isEmpty(data.getQuery()) ? "" : "?" + data.getQuery()));
+                                            }
                                         }
                                         String path = data.getPath();
                                         if (path != null && path.length() > 1) {
@@ -2854,9 +2941,9 @@ public class LaunchActivity extends BasePermissionsActivity implements INavigati
                                             NotificationCenter.getInstance(intentAccount[0]).postNotificationName(NotificationCenter.closeChats);
                                             push_user_id = userId;
                                             String mimeType = cursor.getString(cursor.getColumnIndex(ContactsContract.Data.MIMETYPE));
-                                            if (TextUtils.equals(mimeType, "vnd.android.cursor.item/vnd.org.telegram.messenger.android.call")) {
+                                            if (TextUtils.equals(mimeType, "vnd.android.cursor.item/vnd.com.thecat.messenger.android.call")) {
                                                 audioCallUser = true;
-                                            } else if (TextUtils.equals(mimeType, "vnd.android.cursor.item/vnd.org.telegram.messenger.android.call.video")) {
+                                            } else if (TextUtils.equals(mimeType, "vnd.android.cursor.item/vnd.com.thecat.messenger.android.call.video")) {
                                                 videoCallUser = true;
                                             }
                                         }
@@ -2867,7 +2954,7 @@ public class LaunchActivity extends BasePermissionsActivity implements INavigati
                             }
                         }
                     }
-                } else if (intent.getAction().equals("org.telegram.messenger.OPEN_ACCOUNT")) {
+                } else if (intent.getAction().equals("com.thecat.messenger.OPEN_ACCOUNT")) {
                     open_settings = 1;
                 } else if (intent.getAction().equals("new_dialog")) {
                     open_new_dialog = 1;
@@ -5033,6 +5120,12 @@ public class LaunchActivity extends BasePermissionsActivity implements INavigati
                                     builder.setMessage(LocaleController.getString(R.string.FloodWait));
                                 } else if (error.text.equals("USERS_TOO_MUCH")) {
                                     builder.setMessage(LocaleController.getString(R.string.JoinToGroupErrorFull));
+                                } else if (error.text.equals("INVITE_REQUEST_SENT")) {
+                                    // Not an error: the invite requires admin approval and the join
+                                    // request was recorded server-side. This path (state == 1, unlike
+                                    // JoinGroupAlert's own importChatInvite handler) was missing this
+                                    // case entirely and fell through to "channel does not exist" below.
+                                    builder.setMessage(LocaleController.getString(R.string.RequestToJoinSent));
                                 } else {
                                     builder.setMessage(LocaleController.getString(R.string.JoinToGroupErrorNotExist));
                                 }
@@ -6981,6 +7074,7 @@ public class LaunchActivity extends BasePermissionsActivity implements INavigati
             ApplicationLoader.mainInterfacePausedStageQueueTime = System.currentTimeMillis();
         });
         checkFreeDiscSpace(0);
+        checkBatteryOptimization();
         MediaController.checkGallery();
         onPasscodeResume();
         if (passcodeDialog == null || passcodeDialog.passcodeView.getVisibility() != View.VISIBLE) {
@@ -7874,6 +7968,50 @@ public class LaunchActivity extends BasePermissionsActivity implements INavigati
         loadingThemeInfo = null;
         loadingThemeFileName = null;
         loadingTheme = null;
+    }
+
+    // Without Firebase, the app relies on its own foreground keep-alive service to stay
+    // connected in the background — Doze/App Standby can still throttle it unless the
+    // user grants an ignore-battery-optimizations exemption. Asked once, ever, right
+    // after the account is activated (not before login); the answer (either way) is
+    // remembered so we never nag again, regardless of what the user picked.
+    private void checkBatteryOptimization() {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.M) {
+            return;
+        }
+        if (!UserConfig.getInstance(currentAccount).isClientActivated()) {
+            return;
+        }
+        SharedPreferences preferences = MessagesController.getGlobalMainSettings();
+        if (preferences.getBoolean("batteryOptimizationAsked", false)) {
+            return;
+        }
+        preferences.edit().putBoolean("batteryOptimizationAsked", true).commit();
+        try {
+            PowerManager powerManager = (PowerManager) getSystemService(Context.POWER_SERVICE);
+            if (powerManager != null && powerManager.isIgnoringBatteryOptimizations(getPackageName())) {
+                return;
+            }
+        } catch (Throwable ignore) {
+            return;
+        }
+        try {
+            new AlertDialog.Builder(this)
+                    .setTitle(getString(R.string.BatteryOptimizationTitle))
+                    .setMessage(getString(R.string.BatteryOptimizationMessage))
+                    .setPositiveButton(getString(R.string.Allow), (dialog, which) -> {
+                        try {
+                            Intent intent = new Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS, Uri.parse("package:" + getPackageName()));
+                            startActivity(intent);
+                        } catch (Throwable e) {
+                            FileLog.e(e);
+                        }
+                    })
+                    .setNegativeButton(getString(R.string.Cancel), null)
+                    .show();
+        } catch (Throwable ignore) {
+
+        }
     }
 
     private boolean checkFreeDiscSpaceShown;

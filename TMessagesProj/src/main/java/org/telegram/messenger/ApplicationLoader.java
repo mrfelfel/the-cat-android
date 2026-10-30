@@ -37,6 +37,7 @@ import com.google.android.gms.common.GooglePlayServicesUtil;
 
 import org.json.JSONObject;
 import org.telegram.messenger.voip.VideoCapturerDevice;
+import org.telegram.thecat.TheCatServers;
 import org.telegram.tgnet.ConnectionsManager;
 import org.telegram.tgnet.TLRPC;
 import org.telegram.ui.ActionBar.BaseFragment;
@@ -120,6 +121,22 @@ public class ApplicationLoader extends Application {
         return applicationLoaderInstance.onGetApplicationId();
     }
 
+    /**
+     * True in the standalone dev-server flavor. A virtual override rather than a
+     * BuildConfig boolean read here: the library is minified by its OWN R8 pass
+     * that only ever sees this base class, so any field or method constant
+     * folded from it bakes in the store value -- which is exactly how the dev
+     * flavor once shipped compiled against :30001. Same reasoning as
+     * getStoreBillingBridge().
+     */
+    public boolean isDevServerBuild() {
+        return false;
+    }
+
+    public static boolean isDevServerBuildStatic() {
+        return applicationLoaderInstance != null && applicationLoaderInstance.isDevServerBuild();
+    }
+
     protected String onGetApplicationId() {
         return null;
     }
@@ -130,6 +147,11 @@ public class ApplicationLoader extends Application {
 
     public static boolean isStandaloneBuild() {
         return applicationLoaderInstance.isStandalone();
+    }
+
+    /** True on the Cafe Bazaar flavor (TMessagesProj_AppBazaar). */
+    public static boolean isBazaarStoreBuild() {
+        return applicationLoaderInstance.isBazaarBuild();
     }
 
     public static boolean isBetaBuild() {
@@ -146,6 +168,26 @@ public class ApplicationLoader extends Application {
 
     protected boolean isStandalone() {
         return false;
+    }
+
+    protected boolean isBazaarBuild() {
+        return false;
+    }
+
+    /**
+     * Store-specific billing bridge, provided by the flavour's loader (the Bazaar
+     * module overrides this to return a lazily-created Poolakey bridge). Read by
+     * StoreBilling through {@code applicationLoaderInstance}.
+     *
+     * The getter and StoreBilling are kept by rules in the LIBRARY's
+     * proguard-rules.pro — the library's own R8 pass cannot see app-module
+     * subclasses and has twice constant-folded unkept variants of this chain to
+     * null/false, silently disabling every store purchase. Do not remove those
+     * keep rules; isBazaarBuild()/addItemOptions() ship correctly only by
+     * accident of bytecode shape, not by protection.
+     */
+    public org.telegram.messenger.billing.StoreBillingBridge getStoreBillingBridge() {
+        return null;
     }
 
     protected boolean isBeta() {
@@ -253,6 +295,7 @@ public class ApplicationLoader extends Application {
             } else {
                 ConnectionsManager.getInstance(a);
             }
+            TheCatServers.applyStoredServerToAccount(a);
             TLRPC.User user = UserConfig.getInstance(a).getCurrentUser();
             if (user != null) {
                 MessagesController.getInstance(a).putUser(user, true);
@@ -260,8 +303,12 @@ public class ApplicationLoader extends Application {
             }
         }
 
+        // Discover a reachable Cat server endpoint in the background (seed-first).
+        TheCatServers.startCatNetResolution();
+
         ApplicationLoader app = (ApplicationLoader) ApplicationLoader.applicationContext;
         app.initPushServices();
+        ApplicationLoader.ensureBackgroundWorkEnabled();
         if (BuildVars.LOGS_ENABLED) {
             FileLog.d("app initied");
         }
@@ -349,28 +396,101 @@ public class ApplicationLoader extends Application {
 
         applicationHandler = new Handler(applicationContext.getMainLooper());
 
-        AndroidUtilities.runOnUIThread(ApplicationLoader::startPushService);
+        AndroidUtilities.runOnUIThread(() -> {
+            ApplicationLoader.ensureBackgroundWorkEnabled();
+            ApplicationLoader.startPushService();
+        });
 
         LauncherIconController.tryFixLauncherIconIfNeeded();
         ProxyRotationController.init();
     }
 
-    public static void startPushService() {
+    private static final String BACKGROUND_MIGRATION_KEY = "thecatBackgroundV1";
+    private static final String BACKGROUND_DISABLE_MIGRATION_KEY = "thecatBackgroundV1Disabled";
+
+    public static boolean isPushServiceEnabled() {
         SharedPreferences preferences = MessagesController.getGlobalNotificationsSettings();
-        boolean enabled;
         if (preferences.contains("pushService")) {
-            enabled = preferences.getBoolean("pushService", true);
-        } else {
-            enabled = MessagesController.getMainSettings(UserConfig.selectedAccount).getBoolean("keepAliveService", false);
+            return preferences.getBoolean("pushService", true);
         }
-        if (enabled) {
+        return MessagesController.getMainSettings(UserConfig.selectedAccount).getBoolean("keepAliveService", BuildVars.FORCE_BACKGROUND_WORK);
+    }
+
+    public static void ensureBackgroundWorkEnabled() {
+        SharedPreferences global = MessagesController.getGlobalNotificationsSettings();
+        if (BuildVars.FORCE_BACKGROUND_WORK) {
+            if (!global.getBoolean(BACKGROUND_MIGRATION_KEY, false)) {
+                global.edit()
+                        .putBoolean("pushService", true)
+                        .putBoolean("pushConnection", true)
+                        .putBoolean(BACKGROUND_MIGRATION_KEY, true)
+                        .apply();
+                for (int a = 0; a < UserConfig.MAX_ACCOUNT_COUNT; a++) {
+                    if (!UserConfig.getInstance(a).isClientActivated()) {
+                        continue;
+                    }
+                    SharedPreferences main = MessagesController.getMainSettings(a);
+                    main.edit()
+                            .putBoolean("keepAliveService", true)
+                            .putBoolean("backgroundConnection", true)
+                            .apply();
+                    MessagesController messagesController = MessagesController.getInstance(a);
+                    messagesController.keepAliveService = true;
+                    messagesController.backgroundConnection = true;
+                    ConnectionsManager.getInstance(a).setPushConnectionEnabled(true);
+                }
+            }
+            return;
+        }
+        // One-time undo of the earlier force-enable migration above. Runs once
+        // (BACKGROUND_DISABLE_MIGRATION_KEY), so a user who later turns
+        // Keep-Alive Service back on in settings is never overridden again.
+        if (global.getBoolean(BACKGROUND_DISABLE_MIGRATION_KEY, false)) {
+            return;
+        }
+        global.edit()
+                .putBoolean("pushService", false)
+                .putBoolean("pushConnection", false)
+                .putBoolean(BACKGROUND_DISABLE_MIGRATION_KEY, true)
+                .apply();
+        for (int a = 0; a < UserConfig.MAX_ACCOUNT_COUNT; a++) {
+            if (!UserConfig.getInstance(a).isClientActivated()) {
+                continue;
+            }
+            SharedPreferences main = MessagesController.getMainSettings(a);
+            main.edit()
+                    .putBoolean("keepAliveService", false)
+                    .putBoolean("backgroundConnection", false)
+                    .apply();
+            MessagesController messagesController = MessagesController.getInstance(a);
+            messagesController.keepAliveService = false;
+            messagesController.backgroundConnection = false;
+            ConnectionsManager.getInstance(a).setPushConnectionEnabled(false);
+        }
+        startPushService();
+    }
+
+    public static void startPushService() {
+        if (applicationContext == null) {
+            return;
+        }
+        if (isPushServiceEnabled()) {
             try {
-                applicationContext.startService(new Intent(applicationContext, NotificationsService.class));
+                Intent intent = new Intent(applicationContext, NotificationsService.class);
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                    applicationContext.startForegroundService(intent);
+                } else {
+                    applicationContext.startService(intent);
+                }
+            } catch (Throwable e) {
+                FileLog.e(e);
+            }
+        } else {
+            try {
+                applicationContext.stopService(new Intent(applicationContext, NotificationsService.class));
             } catch (Throwable ignore) {
 
             }
-        } else {
-            applicationContext.stopService(new Intent(applicationContext, NotificationsService.class));
         }
     }
 

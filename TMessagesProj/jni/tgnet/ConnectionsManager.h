@@ -58,6 +58,12 @@ public:
     void cancelRequestsForGuid(int32_t guid);
     void bindRequestToGuid(int32_t requestToken, int32_t guid);
     void applyDatacenterAddress(uint32_t datacenterId, std::string ipAddress, uint32_t port);
+    // Atomically applies a selected server (mirrors desktop TheCat::ApplyServerToDcOptions):
+    //  - single-server (isTelegram=false): map DC 1..5 onto one host:port, lock options
+    //  - Telegram (isTelegram=true): restore real Telegram DC 1..5, leave options unlocked
+    // Sets the per-instance RSA key, switches the current DC, optionally resets auth keys,
+    // then reconnects. Runs on the network thread.
+    void applyServerConfig(std::string host, uint32_t port, bool isTelegram, uint32_t mainDcId, std::string pemKey, uint64_t fingerprint, bool resetKeys);
     void setDelegate(ConnectiosManagerDelegate *connectiosManagerDelegate);
     ConnectionState getConnectionState();
     void setUserId(int64_t userId);
@@ -147,6 +153,11 @@ private:
     int32_t pingTime;
     int64_t pingTimeMs;
     bool testBackend = false;
+    std::string customPublicKey;
+    uint64_t customPublicKeyFingerprint = 0;
+    // When true (single-server backend), help.getConfig must not overwrite the
+    // locked DC 1..5 -> host:port mapping. Mirrors desktop DcOptions::optionsLocked.
+    bool serverOptionsLocked = false;
     bool clientBlocked = true;
     std::string lastInitSystemLangcode = "";
     std::atomic<uint32_t> lastRequestToken{50000000};

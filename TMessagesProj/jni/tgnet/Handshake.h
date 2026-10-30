@@ -10,6 +10,7 @@
 #define HANDSHAKE_H
 
 #include <stdint.h>
+#include <string>
 #include "Defines.h"
 #include <openssl/bn.h>
 
@@ -34,6 +35,11 @@ public:
     void onHandshakeConnectionConnected();
     void onHandshakeConnectionClosed();
     static void cleanupServerKeys();
+    // Computes the Telegram public-key fingerprint (lower 64 bits of SHA1 of the
+    // TL-serialized modulus+exponent) from a PEM RSA public key. Returns 0 on
+    // parse failure. Lets custom servers with their own key work without Java
+    // needing to know the fingerprint in advance.
+    static uint64_t calculatePublicKeyFingerprint(const std::string &pem);
     HandshakeType getType();
     ByteArray *getPendingAuthKey();
     int64_t getPendingAuthKeyId();
