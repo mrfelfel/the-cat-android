@@ -1,0 +1,31 @@
+name: Version bump
+
+# Stores reject a submission unless versionCode increases. On every push to
+# main this workflow commits the bump back to the source (a dedicated bot
+# commit), so every release build carries a fresh versionCode. The bump
+# commit carries [skip ci] so it cannot re-trigger itself.
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: write
+
+jobs:
+  bump:
+    if: ${{ !contains(github.event.head_commit.message, '[skip ci]') }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Bump APP_VERSION_CODE
+        run: |
+          code="$(grep '^APP_VERSION_CODE=' gradle.properties | cut -d= -f2)"
+          next=$((code + 1))
+          sed -i "s/^APP_VERSION_CODE=.*/APP_VERSION_CODE=$next/" gradle.properties
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add gradle.properties
+          git commit -m "chore: bump versionCode to $next [skip ci]"
+          git push
