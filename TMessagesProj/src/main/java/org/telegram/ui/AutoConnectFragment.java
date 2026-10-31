@@ -58,8 +58,8 @@ public class AutoConnectFragment extends BaseFragment {
 
     @Override
     public boolean onFragmentCreate() {
-        TheCatServer server = TheCatServers.thecatServer();
         int targetAccount = targetAccount();
+        TheCatServer server = TheCatServers.thecatServer();
         TheCatServers.setServerForAccount(server.id, targetAccount);
         TheCatServers.applyServerToAccount(server, targetAccount); // resetKeys=true
         ConnectionsManager.getInstance(targetAccount).resumeNetworkMaybe();

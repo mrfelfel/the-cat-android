@@ -9592,11 +9592,11 @@
     <string name="GroupMessagesChargePrice">Charge Stars for Messages</string>
     <string name="GroupMessagesChargePriceInfo">If you turn this on, regular members of the group will have to pay Stars to send messages.</string>
     <string name="GroupMessagesPriceHeader">Set price per message</string>
-    <string name="GroupMessagesPriceInfo">Your group will receive %1$s of the selected fee (~%2$s$) for each incoming message.</string>
+    <string name="GroupMessagesPriceInfo">Your group will receive %1$s of the selected fee (~%2$s) for each incoming message.</string>
     <string name="PrivateMessagesChargePrice">Charge for Messages</string>
     <string name="PrivateMessagesChargePriceInfo">Charge a fee for messages from people outside your contacts or those you haven\'t messaged first.</string>
     <string name="PrivateMessagesPriceHeader">Set your price per message</string>
-    <string name="PrivateMessagesPriceInfo">You will receive %1$s of the selected fee (~%2$s$) for each incoming message.</string>
+    <string name="PrivateMessagesPriceInfo">You will receive %1$s of the selected fee (~%2$s) for each incoming message.</string>
     <string name="PrivateMessagesChargePremiumLocked">Unlock with The Cat Premium</string>
     <string name="PrivateMessagesExceptionsHeader">Exception</string>
     <string name="PrivateMessagesExceptions">Remove Fee</string>
@@ -9918,7 +9918,7 @@
     <string name="PostSuggestionsAddTime">Edit Time</string>
     <string name="PostSuggestionsAddTimeHint">Select the date and time you want the message to be published.</string>
     <string name="PostSuggestionsAddTimeHint2">The post will remain available for at least %d hours from this date.</string>
-    <string name="PostSuggestionsPriceInfo2">You will receive %1$s of the selected fee (~%2$s$) for each incoming message.</string>
+    <string name="PostSuggestionsPriceInfo2">You will receive %1$s of the selected fee (~%2$s) for each incoming message.</string>
 
     <string name="SuggestAPostBelow">Suggest a Post Below</string>
     <string name="SuggestAPostBelowHint">Tap here to suggest a post for %s</string>

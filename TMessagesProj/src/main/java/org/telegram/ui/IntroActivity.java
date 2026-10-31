@@ -82,7 +82,6 @@ import org.telegram.ui.Components.RLottieImageView;
 import org.telegram.ui.Components.ScaleStateListAnimator;
 import org.telegram.ui.Components.SimpleThemeDescription;
 import org.telegram.ui.Components.voip.CellFlickerDrawable;
-import org.telegram.thecat.TheCatServers;
 
 import java.util.ArrayList;
 
@@ -409,12 +408,12 @@ public class IntroActivity extends BaseFragment implements NotificationCenter.No
             startPressed = true;
             // Auto-connect straight to The Cat server and its login screen --
             // the multi-server picker is intentionally not shown here (see
-            // AutoConnectFragment). Reset so the button works again if the user
-            // navigates back.
-            presentFragment(new AutoConnectFragment());
-            // Reset so the button works again if the user navigates back from the
-            // connect/login flow.
-            startPressed = false;
+            // AutoConnectFragment). removeLast=true drops THIS intro from the
+            // fragment stack (mirrors stock's presentFragment(login, ...)),
+            // otherwise it stays under MainTabsActivity after a successful
+            // login and back-pressing from the main screen lands the now
+            // logged-in user back on the intro -> login flow.
+            presentFragment(new AutoConnectFragment(), true);
         });
 
         bottomPages = new BottomPagesView(context, viewPager, 6);
@@ -575,6 +574,7 @@ public class IntroActivity extends BaseFragment implements NotificationCenter.No
         isOnLogout = true;
         return this;
     }
+
 
     @Override
     public AnimatorSet onCustomTransitionAnimation(boolean isOpen, Runnable callback) {

@@ -26,6 +26,7 @@ public class TextInfoCell extends FrameLayout {
         super(context);
 
         textView = new TextView(context);
+        textView.setTypeface(AndroidUtilities.vazir());
         textView.setTextColor(Theme.getColor(Theme.key_windowBackgroundWhiteGrayText5));
         textView.setTextSize(TypedValue.COMPLEX_UNIT_DIP, 13);
         textView.setGravity(Gravity.CENTER);

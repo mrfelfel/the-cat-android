@@ -1961,42 +1961,23 @@ uint8_t ConnectionsManager::getIpStratagy() {
 }
 
 void ConnectionsManager::initDatacenters() {
-    Datacenter *datacenter;
-    if (!testBackend) {
-        struct DcEntry { const char *ip; int port; };
-        static const DcEntry prod[5] = {
-            {"149.154.175.50", 443},
-            {"149.154.167.51", 443},
-            {"149.154.175.100", 443},
-            {"149.154.167.91", 443},
-            {"149.154.171.5",  443}
-        };
-        for (int dcId = 1; dcId <= 5; dcId++) {
-            if (datacenters.find(dcId) == datacenters.end()) {
-                datacenter = new Datacenter(instanceNum, dcId);
-                datacenter->addAddressAndPort(prod[dcId - 1].ip, prod[dcId - 1].port, 0, "");
-                datacenters[dcId] = datacenter;
-            }
-        }
-    } else {
-        struct DcEntry { const char *ip; int port; };
-        static const DcEntry test[3] = {
-            {"149.154.175.40",  443},
-            {"149.154.167.40",  443},
-            {"149.154.175.117", 443}
-        };
-        for (int dcId = 1; dcId <= 3; dcId++) {
-            if (datacenters.find(dcId) == datacenters.end()) {
-                datacenter = new Datacenter(instanceNum, dcId);
-                datacenter->addAddressAndPort(test[dcId - 1].ip, test[dcId - 1].port, 0, "");
-                datacenters[dcId] = datacenter;
-            }
+    // Seed every DC with the Cat server. This build must never dial a Telegram
+    // address, including the window before applyServerConfig runs and after
+    // switchBackend() wipes the table. Keep in sync with TheCatServers
+    // DEFAULT_HOST / DEFAULT_PORT.
+    static const char *const seedIp = "62.220.127.238";
+    static const int seedPort = 30001;
+    for (int dcId = 1; dcId <= 5; dcId++) {
+        if (datacenters.find(dcId) == datacenters.end()) {
+            Datacenter *datacenter = new Datacenter(instanceNum, dcId);
+            datacenter->addAddressAndPort(seedIp, seedPort, 0, "");
+            datacenters[dcId] = datacenter;
         }
     }
 }
 
 void ConnectionsManager::applyServerConfig(std::string host, uint32_t port, bool isTelegram, uint32_t mainDcId, std::string pemKey, uint64_t fingerprint, bool resetKeys) {
-    scheduleTask([&, host, port, isTelegram, mainDcId, pemKey, fingerprint, resetKeys] {
+    scheduleTask([&, host, port, mainDcId, pemKey, fingerprint, resetKeys] {
         // 1. Per-instance RSA key. Cleared thread_local cache so the next handshake
         //    reloads it (Handshake::serverPublicKeys is shared across accounts).
         //    fingerprint == 0 means the caller doesn't know it (custom server with
@@ -2007,96 +1988,39 @@ void ConnectionsManager::applyServerConfig(std::string host, uint32_t port, bool
                 : Handshake::calculatePublicKeyFingerprint(pemKey);
         Handshake::cleanupServerKeys();
 
-        // 2. Build the DC 1..5 address table for the chosen server.
-        struct DcEntry { const char *ip; int port; };
-        static const DcEntry prod[5] = {
-            {"149.154.175.50", 443},
-            {"149.154.167.51", 443},
-            {"149.154.175.100", 443},
-            {"149.154.167.91", 443},
-            {"149.154.171.5",  443}
-        };
-        if (isTelegram) {
-            // Telegram multi-DC: behave like stock Telegram. Ensure all 5 DCs exist
-            // and carry their home address, using ADD (never overwrite) so addresses
-            // learned via help.getConfig survive — otherwise media/stickers/reactions
-            // /custom emoji that live on DC3/4/5 cannot be downloaded. We seed BOTH
-            // the regular and the download/media address with the DC's IP so a media
-            // connection always has an endpoint even before getConfig responds.
-            //
-            // Exception: if the account was previously on a locked single-server
-            // backend (thecat/custom — see the else branch below),
-            // every dc_id 1..5 was force-mapped onto that one non-Telegram host via
-            // replaceAddresses. ADD would leave those poisoned entries in place
-            // alongside the new Telegram address, so DC1/3/4/5 could still silently
-            // resolve to the old server while the client believes it's on Telegram
-            // (this was the actual cause of "can't log into a Telegram account after
-            // using a custom server" — AuthKey/RSA and empty dc_options errors).
-            // Use the same REPLACE semantics the single-server branch uses instead.
-            bool wasLocked = serverOptionsLocked;
-            serverOptionsLocked = false;
-            for (int dcId = 1; dcId <= 5; dcId++) {
-                Datacenter *dc = getDatacenterWithId(dcId);
-                if (dc == nullptr) {
-                    dc = new Datacenter(instanceNum, dcId);
-                    datacenters[dcId] = dc;
-                }
-                if (resetKeys && wasLocked) {
-                    std::vector<TcpAddress> addrs;
-                    addrs.emplace_back(prod[dcId - 1].ip, prod[dcId - 1].port, 0, "");
-                    std::vector<TcpAddress> downloadAddrs;
-                    downloadAddrs.emplace_back(prod[dcId - 1].ip, prod[dcId - 1].port, TcpAddressFlagDownload, "");
-                    dc->replaceAddresses(addrs, 0);
-                    dc->replaceAddresses(downloadAddrs, TcpAddressFlagDownload);
-                } else {
-                    dc->addAddressAndPort(prod[dcId - 1].ip, prod[dcId - 1].port, 0, "");
-                    dc->addAddressAndPort(prod[dcId - 1].ip, prod[dcId - 1].port, TcpAddressFlagDownload, "");
-                }
+        // 2. Map every dc_id onto the one configured server. isTelegram is
+        //    deliberately ignored: this build must never resolve a DC to a
+        //    Telegram address under any flag. Regular, download/media, temp and
+        //    IPv6 buckets are all rewritten so addresses persisted by an older
+        //    build (or by the old DNS-config path) cannot survive, and the
+        //    lock stops help.getConfig from overriding the endpoint.
+        serverOptionsLocked = true;
+        for (int dcId = 1; dcId <= 5; dcId++) {
+            Datacenter *dc = getDatacenterWithId(dcId);
+            if (dc == nullptr) {
+                dc = new Datacenter(instanceNum, dcId);
+                datacenters[dcId] = dc;
             }
+            std::vector<TcpAddress> addrs;
+            addrs.emplace_back(host, port, 0, "");
+            std::vector<TcpAddress> downloadAddrs;
+            downloadAddrs.emplace_back(host, port, 0, "");
+            std::vector<TcpAddress> tempAddrs;
+            tempAddrs.emplace_back(host, port, 0, "");
+            std::vector<TcpAddress> noIpv6;
+            dc->suspendConnections(true);
             if (resetKeys) {
-                // Fresh switch to Telegram: drop stale keys/sessions, home on DC2.
-                for (int dcId = 1; dcId <= 5; dcId++) {
-                    Datacenter *dc = getDatacenterWithId(dcId);
-                    dc->suspendConnections(true);
-                    dc->clearAuthKey(HandshakeTypeAll);
-                    dc->clearServerSalts(false);
-                    dc->clearServerSalts(true);
-                    dc->resetAddressAndPortNum();
-                    dc->recreateSessions(HandshakeTypeAll);
-                }
-                currentDatacenterId = (mainDcId > 0) ? mainDcId : 2;
-            } else if (currentDatacenterId == 0) {
-                currentDatacenterId = (mainDcId > 0) ? mainDcId : 2;
+                dc->clearAuthKey(HandshakeTypeAll);
             }
-            // On restore (resetKeys == false) leave saved addresses, sessions, keys
-            // and the home DC untouched so stock multi-DC media handling keeps working.
-        } else {
-            // Single-server backend: every dc_id resolves to the one machine, so
-            // file/media references to dc 2..5 still connect. Map both the regular and
-            // the download/media address to the single host:port, then lock so
-            // help.getConfig can't override it.
-            serverOptionsLocked = true;
-            for (int dcId = 1; dcId <= 5; dcId++) {
-                Datacenter *dc = getDatacenterWithId(dcId);
-                if (dc == nullptr) {
-                    dc = new Datacenter(instanceNum, dcId);
-                    datacenters[dcId] = dc;
-                }
-                std::vector<TcpAddress> addrs;
-                addrs.emplace_back(host, port, 0, "");
-                std::vector<TcpAddress> downloadAddrs;
-                downloadAddrs.emplace_back(host, port, 0, "");
-                dc->suspendConnections(true);
-                if (resetKeys) {
-                    dc->clearAuthKey(HandshakeTypeAll);
-                }
-                dc->replaceAddresses(addrs, 0);          // regular ipv4
-                dc->replaceAddresses(downloadAddrs, 2);  // download/media ipv4 -> same host
-                dc->resetAddressAndPortNum();
-                dc->recreateSessions(HandshakeTypeAll);
-            }
-            currentDatacenterId = (mainDcId > 0) ? mainDcId : 1;
+            dc->replaceAddresses(addrs, 0);
+            dc->replaceAddresses(downloadAddrs, TcpAddressFlagDownload);
+            dc->replaceAddresses(tempAddrs, TcpAddressFlagTemp);
+            dc->replaceAddresses(noIpv6, TcpAddressFlagIpv6);
+            dc->replaceAddresses(noIpv6, TcpAddressFlagIpv6 | TcpAddressFlagDownload);
+            dc->resetAddressAndPortNum();
+            dc->recreateSessions(HandshakeTypeAll);
         }
+        currentDatacenterId = (mainDcId > 0) ? mainDcId : 1;
         movingToDatacenterId = DEFAULT_DATACENTER_ID;
         saveConfig();
 
@@ -2106,11 +2030,6 @@ void ConnectionsManager::applyServerConfig(std::string host, uint32_t port, bool
             cur->clearServerSalts(false);
             cur->clearServerSalts(true);
             cur->beginHandshake(HandshakeTypeAll, true);
-        }
-        // 4. Telegram: refresh the full multi-DC table (download/media endpoints and
-        //    address alternates for every DC) so media on non-home DCs loads.
-        if (isTelegram) {
-            updateDcSettings(0, false, false);
         }
         scheduleTask([&] {
             processRequestQueue(0, 0);
@@ -3797,98 +3716,6 @@ void ConnectionsManager::setPushConnectionEnabled(bool value) {
             sendPing(datacenter, true);
         }
     }
-}
-
-inline bool checkPhoneByPrefixesRules(std::string phone, std::string rules) {
-    if (rules.empty() || phone.empty()) {
-        return true;
-    }
-    bool found = false;
-
-    std::stringstream ss(rules);
-    std::string prefix;
-    while (std::getline(ss, prefix, ',')) {
-        if (prefix.empty()) {
-            found = true;
-        } else if (prefix[0] == '+' && phone.find(prefix.substr(1)) == 0) {
-            found = true;
-        } else if (prefix[0] == '-' && phone.find(prefix.substr(1)) == 0) {
-            return false;
-        }
-    }
-    return found;
-}
-
-void ConnectionsManager::applyDnsConfig(NativeByteBuffer *buffer, std::string phone, int32_t date) {
-    scheduleTask([&, buffer, phone, date] {
-        int32_t realDate = date;
-        if (LOGS_ENABLED) DEBUG_D("trying to decrypt config %d", requestingSecondAddress);
-        TL_help_configSimple *config = Datacenter::decodeSimpleConfig(buffer);
-        if (config != nullptr && realDate == 0) {
-            realDate = config->date;
-        }
-        int currentDate = getCurrentTime();
-        if (config != nullptr && config->date <= currentDate && currentDate <= config->expires) {
-            if (realDate > 0 && requestingSecondAddressByTlsHashMismatch) {
-                timeDifference += (realDate - currentDate);
-                requestingSecondAddressByTlsHashMismatch = false;
-            }
-            for (auto & iter : config->rules) {
-                TL_accessPointRule *rule = iter.get();
-                if (!checkPhoneByPrefixesRules(phone, rule->phone_prefix_rules)) {
-                    continue;
-                }
-                Datacenter *datacenter = getDatacenterWithId(rule->dc_id);
-                if (datacenter != nullptr) {
-                    std::vector<TcpAddress> addresses;
-                    for (auto iter2 = rule->ips.begin(); iter2 != rule->ips.end(); iter2++) {
-                        IpPort *port = iter2->get();
-                        const std::type_info &typeInfo = typeid(*port);
-                        if (typeInfo == typeid(TL_ipPort)) {
-                            auto ipPort = (TL_ipPort *) port;
-                            addresses.emplace_back(ipPort->ipv4, ipPort->port, 0, "");
-                            if (LOGS_ENABLED) DEBUG_D("got address %s and port %d for dc%d", ipPort->ipv4.c_str(), ipPort->port, rule->dc_id);
-                        } else if (typeInfo == typeid(TL_ipPortSecret)) {
-                            auto ipPort = (TL_ipPortSecret *) port;
-                            addresses.emplace_back(ipPort->ipv4, ipPort->port, 0, std::string((const char *) ipPort->secret->bytes, ipPort->secret->length));
-                            if (LOGS_ENABLED) DEBUG_D("got address %s and port %d for dc%d with secret", ipPort->ipv4.c_str(), ipPort->port, rule->dc_id);
-                        }
-                    }
-                    if (!addresses.empty()) {
-                        datacenter->replaceAddresses(addresses, TcpAddressFlagTemp);
-                        Connection *connection = datacenter->getTempConnection(false);
-                        if (connection != nullptr) {
-                            connection->suspendConnection();
-                        }
-                        if (datacenter->isHandshakingAny()) {
-                            datacenter->beginHandshake(HandshakeTypeCurrent, true);
-                        }
-                        updateDcSettings(rule->dc_id, true, false);
-                    }
-                } else {
-                    if (LOGS_ENABLED) DEBUG_D("config datacenter %d not found", rule->dc_id);
-                }
-            }
-            delete config;
-        } else {
-            if (config == nullptr) {
-                if (LOGS_ENABLED) DEBUG_D("can't decrypt dns config");
-            } else {
-                delete config;
-                if (LOGS_ENABLED) DEBUG_D("dns config not valid due to date or expire, current date = %d, config date = %d, config expired = %d", currentDate, config->date, config->expires);
-            }
-            if (requestingSecondAddress == 1) {
-                requestingSecondAddress = 2;
-                delegate->onRequestNewServerIpAndPort(requestingSecondAddress, instanceNum);
-            } else if (requestingSecondAddress == 0) {
-                requestingSecondAddress = 1;
-                delegate->onRequestNewServerIpAndPort(requestingSecondAddress, instanceNum);
-            } else {
-                requestingSecondAddress = 0;
-            }
-        }
-        buffer->reuse();
-    });
 }
 
 void ConnectionsManager::init(uint32_t version, int32_t layer, int32_t apiId, std::string deviceModel, std::string systemVersion, std::string appVersion, std::string langCode, std::string systemLangCode, std::string configPath, std::string logPath, std::string regId, std::string cFingerpting, std::string installerId, std::string packageId, int32_t timezoneOffset, int64_t userId, bool userPremium, bool isPaused, bool enablePushConnection, bool hasNetwork, int32_t networkType, int32_t performanceClass) {

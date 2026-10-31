@@ -28,6 +28,9 @@ public class AppGlobalConfig {
 
     public final ConfigDouble tonUsdRate = ofDouble("ton_usd_rate", 3);
 
+    // The Cat: toman per 1 USD for the global money display (see TheCatMoney).
+    public final ConfigDouble usdTomanRate = ofDouble("usd_toman_rate", 85000);
+
     public final ConfigString starsRatingLearnMoreUrl = ofString("stars_rating_learnmore_url", "https://catroom.ir/blog/telegram-stars");
     public final ConfigBoolean needAgeVideoVerification = ofBoolean("need_age_video_verification", false);
 

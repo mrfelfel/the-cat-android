@@ -7,11 +7,16 @@
 #   scripts/release-apk-bazaar.sh --skip-build   re-sign existing APKs only
 #                                                (combine with --arm/--fat)
 #
-# Produces (same versionCode + keystore, so either installs over the other
-# in place):
+# Produces, per selected ABI flavor, a store build AND a dev build:
 #   dist/TheCat-<version>-Bazaar-ZeroHub.apk      (afat: all 4 ABIs)
 #   dist/TheCat-<version>-Bazaar-ARM-ZeroHub.apk  (aarm: armeabi-v7a + arm64-v8a,
 #                                                  ~19 MB smaller)
+#   dist/TheCat-<version>-DEV-Bazaar[-ARM]-ZeroHub.apk
+#
+# The two store files share a versionCode and keystore, so either installs over
+# the other in place. The DEV build is a different applicationId
+# (com.thecat.messenger.dev), talks to the dev server on :30098, and installs
+# alongside the store app rather than replacing it.
 #
 # This is the same flow as scripts/release-apk.sh, pointed at
 # :TMessagesProj_AppBazaar instead of the standalone flavor. The Bazaar flavor
@@ -30,7 +35,16 @@ REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$REPO_ROOT"
 
 # --- Config (kept in sync with gradle.properties) ---
-prop() { grep "^$1=" gradle.properties | head -1 | cut -d= -f2-; }
+# Release signing credentials live in ~/.gradle/gradle.properties (kept OUT of the
+# repo), so fall back there when the project gradle.properties omits them.
+prop() {
+    local v=""
+    v="$(grep "^$1=" gradle.properties 2>/dev/null | head -1 | cut -d= -f2-)"
+    if [ -z "$v" ] && [ -f "$HOME/.gradle/gradle.properties" ]; then
+        v="$(grep "^$1=" "$HOME/.gradle/gradle.properties" 2>/dev/null | head -1 | cut -d= -f2-)"
+    fi
+    printf '%s' "$v"
+}
 VERSION="$(prop APP_VERSION_NAME)"
 KEY_ALIAS="$(prop RELEASE_KEY_ALIAS)"
 KEY_PASS="$(prop RELEASE_KEY_PASSWORD)"
@@ -42,10 +56,15 @@ NDK_DIR="$SDK/ndk/27.2.12479018"
 KEYSTORE="TMessagesProj/config/release.keystore"
 OUT_DIR="dist"
 APK_DIR="TMessagesProj_AppBazaar/build/outputs/apk"
-# flavor -> output file
+# flavor -> output file (store build)
 declare -A OUT_NAME=(
     [afat]="TheCat-${VERSION}-Bazaar-ZeroHub.apk"
     [aarm]="TheCat-${VERSION}-Bazaar-ARM-ZeroHub.apk"
+)
+# flavor -> output file (dev build, separate applicationId + icon)
+declare -A OUT_NAME_DEV=(
+    [afat]="TheCat-${VERSION}-DEV-Bazaar-ZeroHub.apk"
+    [aarm]="TheCat-${VERSION}-DEV-Bazaar-ARM-ZeroHub.apk"
 )
 
 fail() { echo "ERROR: $*" >&2; exit 1; }
@@ -63,15 +82,31 @@ for arg in "$@"; do
     esac
 done
 
-# JDK: Gradle 8.11 needs a modern JDK (17+); the real build ran on Homebrew's
-# openjdk. Honor an explicit override, else prefer Homebrew, else java_home.
+# JDK: Gradle 8.11 supports Java 17..23 — newer (e.g. Homebrew openjdk 27
+# after a brew upgrade) breaks :buildSrc config. Honor RELEASE_JAVA_HOME,
+# else scan candidates and take the first whose major version is 17..23.
+jdk_major() {
+    "$1/bin/java" -version 2>&1 | sed -n 's/.*version "\([0-9][0-9]*\).*/\1/p' | head -1
+}
 JAVA_HOME="${RELEASE_JAVA_HOME:-}"
 if [ -z "$JAVA_HOME" ]; then
-    for cand in /opt/homebrew/opt/openjdk@21 /opt/homebrew/opt/openjdk; do
-        [ -x "$cand/bin/java" ] && JAVA_HOME="$cand" && break
+    for cand in /opt/homebrew/opt/openjdk@21 /opt/homebrew/opt/openjdk \
+                /opt/homebrew/Cellar/openjdk/* /Library/Java/JavaVirtualMachines/*/Contents/Home; do
+        [ -x "$cand/bin/java" ] || continue
+        ver="$(jdk_major "$cand")"
+        if [ -n "$ver" ] && [ "$ver" -ge 17 ] && [ "$ver" -le 23 ]; then
+            JAVA_HOME="$cand"
+            break
+        fi
     done
 fi
-[ -n "$JAVA_HOME" ] || JAVA_HOME="$(/usr/libexec/java_home 2>/dev/null || true)"
+if [ -z "$JAVA_HOME" ]; then
+    JAVA_HOME="$(/usr/libexec/java_home 2>/dev/null || true)"
+    ver="$(jdk_major "$JAVA_HOME")"
+    if [ -n "$ver" ] && [ "$ver" -gt 23 ]; then
+        fail "java_home JDK is $ver but Gradle 8.11 needs <= 23 (set RELEASE_JAVA_HOME)"
+    fi
+fi
 [ -n "$JAVA_HOME" ] && [ -x "$JAVA_HOME/bin/java" ] || fail "No JDK found (set RELEASE_JAVA_HOME)"
 export JAVA_HOME
 export PATH="$JAVA_HOME/bin:$PATH"
@@ -130,18 +165,24 @@ if [ "$FREE_KB" -lt $((5 * 1024 * 1024)) ]; then
 fi
 
 # --- Build ---
-# task name helpers: afat -> assembleAfatBazaar, aarm -> assembleAarmBazaar
+# task name helpers, one pair per flavor:
+#   afat -> assembleAfatStoreBazaar  + assembleAfatDevBazaar
+#   aarm -> assembleAarmStoreBazaar  + assembleAarmDevBazaar
+cap_of() { echo "$(tr '[:lower:]' '[:upper:]' <<< "${1:0:1}")${1:1}"; }
 GRADLE_TASKS=()
 for flavor in "${FLAVORS[@]}"; do
-    cap="$(tr '[:lower:]' '[:upper:]' <<< "${flavor:0:1}")${flavor:1}"
-    GRADLE_TASKS+=(":TMessagesProj_AppBazaar:assemble${cap}Bazaar")
+    cap="$(cap_of "$flavor")"
+    GRADLE_TASKS+=(":TMessagesProj_AppBazaar:assemble${cap}StoreBazaar")
+    GRADLE_TASKS+=(":TMessagesProj_AppBazaar:assemble${cap}DevBazaar")
 done
 
 if [ "$SKIP_BUILD" = 1 ]; then
     step "Skipping build (--skip-build)"
     for flavor in "${FLAVORS[@]}"; do
-        [ -f "$APK_DIR/$flavor/bazaar/app.apk" ] \
-            || fail "No APK at $APK_DIR/$flavor/bazaar/app.apk — run without --skip-build first"
+        [ -f "$APK_DIR/${flavor}Store/bazaar/app.apk" ] \
+            || fail "No APK at $APK_DIR/${flavor}Store/bazaar/app.apk — run without --skip-build first"
+        [ -f "$APK_DIR/${flavor}Dev/bazaar/app.apk" ] \
+            || fail "No APK at $APK_DIR/${flavor}Dev/bazaar/app.apk — run without --skip-build first"
     done
 else
     step "Building ${GRADLE_TASKS[*]}"
@@ -150,25 +191,31 @@ fi
 
 # --- Sign + verify each selected flavor (always re-sign; Gradle's signature is not trusted) ---
 mkdir -p "$OUT_DIR"
-for flavor in "${FLAVORS[@]}"; do
-    APK_SRC="$APK_DIR/$flavor/bazaar/app.apk"
-    OUT="$OUT_DIR/${OUT_NAME[$flavor]}"
-    [ -f "$APK_SRC" ] || fail "Build produced no APK at $APK_SRC"
+sign_and_copy() { # <variant-dir> <output file> <label>
+    local src="$APK_DIR/$1/bazaar/app.apk"
+    local out="$OUT_DIR/$2"
+    [ -f "$src" ] || fail "Build produced no APK at $src"
 
-    step "Signing $flavor with $KEYSTORE (alias: $KEY_ALIAS)"
-    SIGNED="$(mktemp -t thecat-bazaar-apk).apk"
+    step "Signing $3 with $KEYSTORE (alias: $KEY_ALIAS)"
+    local signed
+    signed="$(mktemp -t thecat-bazaar-apk).apk"
     "$APKSIGNER" sign \
         --ks "$KEYSTORE" --ks-key-alias "$KEY_ALIAS" \
         --ks-pass "pass:$STORE_PASS" --key-pass "pass:$KEY_PASS" \
-        --out "$SIGNED" "$APK_SRC"
-    cp "$SIGNED" "$APK_SRC"
-    rm -f "$SIGNED"
+        --out "$signed" "$src"
+    cp "$signed" "$src"
+    rm -f "$signed"
 
-    step "Verifying $flavor"
-    "$APKSIGNER" verify --verbose --print-certs "$APK_SRC" | grep -E \
+    step "Verifying $3"
+    "$APKSIGNER" verify --verbose --print-certs "$src" | grep -E \
         'Verifies$|Verified using v[123] scheme|certificate DN|key size' \
-        || fail "Verification failed: $APK_SRC"
+        || fail "Verification failed: $src"
 
-    cp "$APK_SRC" "$OUT"
-    echo "DONE  $(du -h "$OUT" | cut -f1)  ->  $OUT"
+    cp "$src" "$out"
+    echo "DONE  $(du -h "$out" | cut -f1)  ->  $out"
+}
+
+for flavor in "${FLAVORS[@]}"; do
+    sign_and_copy "${flavor}Store" "${OUT_NAME[$flavor]}"     "Bazaar $flavor"
+    sign_and_copy "${flavor}Dev"   "${OUT_NAME_DEV[$flavor]}" "Bazaar $flavor DEV"
 done

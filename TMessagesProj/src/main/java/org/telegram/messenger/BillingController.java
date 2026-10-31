@@ -27,6 +27,7 @@ import com.android.billingclient.api.QueryProductDetailsParams;
 import com.android.billingclient.api.QueryPurchasesParams;
 
 import org.telegram.messenger.utils.BillingUtilities;
+import org.telegram.messenger.utils.TheCatMoney;
 import org.telegram.tgnet.ConnectionsManager;
 import org.telegram.tgnet.TLRPC;
 import org.telegram.tgnet.tl.TL_update;
@@ -36,10 +37,8 @@ import org.telegram.ui.LaunchActivity;
 import org.telegram.ui.LoginActivity;
 import org.telegram.ui.PremiumPreviewFragment;
 
-import java.text.NumberFormat;
 import java.util.ArrayList;
 import java.util.Collections;
-import java.util.Currency;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -104,8 +103,6 @@ public class BillingController implements PurchasesUpdatedListener, BillingClien
         return formatCurrency(amount, currency, exp, false);
     }
 
-    private static NumberFormat currencyInstance;
-    private static NumberFormat currencyInstanceRounded;
     public String formatCurrency(long amount, String currency, int exp, boolean rounded) {
         if (currency == null || currency.isEmpty()) {
             return String.valueOf(amount);
@@ -116,32 +113,9 @@ public class BillingController implements PurchasesUpdatedListener, BillingClien
         if ("XTR".equalsIgnoreCase(currency)) {
             return "XTR " + LocaleController.formatNumber(amount, ',');
         }
-        if ("IRT".equalsIgnoreCase(currency)) {
-            // Iranian toman — not an ISO 4217 code (Currency.getInstance would throw);
-            // server contract: amount in whole tomans, exp 0.
-            return LocaleController.formatNumber(Math.round(amount / Math.pow(10, exp)), ',') + " " + LocaleController.getString(R.string.Toman);
-        }
-        try {
-            Currency cur = Currency.getInstance(currency);
-            if (cur != null) {
-                if (currencyInstance == null) {
-                    currencyInstance = NumberFormat.getCurrencyInstance();
-                }
-                currencyInstance.setCurrency(cur);
-                if (rounded) {
-                    currencyInstance.setMaximumFractionDigits(0);
-                    currencyInstance.setMinimumFractionDigits(0);
-                    return currencyInstance.format(Math.round(amount / Math.pow(10, exp)));
-                }
-                final int defaultFractionDigits = cur.getDefaultFractionDigits();
-                currencyInstance.setMinimumFractionDigits(defaultFractionDigits);
-                currencyInstance.setMaximumFractionDigits(defaultFractionDigits);
-                return currencyInstance.format(amount / Math.pow(10, exp));
-            }
-        } catch (IllegalArgumentException unknownCurrencyCode) {
-            // fall through to the plain "amount currency" form
-        }
-        return amount + " " + currency;
+        // The Cat: the whole money system displays tomans only (TheCatMoney).
+        // Covers IRT/IRR directly and converts USD and everything else.
+        return TheCatMoney.formatFiat(amount, currency, exp);
     }
 
     @SuppressWarnings("ConstantConditions")

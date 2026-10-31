@@ -8821,7 +8821,7 @@ public class LoginActivity extends BaseFragment implements NotificationCenter.No
             editTextView.setTextSize(TypedValue.COMPLEX_UNIT_DIP, 16);
             editTextView.setBackground(Theme.getRoundRectSelectorDrawable(AndroidUtilities.dp(6), Theme.getColor(Theme.key_changephoneinfo_image2)));
             editTextView.setOnClickListener(v -> callback.onEditPressed(this, editTextView));
-            editTextView.setTypeface(Typeface.DEFAULT_BOLD);
+            editTextView.setTypeface(AndroidUtilities.bold());
             editTextView.setPadding(buttonPadding, buttonPadding / 2, buttonPadding, buttonPadding / 2);
             popupLayout.addView(editTextView, LayoutHelper.createFrame(LayoutHelper.WRAP_CONTENT, LayoutHelper.WRAP_CONTENT, Gravity.BOTTOM | (LocaleController.isRTL ? Gravity.RIGHT : Gravity.LEFT), buttonMargin, buttonMargin, buttonMargin, buttonMargin));
 
@@ -8831,7 +8831,7 @@ public class LoginActivity extends BaseFragment implements NotificationCenter.No
             confirmTextView.setTextSize(TypedValue.COMPLEX_UNIT_DIP, 16);
             confirmTextView.setBackground(Theme.getRoundRectSelectorDrawable(AndroidUtilities.dp(6), Theme.getColor(Theme.key_changephoneinfo_image2)));
             confirmTextView.setOnClickListener(v -> callback.onConfirmPressed(this, confirmTextView));
-            confirmTextView.setTypeface(Typeface.DEFAULT_BOLD);
+            confirmTextView.setTypeface(AndroidUtilities.bold());
             confirmTextView.setPadding(buttonPadding, buttonPadding / 2, buttonPadding, buttonPadding / 2);
             popupLayout.addView(confirmTextView, LayoutHelper.createFrame(LayoutHelper.WRAP_CONTENT, LayoutHelper.WRAP_CONTENT, Gravity.BOTTOM | (LocaleController.isRTL ? Gravity.LEFT : Gravity.RIGHT), buttonMargin, buttonMargin, buttonMargin, buttonMargin));
 

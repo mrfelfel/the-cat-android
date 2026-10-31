@@ -58,7 +58,6 @@ import android.text.SpannableStringBuilder;
 import android.text.Spanned;
 import android.text.TextPaint;
 import android.text.TextUtils;
-import android.text.style.AbsoluteSizeSpan;
 import android.text.style.ImageSpan;
 import android.util.LongSparseArray;
 import android.util.Property;
@@ -3506,13 +3505,12 @@ public class DialogsActivity extends BaseFragment implements NotificationCenter.
             } else {
                 statusDrawable = new AnimatedEmojiDrawable.SwapAnimatedEmojiDrawable(null, dp(26));
                 statusDrawable.center = true;
-                // Always the app's own localized name (کت / TheCat). The key is
-                // one no lang pack ships, so neither the server's re-branding nor
-                // a stock Telegram pack can ever override it. Sized to match the
-                // old telegram_logo_2 wordmark (the default 20sp title reads tiny).
-                SpannableStringBuilder headerTitle = new SpannableStringBuilder(getString(R.string.TheCatHeaderName));
-                headerTitle.setSpan(new AbsoluteSizeSpan(26, true), 0, headerTitle.length(), Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
-                actionBar.setTitle(headerTitle, statusDrawable);
+                logoDrawable = context.getResources().getDrawable(R.drawable.telegram_logo_2).mutate();
+                logoDrawable.setBounds(0, dp(2), logoDrawable.getIntrinsicWidth(), dp(2) + logoDrawable.getIntrinsicHeight());
+                logoDrawable.setColorFilter(getThemedColor(Theme.key_telegram_color_dialogsLogo), PorterDuff.Mode.MULTIPLY);
+                SpannableStringBuilder ssb = new SpannableStringBuilder(getString(R.string.AppName));
+                ssb.setSpan(new ImageSpan(logoDrawable), 0, ssb.length(), Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
+                actionBar.setTitle(ssb, statusDrawable);
                 updateStatus(UserConfig.getInstance(currentAccount).getCurrentUser(), false);
             }
             if (folderId == 0) {
@@ -5850,7 +5848,7 @@ public class DialogsActivity extends BaseFragment implements NotificationCenter.
     }
 
     public void showSelectStatusDialog() {
-        if (selectAnimatedEmojiDialog != null || SharedConfig.appLocked || (hasStories && !dialogStoriesCell.isExpanded())) {
+        if (selectAnimatedEmojiDialog != null || SharedConfig.appLocked) {
             return;
         }
         final SelectAnimatedEmojiDialog.SelectAnimatedEmojiDialogWindow[] popup = new SelectAnimatedEmojiDialog.SelectAnimatedEmojiDialogWindow[1];

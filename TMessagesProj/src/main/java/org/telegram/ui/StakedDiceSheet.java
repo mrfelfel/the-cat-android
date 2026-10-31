@@ -496,7 +496,7 @@ public class StakedDiceSheet extends BottomSheetWithRecyclerListView {
         AndroidUtilities.removeFromParent(layout.textView);
         layout.textView = new ButtonSpan.TextViewButtons(f.getContext());
         layout.textView.setSingleLine();
-        layout.textView.setTypeface(Typeface.SANS_SERIF);
+        layout.textView.setTypeface(AndroidUtilities.vazir());
         layout.textView.setTextSize(TypedValue.COMPLEX_UNIT_DIP, 15);
         layout.textView.setEllipsize(TextUtils.TruncateAt.END);
         layout.textView.setPadding(0, dp(8), 0, dp(8));

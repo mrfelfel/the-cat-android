@@ -25,6 +25,11 @@
         <item name="android:windowSplashScreenAnimatedIcon">@drawable/splash_thecat</item>
         <item name="android:windowSplashScreenAnimationDuration">@integer/splash_screen_duration</item>
         <item name="android:windowSplashScreenBackground">#1f2732</item>
+        <!-- Vazir: this night variant redefines the whole theme, so the font
+             wiring must be repeated here or dark-mode devices fall back to the
+             system font on every plain TextView. -->
+        <item name="android:textViewStyle">@style/MyTextViewStyle</item>
+        <item name="android:fontFamily">@font/vazir</item>
     </style>
 
     <style name="ActionBar.Transparent.TMessages.Start" parent="android:style/Widget.Material.Light.ActionBar">

@@ -31,7 +31,7 @@ public class AppIconBulletinLayout extends Bulletin.ButtonLayout {
         textView.setPadding(0, AndroidUtilities.dp(8), 0, AndroidUtilities.dp(8));
         textView.setTextColor(getThemedColor(Theme.key_undo_infoColor));
         textView.setTextSize(TypedValue.COMPLEX_UNIT_DIP, 15);
-        textView.setTypeface(Typeface.SANS_SERIF);
+        textView.setTypeface(AndroidUtilities.vazir());
         addView(textView, LayoutHelper.createFrameRelatively(LayoutHelper.MATCH_PARENT, LayoutHelper.WRAP_CONTENT, Gravity.START | Gravity.CENTER_VERTICAL, 56, 0, 16, 0));
 
         imageView.setImageDrawable(ContextCompat.getDrawable(context, icon.background));

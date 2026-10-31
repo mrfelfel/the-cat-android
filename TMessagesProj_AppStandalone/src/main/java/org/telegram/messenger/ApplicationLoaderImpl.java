@@ -39,6 +39,16 @@ public class ApplicationLoaderImpl extends ApplicationLoader {
         return BuildConfig.APPLICATION_ID;
     }
 
+    /**
+     * True only in the dev flavor; the store flavor inherits the base `false`.
+     * Must stay a virtual override -- the library's own R8 pass cannot see this
+     * class and folds anything read from the base (see proguard-rules.pro).
+     */
+    @Override
+    public boolean isDevServerBuild() {
+        return BuildConfig.THE_CAT_DEV_SERVER;
+    }
+
     @Override
     protected boolean isStandalone() {
         return true;

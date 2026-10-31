@@ -25,3 +25,10 @@ TMessagesProj/jni/ffmpeg/build_android
 # release artifacts (scripts/release-apk.sh output)
 dist/
 *.apk
+
+# internal working reports / stray artifacts — never commit or publish
+BAZAAR_*.md
+REBRAND_*.md
+REBRAND_*_changed_keys.txt
+CLAUDE.md
+a76fa56a-*.png

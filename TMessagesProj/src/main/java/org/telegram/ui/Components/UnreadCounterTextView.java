@@ -96,7 +96,7 @@ public class UnreadCounterTextView extends View {
     }
 
     public void setTextInfo(CharSequence text) {
-        layoutPaint.setTypeface(null);
+        layoutPaint.setTypeface(AndroidUtilities.vazir());
         layoutTextWidth = (int) Math.ceil(layoutPaint.measureText(text, 0, text.length()));
         icon = null;
         textLayout = new StaticLayout(text, layoutPaint, layoutTextWidth + 1, Layout.Alignment.ALIGN_NORMAL, 1.0f, 0.0f, true);
@@ -105,7 +105,7 @@ public class UnreadCounterTextView extends View {
     }
 
     public void setTextInfo(Drawable icon, CharSequence text) {
-        layoutPaint.setTypeface(null);
+        layoutPaint.setTypeface(AndroidUtilities.vazir());
         layoutTextWidth = (int) Math.ceil(layoutPaint.measureText(text, 0, text.length()));
         this.icon = icon;
         textLayout = new StaticLayout(text, layoutPaint, layoutTextWidth + 1, Layout.Alignment.ALIGN_NORMAL, 1.0f, 0.0f, true);

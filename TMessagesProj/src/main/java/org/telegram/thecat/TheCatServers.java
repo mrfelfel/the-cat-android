@@ -63,6 +63,21 @@ public class TheCatServers {
     private static final String DEFAULT_HOST = "62.220.127.238";
     private static final int    DEFAULT_PORT = 30001;
 
+    // The dev flavor (applicationId com.thecat.messenger.dev) ships exactly one
+    // server -- this one -- and no switch. It shares production's RSA key; only
+    // the port differs, so a key mismatch can't be what separates the two.
+    private static final int    DEV_FLAVOR_PORT = 30098;
+
+    /**
+     * True in the dev flavor, false in the store build. Deliberately NOT a
+     * compile-time constant: the library's R8 pass cannot see the app-module
+     * subclass that overrides it and would bake this to `false`, which is how
+     * the dev APK first shipped compiled against :30001.
+     */
+    static boolean isDevFlavorBuild() {
+        return ApplicationLoader.isDevServerBuildStatic();
+    }
+
     // The Cat's own production server RSA key.
     static final String THECAT_RSA_KEY =
         "-----BEGIN RSA PUBLIC KEY-----\n" +
@@ -81,10 +96,10 @@ public class TheCatServers {
     public static TheCatServer thecatServer() {
         TheCatServer s = new TheCatServer();
         s.id                 = ID_THECAT;
-        s.name               = "TheCat";
-        s.description        = "TheCat default server.";
+        s.name               = isDevFlavorBuild() ? "TheCat DEV" : "TheCat";
+        s.description        = isDevFlavorBuild() ? "Development server." : "TheCat default server.";
         s.host               = DEFAULT_HOST;
-        s.port               = DEFAULT_PORT;
+        s.port               = isDevFlavorBuild() ? DEV_FLAVOR_PORT : DEFAULT_PORT;
         s.isOfficial         = true;
         s.multiDc            = false;
         s.mainDcId           = 2;
@@ -94,6 +109,14 @@ public class TheCatServers {
         // the shipped defaults -- see refreshServersInfo(). Only name,
         // description and logo: host/port/key above stay compiled-in.
         applyBuiltinIdentity(s);
+        if (isDevFlavorBuild()) {
+            // The identity overlay is fed by whatever the server advertises in
+            // help.getConfig, which for the dev host is still the production
+            // name. In this build the flavor label has to win, or the account
+            // list and the "switch account" dialog would both read "TheCat".
+            s.name = "TheCat DEV";
+            s.description = "Development server.";
+        }
         return s;
     }
 
@@ -311,10 +334,22 @@ public class TheCatServers {
             fingerprint = THECAT_RSA_FINGERPRINT;
         }
         int mainDc = server.mainDcId > 0 ? server.mainDcId : 1;
+        // For the builtin production server, prefer the catnet-resolved reachable
+        // endpoint over the hardcoded seed, so a blocked seed still connects. Dev
+        // and custom servers are not in the catnet registry -> use their own address.
+        String host = server.host;
+        int port = server.port;
+        if (DEFAULT_HOST.equals(server.host) && server.port == DEFAULT_PORT) {
+            CatNetResolver r = CatNetResolver.getInstance();
+            if (r.hasResolved()) {
+                host = r.getResolvedHost();
+                port = r.getResolvedPort();
+            }
+        }
         ConnectionsManager.native_applyServerConfig(
                 accountNum,
-                server.host,
-                server.port,
+                host,
+                port,
                 false,
                 mainDc,
                 key,
@@ -332,16 +367,61 @@ public class TheCatServers {
      * of being silently kept alive.
      */
     public static void applyStoredServerToAccount(int accountNum) {
-        if (ID_TELEGRAM.equals(getServerIdForAccount(accountNum))) {
+        String storedId = getServerIdForAccount(accountNum);
+        if (ID_TELEGRAM.equals(storedId)) {
             clearServerForAccount(accountNum);
             if (UserConfig.getInstance(accountNum).isClientActivated()) {
                 MessagesController.getInstance(accountNum).performLogout(0);
             }
             return;
         }
-        TheCatServer server = getServerForAccount(accountNum);
+        TheCatServer server = (storedId != null) ? getServerById(storedId) : null;
+        if (server == null && storedId == null) {
+            // Never bound (fresh install or a pre-binding account): fall back to
+            // the built-in server so the native layer always gets applyServerConfig
+            // instead of being left on whatever addresses it booted with. A non-null
+            // id that no longer resolves is a deleted custom server whose saved
+            // endpoint keeps working as-is.
+            server = thecatServer();
+        }
         if (server != null) {
             applyServerToAccount(server, accountNum, false);
+        }
+    }
+
+    /**
+     * Kick off catnet discovery of a reachable Cat server endpoint. When it finds a
+     * new one (e.g. the seed is blocked), re-applies the server to every account so
+     * live connections re-point. No-op for dev (its server is not in the catnet
+     * registry). Seed-first and safe to call always.
+     */
+    public static void startCatNetResolution() {
+        TheCatServer s = thecatServer();
+        if (s == null || !DEFAULT_HOST.equals(s.host) || s.port != DEFAULT_PORT) {
+            return;
+        }
+        CatNetResolver.getInstance().start(DEFAULT_HOST, DEFAULT_PORT, TheCatServers::reapplyAllAccounts);
+    }
+
+    /**
+     * Re-runs the discovery above on demand — the Cat's replacement for stock
+     * Telegram's DNS address book: called when the connection stalls long enough
+     * for native to ask for a new endpoint, and when connectivity returns. Unlike
+     * the startup pass this discards the cached registry document first, so a
+     * dead endpoint is replaced immediately instead of at cache expiry. Throttled
+     * and single-flight inside the resolver; safe from any thread.
+     */
+    public static void refreshCatNetResolution() {
+        TheCatServer s = thecatServer();
+        if (s == null || !DEFAULT_HOST.equals(s.host) || s.port != DEFAULT_PORT) {
+            return;
+        }
+        CatNetResolver.getInstance().refresh(DEFAULT_HOST, DEFAULT_PORT, TheCatServers::reapplyAllAccounts);
+    }
+
+    private static void reapplyAllAccounts() {
+        for (int a = 0; a < UserConfig.MAX_ACCOUNT_COUNT; a++) {
+            applyStoredServerToAccount(a);
         }
     }
 

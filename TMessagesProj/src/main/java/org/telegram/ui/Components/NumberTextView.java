@@ -45,6 +45,7 @@ public class NumberTextView extends View {
 
     public NumberTextView(Context context) {
         super(context);
+        textPaint.setTypeface(AndroidUtilities.vazir());
     }
 
     public void setOnTextWidthProgressChangedListener(OnTextWidthProgressChangedListener onTextWidthProgressChangedListener) {

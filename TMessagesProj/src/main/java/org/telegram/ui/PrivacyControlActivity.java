@@ -100,6 +100,7 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Locale;
 import java.util.concurrent.atomic.AtomicInteger;
+import org.telegram.messenger.utils.TheCatMoney;
 
 public class PrivacyControlActivity extends BaseFragment implements NotificationCenter.NotificationCenterDelegate, ImageUpdater.ImageUpdaterDelegate {
 
@@ -2087,7 +2088,8 @@ public class PrivacyControlActivity extends BaseFragment implements Notification
                         privacyCell.setText(LocaleController.getString(getUserConfig().isPremium() ? R.string.PrivacyLastSeenPremiumInfoForPremium : R.string.PrivacyLastSeenPremiumInfo));
                     } else if (position == priceInfoRow) {
                         final float revenuePercent = getMessagesController().starsPaidMessageCommissionPermille / 1000.0f;
-                        final String income = String.valueOf((int) ((currentStars * revenuePercent / 1000.0 * getMessagesController().starsUsdWithdrawRate1000)) / 100.0);
+                        final long usdCents = (long) (currentStars * revenuePercent / 1000.0 * getMessagesController().starsUsdWithdrawRate1000);
+                        final String income = TheCatMoney.formatToman(TheCatMoney.toToman(usdCents / 100.0, "USD"));
                         privacyCell.setText(formatString(R.string.PrivateMessagesPriceInfo, percents(getMessagesController().starsPaidMessageCommissionPermille), income));
                     } else if (position == showGiftIconInfoRow) {
                         final SpannableString giftIcon = new SpannableString("g");

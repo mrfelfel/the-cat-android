@@ -24,7 +24,7 @@ public class PieLegendView extends LegendSignatureView {
         signature.getLayoutParams().width = AndroidUtilities.dp(96);
         root.addView(value = new TextView(getContext()));
         addView(root);
-        value.setTypeface(Typeface.create("sans-serif-medium", Typeface.NORMAL));
+        value.setTypeface(AndroidUtilities.bold());
 
         setPadding(AndroidUtilities.dp(12), AndroidUtilities.dp(12), AndroidUtilities.dp(12), AndroidUtilities.dp(12));
         chevron.setVisibility(View.GONE);

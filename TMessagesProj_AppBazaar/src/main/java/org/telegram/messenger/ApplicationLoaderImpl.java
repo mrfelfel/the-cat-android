@@ -42,6 +42,16 @@ public class ApplicationLoaderImpl extends ApplicationLoader {
     }
 
     /**
+     * Set only by the dev flavor; the store flavor inherits the base `false`.
+     * Read by TheCatServers to pick the endpoint, so it has to be a virtual
+     * override too -- see the note above getStoreBillingBridge().
+     */
+    @Override
+    public boolean isDevServerBuild() {
+        return BuildConfig.THE_CAT_DEV_SERVER;
+    }
+
+    /**
      * Lazily-creates the Poolakey-backed store bridge. A virtual override on the
      * Application — same shape as isBazaarBuild(), which ships correctly — is the
      * only variant R8 has not folded away: an earlier onCreate()-registration

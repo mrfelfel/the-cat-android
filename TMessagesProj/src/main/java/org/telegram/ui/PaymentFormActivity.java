@@ -1962,7 +1962,7 @@ public class PaymentFormActivity extends BaseFragment implements NotificationCen
                 inputFields[0].setCursorWidth(1.5f);
                 inputFields[0].setInputType(InputType.TYPE_CLASS_PHONE);
                 inputFields[0].setImeOptions(EditorInfo.IME_ACTION_DONE | EditorInfo.IME_FLAG_NO_EXTRACT_UI);
-                inputFields[0].setHint(LocaleController.getInstance().formatCurrencyString(0, paymentForm.invoice.currency));
+                inputFields[0].setHint(LocaleController.getInstance().formatCurrencyString(0, true, true, true, paymentForm.invoice.currency));
                 inputFields[0].setPadding(0, 0, 0, AndroidUtilities.dp(6));
                 inputFields[0].setGravity(LocaleController.isRTL ? Gravity.LEFT : Gravity.RIGHT);
                 container.addView(inputFields[0], LayoutHelper.createFrame(LayoutHelper.MATCH_PARENT, LayoutHelper.WRAP_CONTENT, Gravity.LEFT | Gravity.TOP, 21, 9, 21, 1));

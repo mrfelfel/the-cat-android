@@ -823,7 +823,7 @@ public class VideoAds {
             subtitleTextView.setPadding(dp(4), 0, dp(4), 0);
             subtitleTextView.setTextColor(undoInfoColor);
             subtitleTextView.setLinkTextColor(undoLinkColor);
-            subtitleTextView.setTypeface(Typeface.SANS_SERIF);
+            subtitleTextView.setTypeface(AndroidUtilities.vazir());
             subtitleTextView.setTextSize(TypedValue.COMPLEX_UNIT_DIP, 13);
             linearLayout.addView(subtitleTextView);
 

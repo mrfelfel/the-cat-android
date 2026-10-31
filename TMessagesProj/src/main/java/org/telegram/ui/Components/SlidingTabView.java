@@ -57,7 +57,7 @@ public class SlidingTabView extends LinearLayout {
         tab.setSingleLine();
         tab.setTextColor(0xffffffff);
         tab.setTextSize(TypedValue.COMPLEX_UNIT_DIP, 14);
-        tab.setTypeface(Typeface.DEFAULT_BOLD);
+        tab.setTypeface(AndroidUtilities.bold());
         tab.setBackgroundDrawable(Theme.createSelectorDrawable(Theme.ACTION_BAR_PICKER_SELECTOR_COLOR, 0));
 
         tab.setOnClickListener(new OnClickListener() {

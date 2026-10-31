@@ -121,6 +121,22 @@ public class ApplicationLoader extends Application {
         return applicationLoaderInstance.onGetApplicationId();
     }
 
+    /**
+     * True in the standalone dev-server flavor. A virtual override rather than a
+     * BuildConfig boolean read here: the library is minified by its OWN R8 pass
+     * that only ever sees this base class, so any field or method constant
+     * folded from it bakes in the store value -- which is exactly how the dev
+     * flavor once shipped compiled against :30001. Same reasoning as
+     * getStoreBillingBridge().
+     */
+    public boolean isDevServerBuild() {
+        return false;
+    }
+
+    public static boolean isDevServerBuildStatic() {
+        return applicationLoaderInstance != null && applicationLoaderInstance.isDevServerBuild();
+    }
+
     protected String onGetApplicationId() {
         return null;
     }
@@ -242,6 +258,13 @@ public class ApplicationLoader extends Application {
                         ConnectionsManager.getInstance(a).checkConnection();
                         FileLoader.getInstance(a).onNetworkChanged(isSlow);
                     }
+                    // Address finder: connectivity just changed, so the endpoint
+                    // we are pinned to may be the part that died — let catnet
+                    // re-probe and re-point if it finds a better one (throttled
+                    // and no-op for dev/custom servers, see refreshCatNetResolution).
+                    if (isNetworkOnline()) {
+                        TheCatServers.refreshCatNetResolution();
+                    }
                 }
             };
             IntentFilter filter = new IntentFilter(ConnectivityManager.CONNECTIVITY_ACTION);
@@ -286,6 +309,9 @@ public class ApplicationLoader extends Application {
                 SendMessagesHelper.getInstance(a).checkUnsentMessages();
             }
         }
+
+        // Discover a reachable Cat server endpoint in the background (seed-first).
+        TheCatServers.startCatNetResolution();
 
         ApplicationLoader app = (ApplicationLoader) ApplicationLoader.applicationContext;
         app.initPushServices();
@@ -387,6 +413,7 @@ public class ApplicationLoader extends Application {
     }
 
     private static final String BACKGROUND_MIGRATION_KEY = "thecatBackgroundV1";
+    private static final String BACKGROUND_DISABLE_MIGRATION_KEY = "thecatBackgroundV1Disabled";
 
     public static boolean isPushServiceEnabled() {
         SharedPreferences preferences = MessagesController.getGlobalNotificationsSettings();
@@ -397,31 +424,57 @@ public class ApplicationLoader extends Application {
     }
 
     public static void ensureBackgroundWorkEnabled() {
-        if (!BuildVars.FORCE_BACKGROUND_WORK) {
+        SharedPreferences global = MessagesController.getGlobalNotificationsSettings();
+        if (BuildVars.FORCE_BACKGROUND_WORK) {
+            if (!global.getBoolean(BACKGROUND_MIGRATION_KEY, false)) {
+                global.edit()
+                        .putBoolean("pushService", true)
+                        .putBoolean("pushConnection", true)
+                        .putBoolean(BACKGROUND_MIGRATION_KEY, true)
+                        .apply();
+                for (int a = 0; a < UserConfig.MAX_ACCOUNT_COUNT; a++) {
+                    if (!UserConfig.getInstance(a).isClientActivated()) {
+                        continue;
+                    }
+                    SharedPreferences main = MessagesController.getMainSettings(a);
+                    main.edit()
+                            .putBoolean("keepAliveService", true)
+                            .putBoolean("backgroundConnection", true)
+                            .apply();
+                    MessagesController messagesController = MessagesController.getInstance(a);
+                    messagesController.keepAliveService = true;
+                    messagesController.backgroundConnection = true;
+                    ConnectionsManager.getInstance(a).setPushConnectionEnabled(true);
+                }
+            }
             return;
         }
-        SharedPreferences global = MessagesController.getGlobalNotificationsSettings();
-        if (!global.getBoolean(BACKGROUND_MIGRATION_KEY, false)) {
-            global.edit()
-                    .putBoolean("pushService", true)
-                    .putBoolean("pushConnection", true)
-                    .putBoolean(BACKGROUND_MIGRATION_KEY, true)
-                    .apply();
-            for (int a = 0; a < UserConfig.MAX_ACCOUNT_COUNT; a++) {
-                if (!UserConfig.getInstance(a).isClientActivated()) {
-                    continue;
-                }
-                SharedPreferences main = MessagesController.getMainSettings(a);
-                main.edit()
-                        .putBoolean("keepAliveService", true)
-                        .putBoolean("backgroundConnection", true)
-                        .apply();
-                MessagesController messagesController = MessagesController.getInstance(a);
-                messagesController.keepAliveService = true;
-                messagesController.backgroundConnection = true;
-                ConnectionsManager.getInstance(a).setPushConnectionEnabled(true);
-            }
+        // One-time undo of the earlier force-enable migration above. Runs once
+        // (BACKGROUND_DISABLE_MIGRATION_KEY), so a user who later turns
+        // Keep-Alive Service back on in settings is never overridden again.
+        if (global.getBoolean(BACKGROUND_DISABLE_MIGRATION_KEY, false)) {
+            return;
         }
+        global.edit()
+                .putBoolean("pushService", false)
+                .putBoolean("pushConnection", false)
+                .putBoolean(BACKGROUND_DISABLE_MIGRATION_KEY, true)
+                .apply();
+        for (int a = 0; a < UserConfig.MAX_ACCOUNT_COUNT; a++) {
+            if (!UserConfig.getInstance(a).isClientActivated()) {
+                continue;
+            }
+            SharedPreferences main = MessagesController.getMainSettings(a);
+            main.edit()
+                    .putBoolean("keepAliveService", false)
+                    .putBoolean("backgroundConnection", false)
+                    .apply();
+            MessagesController messagesController = MessagesController.getInstance(a);
+            messagesController.keepAliveService = false;
+            messagesController.backgroundConnection = false;
+            ConnectionsManager.getInstance(a).setPushConnectionEnabled(false);
+        }
+        startPushService();
     }
 
     public static void startPushService() {

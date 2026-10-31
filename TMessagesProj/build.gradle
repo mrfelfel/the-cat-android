@@ -31,6 +31,9 @@ configurations.all {
 }
 
 dependencies {
+    // gomobile address-resolver from the-cat-network-base (network-base/); see
+    // org.telegram.thecat.CatNetResolver. `api` so it reaches the APK too.
+    api files('libs/catnet.aar')
     implementation 'androidx.core:core:1.16.0'
     implementation 'androidx.palette:palette:1.0.0'
     implementation 'androidx.exifinterface:exifinterface:1.3.6'

@@ -4148,7 +4148,7 @@
     <string name="GroupMessagesChargePrice">دریافت ستاره برای پیام‌ها</string>
     <string name="GroupMessagesChargePriceInfo">در صورت فعال کردن این گزینه، اعضای معمولی گروه باید برای ارسال پیام، ستاره پرداخت کنند.</string>
     <string name="GroupMessagesPriceHeader">تنظیم قیمت هر پیام</string>
-    <string name="GroupMessagesPriceInfo" formatted="false">گروه شما ⁨%1$s⁩ هزینه انتخاب شده (~⁨%2$s⁩$) برای هر پیام دریافتی را دریافت خواهد کرد.</string>
+    <string name="GroupMessagesPriceInfo" formatted="false">گروه شما ⁨%1$s⁩ هزینه انتخاب شده (~⁨%2$s⁩) برای هر پیام دریافتی را دریافت خواهد کرد.</string>
     <string name="GroupName">نام گروه</string>
     <string name="GroupNeedBoostsDescription" formatted="false">گروه شما به ⁨%s⁩ برای فعال کردن قابلیت پست استوری نیاز دارد.\n\nاز اعضای **پرمیوم** خود بخواهید تا با استفاده از این لینک از گروه شما حمایت کنند:</string>
     <string name="GroupNeedBoostsDescriptionForNewFeatures" formatted="false">**⁨%1$s⁩** به ⁨%2$s⁩ حمایت دیگر نیاز دارد تا به قابلیت‌های جدید دسترسی پیدا کند.</string>
@@ -6050,7 +6050,7 @@
     <string name="PostSuggestionsOfferTitlePriceStars">قیمت در واحد ستاره را وارد کنید</string>
     <string name="PostSuggestionsOfferTitlePriceTON">قیمت را به کت کوین وارد کنید</string>
     <string name="PostSuggestionsOfferTitleTime">زمان انتشار</string>
-    <string name="PostSuggestionsPriceInfo2" formatted="false">شما ⁨%1$s⁩ هزینه انتخاب شده (~⁨%2$s⁩$) برای هر پیام دریافتی را دریافت خواهید کرد.</string>
+    <string name="PostSuggestionsPriceInfo2" formatted="false">شما ⁨%1$s⁩ هزینه انتخاب شده (~⁨%2$s⁩) برای هر پیام دریافتی را دریافت خواهید کرد.</string>
     <string name="PostSuggestionsSendWithOffer">ارسال با پیشنهاد قیمت</string>
     <string name="PostSuggestionsStars" formatted="false">⭐️ ⁨%d⁩</string>
     <string name="PostingMembers">اعضای پست کننده</string>
@@ -6342,7 +6342,7 @@
     <string name="PrivateMessagesExceptionsHeader">استثناها</string>
     <string name="PrivateMessagesExceptionsInfo">کاربران یا گروه‌هایی که برای ارسال پیام به شما مجبور به پرداخت هزینه نیستند را اضافه کنید.</string>
     <string name="PrivateMessagesPriceHeader">قیمت خود را برای هر پیام مشخص کنید</string>
-    <string name="PrivateMessagesPriceInfo" formatted="false">شما ⁨%1$s⁩ هزینه انتخاب شده (~⁨%2$s⁩$) برای هر پیام دریافتی را دریافت خواهید کرد.</string>
+    <string name="PrivateMessagesPriceInfo" formatted="false">شما ⁨%1$s⁩ هزینه انتخاب شده (~⁨%2$s⁩) برای هر پیام دریافتی را دریافت خواهید کرد.</string>
     <string name="PrivateShares">به اشتراک گذاری خصوصی</string>
     <string name="Proceed">ادامه</string>
     <string name="ProfileActionsAddStory">افزودن استوری</string>

@@ -174,6 +174,7 @@ public class AnimatedTextView extends View {
             this.preserveIndex = preserveIndex;
             this.startFromEnd = startFromEnd;
             this.enforceByLetter = enforceByLetter;
+            textPaint.setTypeface(AndroidUtilities.vazir());
         }
 
         public void setAllowCancel(boolean allowCancel) {
@@ -1057,7 +1058,11 @@ public class AnimatedTextView extends View {
         public void copyStylesFrom(TextPaint paint) {
             setTextColor(paint.getColor());
             setTextSize(paint.getTextSize());
-            setTypeface(paint.getTypeface());
+            Typeface typeface = paint.getTypeface();
+            if (typeface == null || Typeface.DEFAULT.equals(typeface)) {
+                typeface = AndroidUtilities.vazir();
+            }
+            setTypeface(typeface);
         }
 
         public TextPaint getPaint() {

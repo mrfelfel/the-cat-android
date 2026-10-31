@@ -308,15 +308,6 @@ void setPushConnectionEnabled(JNIEnv *env, jclass c, jint instanceNum, jboolean 
     ConnectionsManager::getInstance(instanceNum).setPushConnectionEnabled(value);
 }
 
-void applyDnsConfig(JNIEnv *env, jclass c, jint instanceNum, jlong address, jstring phone, jint date) {
-    const char *phoneStr = env->GetStringUTFChars(phone, 0);
-
-    ConnectionsManager::getInstance(instanceNum).applyDnsConfig((NativeByteBuffer *) (intptr_t) address, phoneStr, date);
-    if (phoneStr != 0) {
-        env->ReleaseStringUTFChars(phone, phoneStr);
-    }
-}
-
 jlong checkProxy(JNIEnv *env, jclass c, jint instanceNum, jstring address, jint port, jstring username, jstring password, jstring secret, jobject requestTimeFunc) {
     const char *addressStr = env->GetStringUTFChars(address, 0);
     const char *usernameStr = env->GetStringUTFChars(username, 0);
@@ -572,7 +563,6 @@ static JNINativeMethod ConnectionsManagerMethods[] = {
         {"native_setNetworkAvailable", "(IZIZ)V", (void *) setNetworkAvailable},
         {"native_setPushConnectionEnabled", "(IZ)V", (void *) setPushConnectionEnabled},
         {"native_setJava", "(Z)V", (void *) setJava},
-        {"native_applyDnsConfig", "(IJLjava/lang/String;I)V", (void *) applyDnsConfig},
         {"native_checkProxy", "(ILjava/lang/String;ILjava/lang/String;Ljava/lang/String;Ljava/lang/String;Lorg/telegram/tgnet/RequestTimeDelegate;)J", (void *) checkProxy},
         {"native_onHostNameResolved", "(Ljava/lang/String;JLjava/lang/String;)V", (void *) onHostNameResolved},
         {"native_discardConnection", "(III)V", (void *) discardConnection},

@@ -83,7 +83,7 @@ public class TextPaintView extends EntityView {
         editText.setText(text);
         updateHint();
         editText.setTextColor(swatch.color);
-        editText.setTypeface(null, Typeface.BOLD);
+        editText.setTypeface(AndroidUtilities.vazirBold());
         editText.setHorizontallyScrolling(false);
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             editText.setImeOptions(EditorInfo.IME_FLAG_NO_EXTRACT_UI | EditorInfo.IME_FLAG_NO_PERSONALIZED_LEARNING);

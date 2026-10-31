@@ -52,7 +52,7 @@ public class PieChartView extends StackLinearChartView<PieChartViewData> {
         textPaint = new TextPaint(Paint.ANTI_ALIAS_FLAG);
         textPaint.setTextAlign(Paint.Align.CENTER);
         textPaint.setColor(Color.WHITE);
-        textPaint.setTypeface(Typeface.create("sans-serif-medium", Typeface.NORMAL));
+        textPaint.setTypeface(AndroidUtilities.bold());
         canCaptureChartSelection = true;
     }
 

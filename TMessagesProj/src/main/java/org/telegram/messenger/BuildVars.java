@@ -37,8 +37,10 @@ public class BuildVars {
 
     public static String HUAWEI_APP_ID = "101184875";
 
-    // The Cat has no FCM push infra — keep MTProto alive in background via foreground service.
-    public static boolean FORCE_BACKGROUND_WORK = true;
+    // The Cat has no FCM push infra, so without this the OS kills the socket in
+    // background and messages/calls arrive late. Off by default to save battery;
+    // users can enable Keep-Alive Service in Settings > Notifications manually.
+    public static boolean FORCE_BACKGROUND_WORK = false;
 
     // You can use this flag to disable Google Play Billing (If you're making fork and want it to be in Google Play)
     public static boolean IS_BILLING_UNAVAILABLE = false;

@@ -75,7 +75,7 @@ public class AboutFragment extends BaseFragment {
         tv.setText(text);
         tv.setTextColor(Theme.getColor(Theme.key_windowBackgroundWhiteBlackText));
         tv.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, 24);
-        tv.setTypeface(Typeface.DEFAULT_BOLD);
+        tv.setTypeface(AndroidUtilities.bold());
         tv.setGravity(Gravity.START);
         return tv;
     }

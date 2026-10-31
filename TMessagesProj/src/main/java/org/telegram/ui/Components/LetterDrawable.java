@@ -69,7 +69,7 @@ public class LetterDrawable extends Drawable {
             }
             namePaintTopic.setColor(Color.WHITE);
             namePaintTopic.setTextSize(dp(13));
-            namePaintTopic.setTypeface(Typeface.create(Typeface.DEFAULT, Typeface.BOLD));
+            namePaintTopic.setTypeface(AndroidUtilities.vazirBold());
             textPaint = namePaintTopic;
         } else {
             if (namePaintSmallTopic == null) {
@@ -77,7 +77,7 @@ public class LetterDrawable extends Drawable {
             }
             namePaintSmallTopic.setColor(Color.WHITE);
             namePaintSmallTopic.setTextSize(Theme.chat_topicTextPaint.getTextSize() * .75f);
-            namePaintSmallTopic.setTypeface(Typeface.create(Typeface.DEFAULT, Typeface.BOLD));
+            namePaintSmallTopic.setTypeface(AndroidUtilities.vazirBold());
             textPaint = namePaintSmallTopic;
         }
     }

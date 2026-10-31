@@ -1056,7 +1056,7 @@ public class ChatThemeBottomSheet extends BottomSheet implements NotificationCen
                 } else {
                     layout.titleTextView.setText(AndroidUtilities.replaceTags(LocaleController.formatString("ThemeAlsoAppliedForHint", R.string.ThemeAlsoAppliedForHint, user.first_name)));
                 }
-                layout.titleTextView.setTypeface(null);
+                layout.titleTextView.setTypeface(AndroidUtilities.vazir());
                 bulletin = Bulletin.make(chatActivity, layout, Bulletin.DURATION_LONG);
             }
         }

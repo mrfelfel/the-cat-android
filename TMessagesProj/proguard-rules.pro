@@ -128,3 +128,22 @@
 -keepclassmembers class org.telegram.messenger.ApplicationLoader {
     public org.telegram.messenger.billing.StoreBillingBridge getStoreBillingBridge();
 }
+
+# Dev-server flavor flag. Same failure mode as the store bridge above: the
+# library's own R8 pass sees only the base ApplicationLoader (returns false),
+# so anything the base folds from it is baked to the STORE value and the dev
+# APK ships compiled against :30001. Verified via javap on shrunkClasses.jar --
+# the first attempt read a BuildConfig boolean directly and came out as
+# `sipush 30001` in the dev APK.
+-keepclassmembers class org.telegram.messenger.ApplicationLoader {
+    public boolean isDevServerBuild();
+}
+-keepclassmembers class * extends org.telegram.messenger.ApplicationLoader {
+    public boolean isDevServerBuild();
+}
+
+# gomobile address-resolver (catnet.aar). The native side binds these by name via
+# JNI (Java_org_thegram_thecat_catnet_mobile_Mobile_new_ etc.), so R8 must not
+# rename or strip them. Mirrors the AAR's consumer rules for the library's own pass.
+-keep class go.** { *; }
+-keep class org.telegram.thecat.catnet.mobile.** { *; }

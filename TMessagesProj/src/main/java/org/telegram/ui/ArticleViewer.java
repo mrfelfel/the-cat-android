@@ -2680,7 +2680,7 @@ public class ArticleViewer extends IArticleViewer implements NotificationCenter.
 
         public void updatePaintFonts(int selectedFont) {
             ApplicationLoader.applicationContext.getSharedPreferences("articles", Activity.MODE_PRIVATE).edit().putInt("font_type", selectedFont).commit();
-            Typeface typefaceNormal = selectedFont == 0 ? Typeface.DEFAULT : Typeface.SERIF;
+            Typeface typefaceNormal = selectedFont == 0 ? AndroidUtilities.vazir() : Typeface.SERIF;
             Typeface typefaceItalic = selectedFont == 0 ? AndroidUtilities.getTypeface("fonts/ritalic.ttf") : Typeface.create("serif", Typeface.ITALIC);
             Typeface typefaceBold = selectedFont == 0 ? AndroidUtilities.bold() : Typeface.create("serif", Typeface.BOLD);
             Typeface typefaceBoldItalic = selectedFont == 0 ? AndroidUtilities.getTypeface("fonts/rmediumitalic.ttf") : Typeface.create("serif", Typeface.BOLD_ITALIC);

@@ -34,9 +34,11 @@ import androidx.annotation.RequiresApi;
 import androidx.annotation.StringRes;
 
 import org.telegram.messenger.time.FastDateFormat;
+import org.telegram.messenger.time.JalaliCalendar;
 import org.telegram.tgnet.Vector;
 import org.telegram.ui.Components.TypefaceSpan;
 import org.telegram.ui.Stars.StarsController;
+import org.telegram.messenger.utils.TheCatMoney;
 import org.telegram.tgnet.ConnectionsManager;
 import org.telegram.tgnet.TLObject;
 import org.telegram.tgnet.TLRPC;
@@ -1873,6 +1875,11 @@ public class LocaleController {
         double doubleAmount;
         boolean discount = amount < 0;
         amount = Math.abs(amount);
+        if (!editText && !StarsController.currency.equals(type)) {
+            // The Cat: display all fiat amounts in tomans only (TheCatMoney).
+            double units = amount / (double) getCurrencyExpDivider(type);
+            return (discount ? "-" : "") + TheCatMoney.formatToman(TheCatMoney.toToman(units, type));
+        }
         Currency currency = Currency.getInstance(type);
         switch (type) {
             case StarsController.currency:
@@ -2188,7 +2195,7 @@ public class LocaleController {
 
     public static String formatDateChat(long date, boolean checkYear) {
         try {
-            Calendar calendar = Calendar.getInstance();
+            Calendar calendar = JalaliCalendar.getInstance();
             calendar.setTimeInMillis(System.currentTimeMillis());
             int currentYear = calendar.get(Calendar.YEAR);
             date *= 1000;
@@ -2209,7 +2216,7 @@ public class LocaleController {
     }
     public static String formatSmallDateChat(long date, boolean full) {
         try {
-            Calendar calendar = Calendar.getInstance();
+            Calendar calendar = JalaliCalendar.getInstance();
             calendar.setTimeInMillis(System.currentTimeMillis());
             int currentYear = calendar.get(Calendar.YEAR);
             date *= 1000;
@@ -2231,7 +2238,7 @@ public class LocaleController {
     public static String formatDate(long date, boolean withToday) {
         try {
             date *= 1000;
-            Calendar rightNow = Calendar.getInstance();
+            Calendar rightNow = JalaliCalendar.getInstance();
             int day = rightNow.get(Calendar.DAY_OF_YEAR);
             int year = rightNow.get(Calendar.YEAR);
             rightNow.setTimeInMillis(date);
@@ -2259,7 +2266,7 @@ public class LocaleController {
     public static String formatDateAudio(long date, boolean shortFormat) {
         try {
             date *= 1000;
-            Calendar rightNow = Calendar.getInstance();
+            Calendar rightNow = JalaliCalendar.getInstance();
             int day = rightNow.get(Calendar.DAY_OF_YEAR);
             int year = rightNow.get(Calendar.YEAR);
             rightNow.setTimeInMillis(date);
@@ -2288,7 +2295,7 @@ public class LocaleController {
     public static String formatSeenDate(long date) {
         try {
             date *= 1000;
-            Calendar rightNow = Calendar.getInstance();
+            Calendar rightNow = JalaliCalendar.getInstance();
             int day = rightNow.get(Calendar.DAY_OF_YEAR);
             int year = rightNow.get(Calendar.YEAR);
             rightNow.setTimeInMillis(date);
@@ -2313,7 +2320,7 @@ public class LocaleController {
     public static String formatPmSeenDate(long date) {
         try {
             date *= 1000;
-            Calendar rightNow = Calendar.getInstance();
+            Calendar rightNow = JalaliCalendar.getInstance();
             int day = rightNow.get(Calendar.DAY_OF_YEAR);
             int year = rightNow.get(Calendar.YEAR);
             rightNow.setTimeInMillis(date);
@@ -2338,7 +2345,7 @@ public class LocaleController {
     public static String formatTodoCompletedDate(long date) {
         try {
             date *= 1000;
-            Calendar rightNow = Calendar.getInstance();
+            Calendar rightNow = JalaliCalendar.getInstance();
             int day = rightNow.get(Calendar.DAY_OF_YEAR);
             int year = rightNow.get(Calendar.YEAR);
             rightNow.setTimeInMillis(date);
@@ -2364,7 +2371,7 @@ public class LocaleController {
     public static String formatPmSentDate(long date) {
         try {
             date *= 1000;
-            Calendar rightNow = Calendar.getInstance();
+            Calendar rightNow = JalaliCalendar.getInstance();
             int day = rightNow.get(Calendar.DAY_OF_YEAR);
             int year = rightNow.get(Calendar.YEAR);
             rightNow.setTimeInMillis(date);
@@ -2389,7 +2396,7 @@ public class LocaleController {
     public static String formatPmEditedDate(long date) {
         try {
             date *= 1000;
-            Calendar rightNow = Calendar.getInstance();
+            Calendar rightNow = JalaliCalendar.getInstance();
             int day = rightNow.get(Calendar.DAY_OF_YEAR);
             int year = rightNow.get(Calendar.YEAR);
             rightNow.setTimeInMillis(date);
@@ -2414,7 +2421,7 @@ public class LocaleController {
     public static String formatPmFwdDate(long date) {
         try {
             date *= 1000;
-            Calendar rightNow = Calendar.getInstance();
+            Calendar rightNow = JalaliCalendar.getInstance();
             int day = rightNow.get(Calendar.DAY_OF_YEAR);
             int year = rightNow.get(Calendar.YEAR);
             rightNow.setTimeInMillis(date);
@@ -2458,7 +2465,7 @@ public class LocaleController {
     public static String formatShortDate(long date) {
         try {
             date *= 1000;
-            Calendar rightNow = Calendar.getInstance();
+            Calendar rightNow = JalaliCalendar.getInstance();
             int day = rightNow.get(Calendar.DAY_OF_YEAR);
             int year = rightNow.get(Calendar.YEAR);
             long timeInMillis = rightNow.getTimeInMillis();
@@ -2494,7 +2501,7 @@ public class LocaleController {
     public static String formatStoryDate(long date) {
         try {
             date *= 1000;
-            Calendar rightNow = Calendar.getInstance();
+            Calendar rightNow = JalaliCalendar.getInstance();
             int day = rightNow.get(Calendar.DAY_OF_YEAR);
             int year = rightNow.get(Calendar.YEAR);
             long timeInMillis = rightNow.getTimeInMillis();
@@ -2572,7 +2579,7 @@ public class LocaleController {
     public static String formatDateCallLog(long date) {
         try {
             date *= 1000;
-            Calendar rightNow = Calendar.getInstance();
+            Calendar rightNow = JalaliCalendar.getInstance();
             int day = rightNow.get(Calendar.DAY_OF_YEAR);
             int year = rightNow.get(Calendar.YEAR);
             rightNow.setTimeInMillis(date);
@@ -2597,7 +2604,7 @@ public class LocaleController {
     public static String formatStatusExpireDateTime(long date) {
         try {
             date *= 1000;
-            Calendar rightNow = Calendar.getInstance();
+            Calendar rightNow = JalaliCalendar.getInstance();
             int day = rightNow.get(Calendar.DAY_OF_YEAR);
             int year = rightNow.get(Calendar.YEAR);
             rightNow.setTimeInMillis(date);
@@ -2620,7 +2627,7 @@ public class LocaleController {
     public static String formatDateTime(long date, boolean useToday) {
         try {
             date *= 1000;
-            Calendar rightNow = Calendar.getInstance();
+            Calendar rightNow = JalaliCalendar.getInstance();
             int day = rightNow.get(Calendar.DAY_OF_YEAR);
             int year = rightNow.get(Calendar.YEAR);
             rightNow.setTimeInMillis(date);
@@ -2659,7 +2666,7 @@ public class LocaleController {
     public static String formatLocationUpdateDate(long date) {
         try {
             date *= 1000;
-            Calendar rightNow = Calendar.getInstance();
+            Calendar rightNow = JalaliCalendar.getInstance();
             int day = rightNow.get(Calendar.DAY_OF_YEAR);
             int year = rightNow.get(Calendar.YEAR);
             rightNow.setTimeInMillis(date);
@@ -2708,7 +2715,7 @@ public class LocaleController {
     public static String formatDateOnline(long date, boolean[] madeShorter) {
         try {
             date *= 1000;
-            Calendar rightNow = Calendar.getInstance();
+            Calendar rightNow = JalaliCalendar.getInstance();
             int day = rightNow.get(Calendar.DAY_OF_YEAR);
             int year = rightNow.get(Calendar.YEAR);
             int hour = rightNow.get(Calendar.HOUR_OF_DAY);
@@ -2783,6 +2790,10 @@ public class LocaleController {
         }
         nameDisplayOrder = lang.equals("ko") ? 2 : 1;
 
+        // The Cat: show dates in the Solar Hijri (Jalali) calendar when the UI language is Persian.
+        // Wire protocol and stored values stay Gregorian; only formatting/picking changes.
+        JalaliCalendar.setEnabled(JalaliCalendar.isJalaliLanguage(lang));
+
         formatterBoostExpired = null;
         formatterGiveawayCard = null;
         formatterGiveawayMonthDay = null;
@@ -2818,7 +2829,7 @@ public class LocaleController {
     }
 
     public static String formatStartsTime(long date, int type, boolean needToday) {
-        Calendar calendar = Calendar.getInstance();
+        Calendar calendar = JalaliCalendar.getInstance();
         calendar.setTimeInMillis(System.currentTimeMillis());
         int currentYear = calendar.get(Calendar.YEAR);
         int currentDay = calendar.get(Calendar.DAY_OF_YEAR);
@@ -2856,27 +2867,37 @@ public class LocaleController {
     public static String formatYearMonthDay(long date, boolean alwaysShowYear) {
         try {
             date *= 1000;
-            Calendar rightNow = Calendar.getInstance();
+            Calendar rightNow = JalaliCalendar.getInstance();
             int year = rightNow.get(Calendar.YEAR);
             rightNow.setTimeInMillis(date);
             int dateYear = rightNow.get(Calendar.YEAR);
             int month = rightNow.get(Calendar.MONTH);
             int day = rightNow.get(Calendar.DAY_OF_MONTH);
 
-            final String[] months = new String[]{
-                    LocaleController.getString(R.string.January),
-                    LocaleController.getString(R.string.February),
-                    LocaleController.getString(R.string.March),
-                    LocaleController.getString(R.string.April),
-                    LocaleController.getString(R.string.May),
-                    LocaleController.getString(R.string.June),
-                    LocaleController.getString(R.string.July),
-                    LocaleController.getString(R.string.August),
-                    LocaleController.getString(R.string.September),
-                    LocaleController.getString(R.string.October),
-                    LocaleController.getString(R.string.November),
-                    LocaleController.getString(R.string.December)
-            };
+            final String[] months;
+            if (JalaliCalendar.isEnabled()) {
+                months = new String[]{
+                        JalaliCalendar.getMonthName(1), JalaliCalendar.getMonthName(2), JalaliCalendar.getMonthName(3),
+                        JalaliCalendar.getMonthName(4), JalaliCalendar.getMonthName(5), JalaliCalendar.getMonthName(6),
+                        JalaliCalendar.getMonthName(7), JalaliCalendar.getMonthName(8), JalaliCalendar.getMonthName(9),
+                        JalaliCalendar.getMonthName(10), JalaliCalendar.getMonthName(11), JalaliCalendar.getMonthName(12)
+                };
+            } else {
+                months = new String[]{
+                        LocaleController.getString(R.string.January),
+                        LocaleController.getString(R.string.February),
+                        LocaleController.getString(R.string.March),
+                        LocaleController.getString(R.string.April),
+                        LocaleController.getString(R.string.May),
+                        LocaleController.getString(R.string.June),
+                        LocaleController.getString(R.string.July),
+                        LocaleController.getString(R.string.August),
+                        LocaleController.getString(R.string.September),
+                        LocaleController.getString(R.string.October),
+                        LocaleController.getString(R.string.November),
+                        LocaleController.getString(R.string.December)
+                };
+            }
             if (year == dateYear && !alwaysShowYear) {
                 return months[month] + " " + day;
             } else {
@@ -2891,26 +2912,36 @@ public class LocaleController {
     public static String formatYearMont(long date, boolean alwaysShowYear) {
         try {
             date *= 1000;
-            Calendar rightNow = Calendar.getInstance();
+            Calendar rightNow = JalaliCalendar.getInstance();
             int year = rightNow.get(Calendar.YEAR);
             rightNow.setTimeInMillis(date);
             int dateYear = rightNow.get(Calendar.YEAR);
             int month = rightNow.get(Calendar.MONTH);
 
-            final String[] months = new String[]{
-                    LocaleController.getString(R.string.January),
-                    LocaleController.getString(R.string.February),
-                    LocaleController.getString(R.string.March),
-                    LocaleController.getString(R.string.April),
-                    LocaleController.getString(R.string.May),
-                    LocaleController.getString(R.string.June),
-                    LocaleController.getString(R.string.July),
-                    LocaleController.getString(R.string.August),
-                    LocaleController.getString(R.string.September),
-                    LocaleController.getString(R.string.October),
-                    LocaleController.getString(R.string.November),
-                    LocaleController.getString(R.string.December)
-            };
+            final String[] months;
+            if (JalaliCalendar.isEnabled()) {
+                months = new String[]{
+                        JalaliCalendar.getMonthName(1), JalaliCalendar.getMonthName(2), JalaliCalendar.getMonthName(3),
+                        JalaliCalendar.getMonthName(4), JalaliCalendar.getMonthName(5), JalaliCalendar.getMonthName(6),
+                        JalaliCalendar.getMonthName(7), JalaliCalendar.getMonthName(8), JalaliCalendar.getMonthName(9),
+                        JalaliCalendar.getMonthName(10), JalaliCalendar.getMonthName(11), JalaliCalendar.getMonthName(12)
+                };
+            } else {
+                months = new String[]{
+                        LocaleController.getString(R.string.January),
+                        LocaleController.getString(R.string.February),
+                        LocaleController.getString(R.string.March),
+                        LocaleController.getString(R.string.April),
+                        LocaleController.getString(R.string.May),
+                        LocaleController.getString(R.string.June),
+                        LocaleController.getString(R.string.July),
+                        LocaleController.getString(R.string.August),
+                        LocaleController.getString(R.string.September),
+                        LocaleController.getString(R.string.October),
+                        LocaleController.getString(R.string.November),
+                        LocaleController.getString(R.string.December)
+                };
+            }
             if (year == dateYear && !alwaysShowYear) {
                 return months[month];
             } else {
@@ -2925,7 +2956,7 @@ public class LocaleController {
     public static String formatDateForBan(long date) {
         try {
             date *= 1000;
-            Calendar rightNow = Calendar.getInstance();
+            Calendar rightNow = JalaliCalendar.getInstance();
             int year = rightNow.get(Calendar.YEAR);
             rightNow.setTimeInMillis(date);
             int dateYear = rightNow.get(Calendar.YEAR);
@@ -2947,7 +2978,7 @@ public class LocaleController {
             if (Math.abs(System.currentTimeMillis() - date) >= 31536000000L) {
                 return getInstance().getFormatterYear().format(new Date(date));
             } else {
-                Calendar rightNow = Calendar.getInstance();
+                Calendar rightNow = JalaliCalendar.getInstance();
                 int day = rightNow.get(Calendar.DAY_OF_YEAR);
                 rightNow.setTimeInMillis(date);
                 int dateDay = rightNow.get(Calendar.DAY_OF_YEAR);

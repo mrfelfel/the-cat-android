@@ -692,7 +692,7 @@ public class AffiliateProgramFragment extends GradientHeaderActivity implements 
             if (TextUtils.isEmpty(text)) {
                 imageViewLayoutParams.topMargin = dp(10);
                 imageViewLayoutParams.bottomMargin = dp(10);
-                titleView.setTypeface(null);
+                titleView.setTypeface(AndroidUtilities.vazir());
                 titleView.setTextSize(TypedValue.COMPLEX_UNIT_DIP, 16);
                 textLayoutLayoutParams.topMargin = 0;
                 textLayoutLayoutParams.bottomMargin = 0;
