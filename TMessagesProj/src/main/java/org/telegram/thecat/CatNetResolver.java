@@ -1,11 +1,14 @@
 package org.telegram.thecat;
 
 import android.content.Context;
+import android.os.SystemClock;
 
 import org.telegram.messenger.ApplicationLoader;
 import org.telegram.messenger.FileLog;
 import org.telegram.thecat.catnet.mobile.Client;
 import org.telegram.thecat.catnet.mobile.Mobile;
+
+import java.io.File;
 
 /**
  * Finds a reachable Cat server address via the-cat-network-base (catnet), so the
@@ -16,10 +19,23 @@ import org.telegram.thecat.catnet.mobile.Mobile;
  * the caller simply falls back to the seed. Resolution runs off the main thread and
  * caches to {@code catnet-servers.json} in the app cache dir, so a second launch
  * resolves from cache before any network layer runs.
+ *
+ * <p>{@link #start} is the once-per-launch, cache-first entry. {@link #refresh} is
+ * the address-finder re-run for when the current endpoint stops answering: it
+ * discards the cached registry document first, so Resolve skips its fresh-cache
+ * fast-path and actually re-probes the seed / refetches the document instead of
+ * returning the address that just failed (the mobile AAR exposes no force flag;
+ * the Go cache reads the file from disk on every resolve, so deleting it is the
+ * same thing).
  */
 public final class CatNetResolver {
 
     private static final long TIMEOUT_MS = 12000L;
+    // Rate-limit re-runs: the native connection-stall callback and the
+    // connectivity receiver can both fire in bursts while an outage lasts.
+    private static final long REFRESH_MIN_INTERVAL_MS = 15000L;
+    // Must match the cache path mobile.New() builds inside the AAR.
+    private static final String CACHE_FILE = "catnet-servers.json";
 
     private static volatile CatNetResolver instance;
 
@@ -27,6 +43,8 @@ public final class CatNetResolver {
     private String resolvedHost;
     private int resolvedPort;
     private boolean started;
+    private boolean running;
+    private long lastAttemptAt;
 
     public static CatNetResolver getInstance() {
         if (instance == null) {
@@ -61,15 +79,62 @@ public final class CatNetResolver {
      * fails. {@code onNewAddress} runs (on a background thread) whenever the
      * resolved address CHANGES, so the caller can re-point a live connection.
      */
-    public synchronized void start(final String seedHost, final int seedPort, final Runnable onNewAddress) {
-        if (started) {
+    public void start(final String seedHost, final int seedPort, final Runnable onNewAddress) {
+        synchronized (this) {
+            if (started) {
+                return;
+            }
+            started = true;
+        }
+        if (!reserveAttempt()) {
             return;
         }
-        started = true;
+        runResolve(seedHost, seedPort, onNewAddress, false);
+    }
+
+    /**
+     * Re-run discovery on demand — the connection-stall / network-returned path
+     * where stock Telegram refetched its own DNS address book. Same seed-first
+     * guarantees and change callback as {@link #start}, but the cached registry
+     * document is discarded first so a dead endpoint is replaced now rather than
+     * at cache expiry. Throttled and single-flight; safe to call from any thread.
+     */
+    public void refresh(final String seedHost, final int seedPort, final Runnable onNewAddress) {
+        if (!reserveAttempt()) {
+            FileLog.d("CatNetResolver: refresh skipped (throttled or already running)");
+            return;
+        }
+        runResolve(seedHost, seedPort, onNewAddress, true);
+    }
+
+    /** Single-flight + minimum spacing across both start() and refresh(). */
+    private synchronized boolean reserveAttempt() {
+        if (running) {
+            return false;
+        }
+        long now = SystemClock.elapsedRealtime();
+        if (lastAttemptAt != 0 && now - lastAttemptAt < REFRESH_MIN_INTERVAL_MS) {
+            return false;
+        }
+        running = true;
+        lastAttemptAt = now;
+        return true;
+    }
+
+    private void runResolve(final String seedHost, final int seedPort, final Runnable onNewAddress, final boolean discardCache) {
         final Context appCtx = ApplicationLoader.applicationContext;
         final String seeds = seedHost + ":" + seedPort;
         new Thread(() -> {
             try {
+                if (discardCache && appCtx != null) {
+                    // Force path: without this the Go side returns the fresh
+                    // cached document and never re-probes — i.e. it would keep
+                    // offering the endpoint that just stopped answering.
+                    File cacheFile = new File(appCtx.getCacheDir(), CACHE_FILE);
+                    if (cacheFile.exists()) {
+                        cacheFile.delete();
+                    }
+                }
                 String cacheDir = appCtx != null ? appCtx.getCacheDir().getAbsolutePath() : "";
                 Client c;
                 synchronized (this) {
@@ -110,6 +175,10 @@ public final class CatNetResolver {
             } catch (Throwable t) {
                 // Total failure is fine: the caller keeps using the seed.
                 FileLog.e(t);
+            } finally {
+                synchronized (this) {
+                    running = false;
+                }
             }
         }, "CatNetResolver").start();
     }

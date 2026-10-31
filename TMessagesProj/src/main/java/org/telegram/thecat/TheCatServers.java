@@ -367,14 +367,23 @@ public class TheCatServers {
      * of being silently kept alive.
      */
     public static void applyStoredServerToAccount(int accountNum) {
-        if (ID_TELEGRAM.equals(getServerIdForAccount(accountNum))) {
+        String storedId = getServerIdForAccount(accountNum);
+        if (ID_TELEGRAM.equals(storedId)) {
             clearServerForAccount(accountNum);
             if (UserConfig.getInstance(accountNum).isClientActivated()) {
                 MessagesController.getInstance(accountNum).performLogout(0);
             }
             return;
         }
-        TheCatServer server = getServerForAccount(accountNum);
+        TheCatServer server = (storedId != null) ? getServerById(storedId) : null;
+        if (server == null && storedId == null) {
+            // Never bound (fresh install or a pre-binding account): fall back to
+            // the built-in server so the native layer always gets applyServerConfig
+            // instead of being left on whatever addresses it booted with. A non-null
+            // id that no longer resolves is a deleted custom server whose saved
+            // endpoint keeps working as-is.
+            server = thecatServer();
+        }
         if (server != null) {
             applyServerToAccount(server, accountNum, false);
         }
@@ -391,11 +400,29 @@ public class TheCatServers {
         if (s == null || !DEFAULT_HOST.equals(s.host) || s.port != DEFAULT_PORT) {
             return;
         }
-        CatNetResolver.getInstance().start(DEFAULT_HOST, DEFAULT_PORT, () -> {
-            for (int a = 0; a < UserConfig.MAX_ACCOUNT_COUNT; a++) {
-                applyStoredServerToAccount(a);
-            }
-        });
+        CatNetResolver.getInstance().start(DEFAULT_HOST, DEFAULT_PORT, TheCatServers::reapplyAllAccounts);
+    }
+
+    /**
+     * Re-runs the discovery above on demand — the Cat's replacement for stock
+     * Telegram's DNS address book: called when the connection stalls long enough
+     * for native to ask for a new endpoint, and when connectivity returns. Unlike
+     * the startup pass this discards the cached registry document first, so a
+     * dead endpoint is replaced immediately instead of at cache expiry. Throttled
+     * and single-flight inside the resolver; safe from any thread.
+     */
+    public static void refreshCatNetResolution() {
+        TheCatServer s = thecatServer();
+        if (s == null || !DEFAULT_HOST.equals(s.host) || s.port != DEFAULT_PORT) {
+            return;
+        }
+        CatNetResolver.getInstance().refresh(DEFAULT_HOST, DEFAULT_PORT, TheCatServers::reapplyAllAccounts);
+    }
+
+    private static void reapplyAllAccounts() {
+        for (int a = 0; a < UserConfig.MAX_ACCOUNT_COUNT; a++) {
+            applyStoredServerToAccount(a);
+        }
     }
 
     // --- Helpers ---

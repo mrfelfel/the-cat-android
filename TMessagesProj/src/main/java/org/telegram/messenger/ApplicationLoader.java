@@ -258,6 +258,13 @@ public class ApplicationLoader extends Application {
                         ConnectionsManager.getInstance(a).checkConnection();
                         FileLoader.getInstance(a).onNetworkChanged(isSlow);
                     }
+                    // Address finder: connectivity just changed, so the endpoint
+                    // we are pinned to may be the part that died — let catnet
+                    // re-probe and re-point if it finds a better one (throttled
+                    // and no-op for dev/custom servers, see refreshCatNetResolution).
+                    if (isNetworkOnline()) {
+                        TheCatServers.refreshCatNetResolution();
+                    }
                 }
             };
             IntentFilter filter = new IntentFilter(ConnectivityManager.CONNECTIVITY_ACTION);
