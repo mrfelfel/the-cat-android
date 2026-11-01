@@ -82,6 +82,7 @@ public class AboutFragment extends BaseFragment {
 
     private TextView makeBody(Context context, String text) {
         TextView tv = new TextView(context);
+        tv.setTypeface(AndroidUtilities.vazir());
         tv.setText(text);
         tv.setTextColor(Theme.getColor(Theme.key_windowBackgroundWhiteGrayText));
         tv.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, 15);
@@ -92,6 +93,7 @@ public class AboutFragment extends BaseFragment {
 
     private TextView makeSectionHeader(Context context, String text) {
         TextView tv = new TextView(context);
+        tv.setTypeface(AndroidUtilities.vazir());
         tv.setText(text);
         tv.setTextColor(Theme.getColor(Theme.key_windowBackgroundWhiteBlueText));
         tv.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, 13);
@@ -106,6 +108,7 @@ public class AboutFragment extends BaseFragment {
         row.setPadding(AndroidUtilities.dp(14), AndroidUtilities.dp(12), AndroidUtilities.dp(14), AndroidUtilities.dp(12));
 
         TextView titleView = new TextView(context);
+        titleView.setTypeface(AndroidUtilities.vazir());
         titleView.setText(title);
         titleView.setTextColor(Theme.getColor(Theme.key_windowBackgroundWhiteBlackText));
         titleView.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, 15);
@@ -114,6 +117,7 @@ public class AboutFragment extends BaseFragment {
 
         if (subtitle != null && !subtitle.equals(title)) {
             TextView subView = new TextView(context);
+            subView.setTypeface(AndroidUtilities.vazir());
             subView.setText(subtitle);
             subView.setTextColor(Theme.getColor(Theme.key_windowBackgroundWhiteGrayText));
             subView.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, 13);
