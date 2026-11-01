@@ -1131,6 +1131,20 @@ public class StarsController {
         payload.amount = option.amount;
         payload.users = users;
 
+        // Bazaar flavor: buy the giveaway from the Bazaar wallet instead of the
+        // Google or invoice/bot path below. Consumable, so it is consumed after
+        // the server credits it.
+        if (BuildVars.isBazaarStoreApp() && StoreBilling.isAvailable()) {
+            StoreBilling.tryPurchaseConsumable(activity, currentAccount, payload, option.store_product,
+                    new StoreBillingBridge.Callback() {
+                        @Override public void onSuccess() { if (whenDone != null) whenDone.run(true, null); }
+                        @Override public void onError(String message) { if (whenDone != null) whenDone.run(false, message); }
+                        @Override public void onCanceled() { if (whenDone != null) whenDone.run(false, null); }
+                        @Override public void onQueued() { if (whenDone != null) whenDone.run(true, null); }
+                    });
+            return;
+        }
+
         if (BuildVars.useInvoiceBilling() || !BillingController.getInstance().isReady() || option.store_product == null) {
 
             TLRPC.TL_inputInvoiceStars invoice = new TLRPC.TL_inputInvoiceStars();

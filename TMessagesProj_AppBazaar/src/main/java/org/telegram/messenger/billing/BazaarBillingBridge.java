@@ -15,6 +15,8 @@ import org.telegram.messenger.utils.BillingUtilities;
 import org.telegram.tgnet.ConnectionsManager;
 import org.telegram.tgnet.TLRPC;
 
+import java.util.concurrent.atomic.AtomicBoolean;
+
 import ir.cafebazaar.poolakey.Payment;
 import ir.cafebazaar.poolakey.callback.ConnectionCallback;
 import ir.cafebazaar.poolakey.callback.ConsumeCallback;
@@ -39,6 +41,11 @@ import kotlin.jvm.functions.Function1;
  * signature against Bazaar and activates premium, replying with Updates. Until
  * that server method exists the request fails with an RPC error, which is
  * surfaced to the user -- no premium is granted client-side.
+ *
+ * Every callback Poolakey can reach is guarded: Poolakey dispatches the
+ * purchase result inline from {@code Activity.onActivityResult}, so any
+ * Throwable escaping our handler kills the process at the exact moment the
+ * Bazaar dialog closes.
  */
 public class BazaarBillingBridge implements StoreBillingBridge {
 
@@ -58,14 +65,37 @@ public class BazaarBillingBridge implements StoreBillingBridge {
     private static final String BAZAAR_RSA_PUBLIC_KEY =
             "MIHNMA0GCSqGSIb3DQEBAQUAA4G7ADCBtwKBrwDYzR6TTCgSHqc4XnwB1b0uWUn5/3ek/z1P+qiYYs2e0davkBFXlDIMzZx+qRTsZDNWhdyceDsGUgTCDQBXvF+GoKK/uysaN+uDx6xYKkYNFXngUfNW2OEAYYApbSMTOqV0ZkuayKsquEcPrrUj0nULwQve+JV6bA7gDXbvDyzDG0UdlXvI7GBVXHOFsLVDuuAJgkhiXi795D/BSoFqZwwCe8n+YsnIqUFvP30Y6i8CAwEAAQ==";
 
-    private final Payment payment;
+    private static final Callback NO_OP_CALLBACK = new Callback() {
+        @Override
+        public void onSuccess() {
+        }
+
+        @Override
+        public void onError(String message) {
+        }
+
+        @Override
+        public void onCanceled() {
+        }
+
+        @Override
+        public void onQueued() {
+        }
+    };
+
+    private final Context appContext;
+    /**
+     * Recreated after a disconnect: Poolakey quits its HandlerThread from
+     * {@code BillingConnection.disconnect()}, so a cached Payment stops
+     * executing anything the moment the Bazaar service goes away -- which is
+     * what usually happens right after the payment dialog closes.
+     */
+    private volatile Payment payment;
     private volatile boolean connected;
 
     public BazaarBillingBridge(Context context) {
-        SecurityCheck securityCheck = TextUtils.isEmpty(BAZAAR_RSA_PUBLIC_KEY)
-                ? SecurityCheck.Disable.INSTANCE
-                : new SecurityCheck.Enable(BAZAAR_RSA_PUBLIC_KEY);
-        this.payment = new Payment(context, new PaymentConfiguration(securityCheck, true));
+        this.appContext = context.getApplicationContext();
+        payment();
         // Let the durable outbox consume a stars/gift receipt once the server
         // finally confirms it during a delayed retry, so the user can rebuy.
         BazaarReceiptQueue.setConsumeHandler(this::consumeQuietly);
@@ -78,17 +108,18 @@ public class BazaarBillingBridge implements StoreBillingBridge {
 
     /** Debug-only accessor so the pending-purchases screen can query the store. */
     public Payment getPaymentForDebug() {
-        return payment;
+        return payment();
     }
 
     @Override
     public void purchasePremiumSubscription(Activity activity, int account, TLRPC.TL_premiumSubscriptionOption option, String source, boolean upgrade, Callback callback) {
+        final GuardedCallback guarded = new GuardedCallback(callback);
         if (activity == null) {
-            callback.onError("Unable to start payment: no active screen.");
+            guarded.error("Unable to start payment: no active screen.");
             return;
         }
         if (!(activity instanceof ComponentActivity)) {
-            callback.onError("Unable to start payment: unsupported screen.");
+            guarded.error("Unable to start payment: unsupported screen.");
             return;
         }
         final ActivityResultRegistry registry = ((ComponentActivity) activity).getActivityResultRegistry();
@@ -105,24 +136,25 @@ public class BazaarBillingBridge implements StoreBillingBridge {
         ensureConnected(new Runnable() {
             @Override
             public void run() {
-                PaymentRequestHolder holder = new PaymentRequestHolder(sku, payload, accountInstance, purpose, callback, false);
-                startSubscribe(registry, holder);
+                PaymentRequestHolder holder = new PaymentRequestHolder(sku, payload, accountInstance, purpose, guarded, false);
+                startPurchase(registry, holder, true);
             }
-        }, callback);
+        }, guarded);
     }
 
     @Override
     public void purchaseConsumable(Activity activity, int account, TLRPC.InputStorePaymentPurpose purpose, String sku, Callback callback) {
+        final GuardedCallback guarded = new GuardedCallback(callback);
         if (activity == null) {
-            callback.onError("Unable to start payment: no active screen.");
+            guarded.error("Unable to start payment: no active screen.");
             return;
         }
         if (!(activity instanceof ComponentActivity)) {
-            callback.onError("Unable to start payment: unsupported screen.");
+            guarded.error("Unable to start payment: unsupported screen.");
             return;
         }
         if (TextUtils.isEmpty(sku)) {
-            callback.onError("This item is not available for purchase yet.");
+            guarded.error("This item is not available for purchase yet.");
             return;
         }
         final ActivityResultRegistry registry = ((ComponentActivity) activity).getActivityResultRegistry();
@@ -132,77 +164,60 @@ public class BazaarBillingBridge implements StoreBillingBridge {
         ensureConnected(new Runnable() {
             @Override
             public void run() {
-                PaymentRequestHolder holder = new PaymentRequestHolder(sku, payload, accountInstance, purpose, callback, true);
-                startConsumable(registry, holder);
+                PaymentRequestHolder holder = new PaymentRequestHolder(sku, payload, accountInstance, purpose, guarded, true);
+                startPurchase(registry, holder, false);
             }
-        }, callback);
+        }, guarded);
     }
 
-    /** INAPP purchase for stars/gifts; mirrors startSubscribe but for one-time products. */
-    private void startConsumable(ActivityResultRegistry registry, PaymentRequestHolder holder) {
+    private void startPurchase(ActivityResultRegistry registry, PaymentRequestHolder holder, boolean subscription) {
         final PurchaseRequest request = new PurchaseRequest(holder.sku, holder.payload, null);
-        payment.purchaseProduct(registry, request, new Function1<PurchaseCallback, Unit>() {
+        try {
+            if (subscription) {
+                payment().subscribeProduct(registry, request, purchaseCallbacks(holder));
+            } else {
+                payment().purchaseProduct(registry, request, purchaseCallbacks(holder));
+            }
+        } catch (Throwable t) {
+            FileLog.e("Bazaar billing: could not start " + holder.sku, t);
+            holder.callback.error("Could not open Bazaar payment: " + messageOf(t));
+            return;
+        }
+        // Anything Poolakey hands back from inside the call above is a leftover
+        // of an earlier attempt whose launcher was unregistered, not a result of
+        // this one -- only results arriving after the flow is on screen count.
+        holder.armed = true;
+    }
+
+    private Function1<PurchaseCallback, Unit> purchaseCallbacks(final PaymentRequestHolder holder) {
+        return new Function1<PurchaseCallback, Unit>() {
             @Override
             public Unit invoke(PurchaseCallback cb) {
                 cb.purchaseSucceed(new Function1<PurchaseInfo, Unit>() {
                     @Override
                     public Unit invoke(PurchaseInfo info) {
-                        onPurchaseSucceed(holder, info);
+                        if (holder.armed) {
+                            guard(() -> onPurchaseSucceed(holder, info));
+                        }
                         return Unit.INSTANCE;
                     }
                 });
                 cb.purchaseCanceled(new Function0<Unit>() {
                     @Override
                     public Unit invoke() {
-                        AndroidUtilities.runOnUIThread(() -> holder.callback.onCanceled());
+                        if (holder.armed) {
+                            guard(() -> holder.callback.canceled());
+                        }
                         return Unit.INSTANCE;
                     }
                 });
                 cb.purchaseFailed(new Function1<Throwable, Unit>() {
                     @Override
                     public Unit invoke(Throwable t) {
-                        FileLog.e("Bazaar billing: consumable purchase failed", t);
-                        AndroidUtilities.runOnUIThread(() -> holder.callback.onError("Payment failed: " + t.getMessage()));
-                        return Unit.INSTANCE;
-                    }
-                });
-                cb.failedToBeginFlow(new Function1<Throwable, Unit>() {
-                    @Override
-                    public Unit invoke(Throwable t) {
-                        FileLog.e("Bazaar billing: failed to begin consumable flow", t);
-                        AndroidUtilities.runOnUIThread(() -> holder.callback.onError("Could not open Bazaar payment: " + t.getMessage()));
-                        return Unit.INSTANCE;
-                    }
-                });
-                return Unit.INSTANCE;
-            }
-        });
-    }
-
-    private void startSubscribe(ActivityResultRegistry registry, PaymentRequestHolder holder) {
-        final PurchaseRequest request = new PurchaseRequest(holder.sku, holder.payload, null);
-        payment.subscribeProduct(registry, request, new Function1<PurchaseCallback, Unit>() {
-            @Override
-            public Unit invoke(PurchaseCallback cb) {
-                cb.purchaseSucceed(new Function1<PurchaseInfo, Unit>() {
-                    @Override
-                    public Unit invoke(PurchaseInfo info) {
-                        onPurchaseSucceed(holder, info);
-                        return Unit.INSTANCE;
-                    }
-                });
-                cb.purchaseCanceled(new Function0<Unit>() {
-                    @Override
-                    public Unit invoke() {
-                        AndroidUtilities.runOnUIThread(() -> holder.callback.onCanceled());
-                        return Unit.INSTANCE;
-                    }
-                });
-                cb.purchaseFailed(new Function1<Throwable, Unit>() {
-                    @Override
-                    public Unit invoke(Throwable t) {
-                        FileLog.e("Bazaar billing: purchase failed", t);
-                        AndroidUtilities.runOnUIThread(() -> holder.callback.onError("Payment failed: " + t.getMessage()));
+                        if (holder.armed) {
+                            FileLog.e("Bazaar billing: purchase failed", t);
+                            guard(() -> holder.callback.error("Payment failed: " + messageOf(t)));
+                        }
                         return Unit.INSTANCE;
                     }
                 });
@@ -210,13 +225,13 @@ public class BazaarBillingBridge implements StoreBillingBridge {
                     @Override
                     public Unit invoke(Throwable t) {
                         FileLog.e("Bazaar billing: failed to begin flow", t);
-                        AndroidUtilities.runOnUIThread(() -> holder.callback.onError("Could not open Bazaar payment: " + t.getMessage()));
+                        guard(() -> holder.callback.error("Could not open Bazaar payment: " + messageOf(t)));
                         return Unit.INSTANCE;
                     }
                 });
                 return Unit.INSTANCE;
             }
-        });
+        };
     }
 
     private void onPurchaseSucceed(PaymentRequestHolder holder, PurchaseInfo info) {
@@ -226,16 +241,38 @@ public class BazaarBillingBridge implements StoreBillingBridge {
         // the receipt is NOT dropped -- it is queued durably and re-sent until
         // the server acknowledges, so the purchase survives process death and
         // connectivity loss.
-        String receiptJson = buildReceiptJson(info);
-        String key = info.getPurchaseToken() != null ? info.getPurchaseToken() : info.getOrderId();
+        String built = null;
+        String token = null;
+        boolean sent = false;
+        try {
+            built = buildReceiptJson(info);
+            token = TextUtils.isEmpty(info.getPurchaseToken()) ? info.getOrderId() : info.getPurchaseToken();
 
-        TLRPC.TL_payments_assignBazaarTransaction req = new TLRPC.TL_payments_assignBazaarTransaction();
-        req.receipt = new TLRPC.TL_dataJSON();
-        req.receipt.data = receiptJson;
-        req.purpose = holder.purpose;
+            final String receiptJson = built;
+            final String key = token;
+            TLRPC.TL_payments_assignBazaarTransaction req = new TLRPC.TL_payments_assignBazaarTransaction();
+            req.receipt = new TLRPC.TL_dataJSON();
+            req.receipt.data = receiptJson;
+            req.purpose = holder.purpose;
 
-        int flags = ConnectionsManager.RequestFlagFailOnServerErrors | ConnectionsManager.RequestFlagInvokeAfter;
-        holder.accountInstance.getConnectionsManager().sendRequest(req, (response, error) -> AndroidUtilities.runOnUIThread(() -> {
+            int flags = ConnectionsManager.RequestFlagFailOnServerErrors | ConnectionsManager.RequestFlagInvokeAfter;
+            holder.accountInstance.getConnectionsManager().sendRequest(req, (response, error) ->
+                    AndroidUtilities.runOnUIThread(() -> onReceiptAnswer(holder, receiptJson, key, response, error)), flags);
+            sent = true;
+        } catch (Throwable t) {
+            FileLog.e("Bazaar billing: failed to forward receipt " + token, t);
+            if (sent) {
+                return;
+            }
+            // Money already taken: keep the receipt so it retries, and tell the
+            // UI the purchase is safe rather than lost.
+            queueReceipt(holder, built, token, messageOf(t));
+            holder.callback.queued();
+        }
+    }
+
+    private void onReceiptAnswer(PaymentRequestHolder holder, String receiptJson, String key, Object response, TLRPC.TL_error error) {
+        try {
             if (response instanceof TLRPC.Updates) {
                 holder.accountInstance.getMessagesController().processUpdates((TLRPC.Updates) response, false);
                 // A consumable (stars/gift) must be consumed at the store once the
@@ -243,16 +280,31 @@ public class BazaarBillingBridge implements StoreBillingBridge {
                 if (holder.consumable) {
                     consumeQuietly(key);
                 }
-                holder.callback.onSuccess();
+                holder.callback.success();
             } else {
                 // Queue for automatic retry instead of failing the purchase. The
                 // user paid; only confirmation is pending.
                 String errText = error == null ? "no response" : error.text;
                 FileLog.e("Bazaar billing: assignBazaarTransaction failed (" + errText + "), queueing receipt " + key);
-                BazaarReceiptQueue.enqueue(holder.accountInstance.getCurrentAccount(), receiptJson, holder.payload, key, errText, holder.consumable);
-                holder.callback.onQueued();
+                queueReceipt(holder, receiptJson, key, errText);
+                holder.callback.queued();
             }
-        }), flags);
+        } catch (Throwable t) {
+            FileLog.e("Bazaar billing: could not apply receipt " + key, t);
+            queueReceipt(holder, receiptJson, key, messageOf(t));
+            holder.callback.queued();
+        }
+    }
+
+    private static void queueReceipt(PaymentRequestHolder holder, String receiptJson, String key, String error) {
+        if (TextUtils.isEmpty(receiptJson)) {
+            return;
+        }
+        try {
+            BazaarReceiptQueue.enqueue(holder.accountInstance.getCurrentAccount(), receiptJson, holder.payload, key, error, holder.consumable);
+        } catch (Throwable t) {
+            FileLog.e("Bazaar billing: could not queue receipt " + key, t);
+        }
     }
 
     /**
@@ -264,26 +316,30 @@ public class BazaarBillingBridge implements StoreBillingBridge {
         if (TextUtils.isEmpty(purchaseToken)) {
             return;
         }
-        payment.consumeProduct(purchaseToken, new Function1<ConsumeCallback, Unit>() {
-            @Override
-            public Unit invoke(ConsumeCallback cb) {
-                cb.consumeSucceed(new Function0<Unit>() {
-                    @Override
-                    public Unit invoke() {
-                        FileLog.d("Bazaar billing: consumed " + purchaseToken);
-                        return Unit.INSTANCE;
-                    }
-                });
-                cb.consumeFailed(new Function1<Throwable, Unit>() {
-                    @Override
-                    public Unit invoke(Throwable t) {
-                        FileLog.e("Bazaar billing: consume failed for " + purchaseToken, t);
-                        return Unit.INSTANCE;
-                    }
-                });
-                return Unit.INSTANCE;
-            }
-        });
+        try {
+            payment().consumeProduct(purchaseToken, new Function1<ConsumeCallback, Unit>() {
+                @Override
+                public Unit invoke(ConsumeCallback cb) {
+                    cb.consumeSucceed(new Function0<Unit>() {
+                        @Override
+                        public Unit invoke() {
+                            FileLog.d("Bazaar billing: consumed " + purchaseToken);
+                            return Unit.INSTANCE;
+                        }
+                    });
+                    cb.consumeFailed(new Function1<Throwable, Unit>() {
+                        @Override
+                        public Unit invoke(Throwable t) {
+                            FileLog.e("Bazaar billing: consume failed for " + purchaseToken, t);
+                            return Unit.INSTANCE;
+                        }
+                    });
+                    return Unit.INSTANCE;
+                }
+            });
+        } catch (Throwable t) {
+            FileLog.e("Bazaar billing: consume threw for " + purchaseToken, t);
+        }
     }
 
     /**
@@ -312,33 +368,98 @@ public class BazaarBillingBridge implements StoreBillingBridge {
         }
     }
 
-    private void ensureConnected(Runnable onConnected, Callback callback) {
+    private void ensureConnected(Runnable onConnected, GuardedCallback callback) {
         if (connected) {
-            onConnected.run();
+            startOrReport(onConnected, callback);
             return;
         }
-        payment.connect(new Function1<ConnectionCallback, Unit>() {
-            @Override
-            public Unit invoke(ConnectionCallback cb) {
-                cb.connectionSucceed(new Function0<Unit>() {
-                    @Override
-                    public Unit invoke() {
-                        connected = true;
-                        onConnected.run();
-                        return Unit.INSTANCE;
-                    }
-                });
-                cb.connectionFailed(new Function1<Throwable, Unit>() {
-                    @Override
-                    public Unit invoke(Throwable t) {
-                        FileLog.e("Bazaar billing: connection failed", t);
-                        AndroidUtilities.runOnUIThread(() -> callback.onError("Could not connect to Bazaar: " + t.getMessage()));
-                        return Unit.INSTANCE;
-                    }
-                });
-                return Unit.INSTANCE;
+        try {
+            payment().connect(new Function1<ConnectionCallback, Unit>() {
+                @Override
+                public Unit invoke(ConnectionCallback cb) {
+                    cb.connectionSucceed(new Function0<Unit>() {
+                        @Override
+                        public Unit invoke() {
+                            connected = true;
+                            startOrReport(onConnected, callback);
+                            return Unit.INSTANCE;
+                        }
+                    });
+                    cb.connectionFailed(new Function1<Throwable, Unit>() {
+                        @Override
+                        public Unit invoke(Throwable t) {
+                            connected = false;
+                            FileLog.e("Bazaar billing: connection failed", t);
+                            guard(() -> callback.error(connectionErrorMessage(t)));
+                            return Unit.INSTANCE;
+                        }
+                    });
+                    cb.disconnected(new Function0<Unit>() {
+                        @Override
+                        public Unit invoke() {
+                            // Drop the dead Payment so the next attempt binds again
+                            // instead of silently posting into a quit HandlerThread.
+                            connected = false;
+                            payment = null;
+                            return Unit.INSTANCE;
+                        }
+                    });
+                    return Unit.INSTANCE;
+                }
+            });
+        } catch (Throwable t) {
+            connected = false;
+            FileLog.e("Bazaar billing: connect threw", t);
+            guard(() -> callback.error(connectionErrorMessage(t)));
+        }
+    }
+
+    private Payment payment() {
+        Payment p = payment;
+        if (p == null) {
+            synchronized (this) {
+                p = payment;
+                if (p == null) {
+                    SecurityCheck securityCheck = TextUtils.isEmpty(BAZAAR_RSA_PUBLIC_KEY)
+                            ? SecurityCheck.Disable.INSTANCE
+                            : new SecurityCheck.Enable(BAZAAR_RSA_PUBLIC_KEY);
+                    p = payment = new Payment(appContext, new PaymentConfiguration(securityCheck, true));
+                }
             }
-        });
+        }
+        return p;
+    }
+
+    private static String connectionErrorMessage(Throwable t) {
+        if (t instanceof SecurityException) {
+            return "Bazaar did not grant payment permission: " + messageOf(t);
+        }
+        return "Could not connect to Bazaar: " + messageOf(t);
+    }
+
+    private static String messageOf(Throwable t) {
+        if (t == null) {
+            return "unknown error";
+        }
+        final String message = t.getMessage();
+        return TextUtils.isEmpty(message) ? t.getClass().getSimpleName() : message;
+    }
+
+    private static void guard(Runnable body) {
+        try {
+            body.run();
+        } catch (Throwable t) {
+            FileLog.e("Bazaar billing: callback threw", t);
+        }
+    }
+
+    private static void startOrReport(Runnable body, GuardedCallback callback) {
+        try {
+            body.run();
+        } catch (Throwable t) {
+            FileLog.e("Bazaar billing: could not start purchase", t);
+            callback.error("Could not open Bazaar payment: " + messageOf(t));
+        }
     }
 
     /**
@@ -355,16 +476,62 @@ public class BazaarBillingBridge implements StoreBillingBridge {
         return SKU_PREMIUM_MONTHLY;
     }
 
+    /**
+     * Wraps the caller's callback so it fires at most once and never lets a
+     * Throwable escape: the UI handlers (bulletins, presentFragment, fireworks)
+     * routinely run against a fragment that the payment dialog has since
+     * detached, and an exception there is fatal because Poolakey invokes us
+     * straight off the activity-result dispatch.
+     */
+    private static final class GuardedCallback {
+
+        private final Callback delegate;
+        private final AtomicBoolean fired = new AtomicBoolean();
+
+        GuardedCallback(Callback callback) {
+            this.delegate = callback == null ? NO_OP_CALLBACK : callback;
+        }
+
+        void success() {
+            fire("onSuccess", delegate::onSuccess);
+        }
+
+        void error(String message) {
+            fire("onError", () -> delegate.onError(message));
+        }
+
+        void canceled() {
+            fire("onCanceled", delegate::onCanceled);
+        }
+
+        void queued() {
+            fire("onQueued", delegate::onQueued);
+        }
+
+        private void fire(String what, Runnable body) {
+            if (!fired.compareAndSet(false, true)) {
+                return;
+            }
+            try {
+                body.run();
+            } catch (Throwable t) {
+                FileLog.e("Bazaar billing: " + what + " callback threw", t);
+            }
+        }
+    }
+
     private static final class PaymentRequestHolder {
         final String sku;
         final String payload;
         final AccountInstance accountInstance;
         final TLRPC.InputStorePaymentPurpose purpose;
-        final Callback callback;
+        final GuardedCallback callback;
         /** True for stars/gifts: consume at the store once the server confirms. */
         final boolean consumable;
+        /** False until the purchase flow is on screen; filters stale results. */
+        volatile boolean armed;
 
-        PaymentRequestHolder(String sku, String payload, AccountInstance accountInstance, TLRPC.InputStorePaymentPurpose purpose, Callback callback, boolean consumable) {
+        PaymentRequestHolder(String sku, String payload, AccountInstance accountInstance, TLRPC.InputStorePaymentPurpose purpose, GuardedCallback callback, boolean consumable) {
             this.sku = sku;
             this.payload = payload;
             this.accountInstance = accountInstance;

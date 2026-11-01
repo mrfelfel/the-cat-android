@@ -1,5 +1,6 @@
 package org.telegram.ui.Components.Premium.boosts;
 
+import android.app.Activity;
 import android.os.Build;
 import android.text.TextUtils;
 import android.util.Pair;
@@ -25,6 +26,8 @@ import org.telegram.messenger.R;
 import org.telegram.messenger.UserConfig;
 import org.telegram.messenger.UserObject;
 import org.telegram.messenger.Utilities;
+import org.telegram.messenger.billing.StoreBilling;
+import org.telegram.messenger.billing.StoreBillingBridge;
 import org.telegram.tgnet.ConnectionsManager;
 import org.telegram.tgnet.TLObject;
 import org.telegram.tgnet.TLRPC;
@@ -108,11 +111,51 @@ public class BoostRepository {
 
     public static void payGiftCode(List<TLObject> users, TLRPC.TL_premiumGiftCodeOption option, TLRPC.Chat chat, TLRPC.TL_textWithEntities message, BaseFragment baseFragment, Utilities.Callback<Void> onSuccess, Utilities.Callback<TLRPC.TL_error> onError) {
         invalidateGiftOptionsToCache(UserConfig.selectedAccount);
+        if (BuildVars.isBazaarStoreApp() && StoreBilling.isAvailable()) {
+            payGiftCodeByBazaar(users, option, chat, message, baseFragment, onSuccess, onError);
+            return;
+        }
         if (!isGoogleBillingAvailable()) {
             payGiftCodeByInvoice(users, option, chat, message, baseFragment, onSuccess, onError);
         } else {
             payGiftCodeByGoogle(users, option, chat, message, baseFragment, onSuccess, onError);
         }
+    }
+
+    /**
+     * Bazaar flavor: the gift code is paid for from the Cafe Bazaar wallet.
+     * Consumable, so the store keeps allowing purchases after the server has
+     * credited the recipients.
+     */
+    private static void payGiftCodeByBazaar(List<TLObject> users, TLRPC.TL_premiumGiftCodeOption option, TLRPC.Chat chat,
+                                            TLRPC.TL_textWithEntities message, BaseFragment baseFragment,
+                                            Utilities.Callback<Void> onSuccess, Utilities.Callback<TLRPC.TL_error> onError) {
+        MessagesController controller = MessagesController.getInstance(UserConfig.selectedAccount);
+        TLRPC.TL_inputStorePaymentPremiumGiftCode payload = new TLRPC.TL_inputStorePaymentPremiumGiftCode();
+        payload.users = new ArrayList<>();
+        for (TLObject user : users) {
+            if (user instanceof TLRPC.User) {
+                payload.users.add(controller.getInputUser((TLRPC.User) user));
+            }
+        }
+        if (chat != null) {
+            payload.flags |= 1;
+            payload.boost_peer = controller.getInputPeer(-chat.id);
+        }
+        if (message != null && !TextUtils.isEmpty(message.text)) {
+            payload.flags |= 2;
+            payload.message = message;
+        }
+        payload.currency = option.currency;
+        payload.amount = option.amount;
+
+        StoreBilling.tryPurchaseConsumable(purchaseActivity(baseFragment), UserConfig.selectedAccount, payload, option.store_product,
+                new StoreBillingBridge.Callback() {
+                    @Override public void onSuccess() { onSuccess.run(null); }
+                    @Override public void onQueued() { onSuccess.run(null); }
+                    @Override public void onCanceled() { onError.run(null); }
+                    @Override public void onError(String message) { onError.run(errorMessage(message)); }
+                });
     }
 
     public static boolean isGoogleBillingAvailable() {
@@ -335,11 +378,73 @@ public class BoostRepository {
                                    TLRPC.Chat chat, int date, boolean onlyNewSubscribers, BaseFragment baseFragment,
                                    boolean winnersVisible, boolean withAdditionPrize, String prizeDesc,
                                    Utilities.Callback<Void> onSuccess, Utilities.Callback<TLRPC.TL_error> onError) {
+        if (BuildVars.isBazaarStoreApp() && StoreBilling.isAvailable()) {
+            payGiveAwayByBazaar(chats, selectedCountries, option, chat, date, onlyNewSubscribers, winnersVisible, withAdditionPrize, prizeDesc, baseFragment, onSuccess, onError);
+            return;
+        }
         if (!isGoogleBillingAvailable()) {
             payGiveAwayByInvoice(chats, selectedCountries, option, chat, date, onlyNewSubscribers, baseFragment, winnersVisible, withAdditionPrize, prizeDesc, onSuccess, onError);
         } else {
             payGiveAwayByGoogle(chats, selectedCountries, option, chat, date, onlyNewSubscribers, baseFragment, winnersVisible, withAdditionPrize, prizeDesc, onSuccess, onError);
         }
+    }
+
+    /**
+     * Bazaar flavor: the premium giveaway is paid for from the Cafe Bazaar
+     * wallet. Consumable, so the store keeps allowing purchases after the
+     * server has run the giveaway.
+     */
+    private static void payGiveAwayByBazaar(List<TLObject> chats, List<TLObject> selectedCountries, TLRPC.TL_premiumGiftCodeOption option,
+                                            TLRPC.Chat chat, int date, boolean onlyNewSubscribers, boolean winnersVisible,
+                                            boolean withAdditionPrize, String prizeDesc, BaseFragment baseFragment,
+                                            Utilities.Callback<Void> onSuccess, Utilities.Callback<TLRPC.TL_error> onError) {
+        MessagesController controller = MessagesController.getInstance(UserConfig.selectedAccount);
+        TLRPC.TL_inputStorePaymentPremiumGiveaway payload = new TLRPC.TL_inputStorePaymentPremiumGiveaway();
+
+        payload.only_new_subscribers = onlyNewSubscribers;
+        payload.winners_are_visible = winnersVisible;
+        payload.prize_description = prizeDesc;
+        payload.until_date = date;
+        payload.flags |= 2;
+        payload.flags |= 4;
+        if (withAdditionPrize) {
+            payload.flags |= 16;
+        }
+        payload.random_id = System.currentTimeMillis();
+        payload.additional_peers = new ArrayList<>();
+        for (TLObject o : chats) {
+            if (o instanceof TLRPC.Chat) {
+                payload.additional_peers.add(controller.getInputPeer(-((TLRPC.Chat) o).id));
+            }
+        }
+        payload.boost_peer = controller.getInputPeer(-chat.id);
+        for (TLObject object : selectedCountries) {
+            TLRPC.TL_help_country country = (TLRPC.TL_help_country) object;
+            payload.countries_iso2.add(country.iso2);
+        }
+        payload.currency = option.currency;
+        payload.amount = option.amount;
+
+        StoreBilling.tryPurchaseConsumable(purchaseActivity(baseFragment), UserConfig.selectedAccount, payload, option.store_product,
+                new StoreBillingBridge.Callback() {
+                    @Override public void onSuccess() { onSuccess.run(null); }
+                    @Override public void onQueued() { onSuccess.run(null); }
+                    @Override public void onCanceled() { onError.run(null); }
+                    @Override public void onError(String message) { onError.run(errorMessage(message)); }
+                });
+    }
+
+    private static Activity purchaseActivity(BaseFragment baseFragment) {
+        if (baseFragment != null && baseFragment.getParentActivity() != null) {
+            return baseFragment.getParentActivity();
+        }
+        return LaunchActivity.instance;
+    }
+
+    private static TLRPC.TL_error errorMessage(String message) {
+        TLRPC.TL_error error = new TLRPC.TL_error();
+        error.text = message == null ? "UNKNOWN_ERROR" : message;
+        return error;
     }
 
     public static void payGiveAwayByInvoice(List<TLObject> chats, List<TLObject> selectedCountries, TLRPC.TL_premiumGiftCodeOption option,
