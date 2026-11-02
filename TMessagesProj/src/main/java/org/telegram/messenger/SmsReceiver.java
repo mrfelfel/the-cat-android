@@ -42,19 +42,29 @@ public class SmsReceiver extends BroadcastReceiver {
             if (TextUtils.isEmpty(message)) {
                 return;
             }
-            Pattern pattern = Pattern.compile("[0-9\\-]+");
-            final Matcher matcher = pattern.matcher(message);
-            if (matcher.find()) {
-                String code = matcher.group(0).replace("-", "");
+            // prefer a code-shaped number so expiry minutes and footer digits
+            // earlier in the text don't get autofilled instead of the login code
+            String code = firstMatch(Pattern.compile("(?<![0-9])[0-9]{4,6}(?![0-9])"), message);
+            if (code == null) {
+                code = firstMatch(Pattern.compile("[0-9\\-]+"), message);
+            }
+            if (code != null) {
+                code = code.replace("-", "");
                 if (code.length() >= 3) {
                     if (hash != null) {
                         preferences.edit().putString("sms_hash_code", hash + "|" + code).commit();
                     }
-                    AndroidUtilities.runOnUIThread(() -> NotificationCenter.getGlobalInstance().postNotificationName(NotificationCenter.didReceiveSmsCode, code));
+                    final String finalCode = code;
+                    AndroidUtilities.runOnUIThread(() -> NotificationCenter.getGlobalInstance().postNotificationName(NotificationCenter.didReceiveSmsCode, finalCode));
                 }
             }
         } catch (Throwable e) {
             FileLog.e(e);
         }
+    }
+
+    private static String firstMatch(Pattern pattern, String message) {
+        Matcher matcher = pattern.matcher(message);
+        return matcher.find() ? matcher.group(0) : null;
     }
 }
