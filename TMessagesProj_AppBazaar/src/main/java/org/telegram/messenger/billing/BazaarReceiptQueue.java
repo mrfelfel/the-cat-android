@@ -304,12 +304,24 @@ public final class BazaarReceiptQueue {
         req.receipt.data = item.receiptJson;
         req.purpose = purpose;
 
-        AccountInstance acc = AccountInstance.getInstance(item.account);
+        final AccountInstance acc;
+        try {
+            acc = AccountInstance.getInstance(item.account);
+        } catch (Throwable t) {
+            BazaarErrors.reportQuietly("receipt queue", t);
+            done.run(false);
+            return;
+        }
         int flags = ConnectionsManager.RequestFlagFailOnServerErrors | ConnectionsManager.RequestFlagInvokeAfter;
         acc.getConnectionsManager().sendRequest(req, (response, error) -> {
             boolean ok = response instanceof TLRPC.Updates;
             if (ok) {
-                acc.getMessagesController().processUpdates((TLRPC.Updates) response, false);
+                try {
+                    acc.getMessagesController().processUpdates((TLRPC.Updates) response, false);
+                } catch (Throwable t) {
+                    // The payment itself is fine; only applying the updates failed.
+                    BazaarErrors.reportQuietly("apply receipt " + item.key, t);
+                }
             } else {
                 FileLog.e("BazaarReceiptQueue: " + item.key + " not accepted: " + (error == null ? "null response" : error.text));
             }
