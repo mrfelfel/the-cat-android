@@ -1973,6 +1973,11 @@ public class LocaleController {
 
     public static int getCurrencyExpDivider(String type) {
         switch (type) {
+            // The Cat: IRT is whole tomans, exponent 0. Without this the server's
+            // whole-toman amounts fell through to the /100 default and a 5,000
+            // تومان pack rendered as 50.
+            case "IRT":
+                return 1;
             case "CLF":
                 return 10000;
             case "BHD":
@@ -2016,6 +2021,12 @@ public class LocaleController {
         String customFormat;
         double doubleAmount;
         amount = Math.abs(amount);
+        // The Cat: this variant feeds the tip and amount inputs, so it renders the
+        // bare whole-toman number the buyer types — no /100, no currency symbol,
+        // no grouping. IRT is exponent 0 by contract, so the packed %d is right.
+        if ("IRT".equals(type)) {
+            return String.format(Locale.US, "%d", amount);
+        }
         switch (type) {
             case "CLF":
                 customFormat = " %.4f";
