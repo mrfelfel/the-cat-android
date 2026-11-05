@@ -5766,6 +5766,10 @@
     <string name="PaymentCheckoutMethodNewCard">افزودن کارت بانکی…</string>
     <string name="PaymentCheckoutName">نام</string>
     <string name="PaymentCheckoutPay" formatted="false">پرداخت ⁨%1$s⁩</string>
+    <string name="PaymentOpenInBrowser">باز شدن در مرورگر</string>
+    <string name="PaymentOpenInBrowserChoose">مرورگر پرداخت را انتخاب کنید</string>
+    <string name="PaymentOpenInBrowserHint">صفحه پرداخت بیرون از برنامه باز می‌شود. بعد از پرداخت به همین‌جا برگردید؛ خرید خودکار تأیید می‌شود.</string>
+    <string name="PaymentOpenInBrowserNoApp">هیچ مرورگری نصب نیست. یک مرورگر نصب کنید و دوباره تلاش کنید.</string>
     <string name="PaymentCheckoutPhoneNumber">شماره تلفن</string>
     <string name="PaymentCheckoutProvider">ارائه‌دهنده خدمات پرداخت</string>
     <string name="PaymentCheckoutShippingMethod">روش ارسال</string>

@@ -130,6 +130,10 @@
     <string name="StarsPurchaseUnavailable">Purchasing stars is not available at this time.</string>
     <string name="PaymentTestInvoice">TEST INVOICE</string>
     <string name="PaymentCheckoutPay">PAY %1$s</string>
+    <string name="PaymentOpenInBrowser">Open in browser</string>
+    <string name="PaymentOpenInBrowserChoose">Choose a browser to finish the payment in</string>
+    <string name="PaymentOpenInBrowserHint">The payment page opens outside the app. After paying, come back here: the purchase is confirmed automatically.</string>
+    <string name="PaymentOpenInBrowserNoApp">No browser is installed. Install one and try again.</string>
     <string name="PaymentCheckoutMethod">Payment method</string>
     <string name="PaymentCheckoutMethodNewCard">New card</string>
     <string name="PaymentCheckoutProvider">Payment provider</string>

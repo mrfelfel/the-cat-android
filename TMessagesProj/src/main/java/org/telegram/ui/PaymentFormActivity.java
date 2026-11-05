@@ -24,6 +24,7 @@ import android.content.DialogInterface;
 import android.content.Intent;
 import android.content.SharedPreferences;
 import android.content.pm.PackageManager;
+import android.content.pm.ResolveInfo;
 import android.graphics.Canvas;
 import android.graphics.Paint;
 import android.graphics.Typeface;
@@ -323,6 +324,11 @@ public class PaymentFormActivity extends BaseFragment implements NotificationCen
     private boolean isCheckoutPreview;
     private boolean allowUnregistered;
     private boolean needPayAfterTransition;
+    // The gateway checkout opened in the system browser. The bank's redirect
+    // chain refuses embedded webviews, so this step only picks the browser and
+    // confirms; the server settles the purchase from its callback.
+    private boolean openInBrowser;
+    private Runnable openInBrowserContinue;
 
     private Theme.ResourcesProvider resourcesProvider;
     private PaymentFormCallback paymentFormCallback;
@@ -691,6 +697,13 @@ public class PaymentFormActivity extends BaseFragment implements NotificationCen
         fragmentView = new FrameLayout(context);
         FrameLayout frameLayout = (FrameLayout) fragmentView;
         fragmentView.setBackgroundColor(getThemedColor(Theme.key_windowBackgroundGray));
+
+        // A gateway checkout never loads the bank page in this webview: the
+        // redirect chain refuses embedded pages, so it goes to the browser.
+        if (currentStep == STEP_PAYMENT_INFO && prepareOpenInBrowser(context)) {
+            actionBar.setTitle(LocaleController.getString(R.string.PaymentOpenInBrowser));
+            actionBar.setSubtitle(LocaleController.getString(R.string.PaymentCheckout));
+        }
 
         scrollView = new ScrollView(context);
         scrollView.setFillViewport(true);
@@ -1170,6 +1183,8 @@ public class PaymentFormActivity extends BaseFragment implements NotificationCen
                     }
                 }
             }
+        } else if (currentStep == STEP_PAYMENT_INFO && openInBrowser) {
+            showOpenInBrowserStep(context);
         } else if (currentStep == STEP_PAYMENT_INFO) {
             if (paymentForm.native_params != null) {
                 try {
@@ -1254,6 +1269,11 @@ public class PaymentFormActivity extends BaseFragment implements NotificationCen
                         shouldNavigateBack = !url.equals(webViewUrl);
                         try {
                             Uri uri = Uri.parse(url);
+                            // webauth only counts when the system browser was in
+                            // the path; inside this webview it proves nothing.
+                            if ("webauth".equalsIgnoreCase(uri.getScheme())) {
+                                return true;
+                            }
                             if ("cr0.ir".equals(uri.getHost())) {
                                 goToNextStep();
                                 return true;
@@ -3331,6 +3351,14 @@ public class PaymentFormActivity extends BaseFragment implements NotificationCen
     public void onBecomeFullyVisible() {
         super.onBecomeFullyVisible();
 
+        if (openInBrowser && openInBrowserContinue != null) {
+            // Once per page visit: coming back from the browser or a dialog
+            // must not re-open the chooser under the buyer.
+            final Runnable once = openInBrowserContinue;
+            openInBrowserContinue = null;
+            once.run();
+            return;
+        }
         if (currentStep == STEP_CHECKOUT) {
             if (needPayAfterTransition) {
                 needPayAfterTransition = false;
@@ -3342,6 +3370,9 @@ public class PaymentFormActivity extends BaseFragment implements NotificationCen
     @Override
     public void onTransitionAnimationEnd(boolean isOpen, boolean backward) {
         if (isOpen && !backward) {
+            if (openInBrowser) {
+                return;
+            }
             if (webView != null) {
                 if (currentStep != STEP_CHECKOUT) {
                     if (paymentFormMethod != null) {
@@ -3605,6 +3636,107 @@ public class PaymentFormActivity extends BaseFragment implements NotificationCen
                 }
                 break;
         }
+    }
+
+    // Decides whether this checkout belongs in the system browser. The bank's
+    // redirect chain does not work inside an embedded webview, so a gateway
+    // checkout (the form carries its own URL) skips the webview entirely,
+    // picks a browser, and lets the server settle the purchase from the
+    // gateway callback; the browser hands the buyer back with webauth://.
+    private boolean prepareOpenInBrowser(Context context) {
+        if (paymentFormMethod != null || paymentForm == null || TextUtils.isEmpty(paymentForm.url)) {
+            return false;
+        }
+        openInBrowser = true;
+        openInBrowserContinue = () -> {
+            if (getParentActivity() == null) {
+                return;
+            }
+            showBrowserChooser(context);
+        };
+        return true;
+    }
+
+    private void showOpenInBrowserStep(Context context) {
+        final LinearLayout layout = new LinearLayout(context);
+        layout.setOrientation(LinearLayout.VERTICAL);
+        final TextView title = new TextView(context);
+        title.setTextSize(TypedValue.COMPLEX_UNIT_DIP, 15);
+        title.setTypeface(AndroidUtilities.bold());
+        title.setTextColor(Theme.getColor(Theme.key_windowBackgroundWhiteBlackText));
+        title.setText(LocaleController.getString(R.string.PaymentOpenInBrowserChoose));
+        layout.addView(title, LayoutHelper.createLinear(LayoutHelper.MATCH_PARENT, LayoutHelper.WRAP_CONTENT, 21, 12, 21, 4));
+        final TextView hint = new TextView(context);
+        hint.setTextSize(TypedValue.COMPLEX_UNIT_DIP, 13);
+        hint.setTextColor(Theme.getColor(Theme.key_windowBackgroundWhiteGrayText2));
+        hint.setText(LocaleController.getString(R.string.PaymentOpenInBrowserHint));
+        layout.addView(hint, LayoutHelper.createLinear(LayoutHelper.MATCH_PARENT, LayoutHelper.WRAP_CONTENT, 21, 0, 21, 8));
+        linearLayout2.addView(layout, LayoutHelper.createLinear(LayoutHelper.MATCH_PARENT, LayoutHelper.WRAP_CONTENT));
+    }
+
+    private void showBrowserChooser(Context context) {
+        final Activity activity = getParentActivity();
+        if (activity == null) {
+            return;
+        }
+        final Intent probe = new Intent(Intent.ACTION_VIEW, Uri.parse(paymentForm.url));
+        final List<ResolveInfo> resolved = activity.getPackageManager().queryIntentActivities(probe, PackageManager.MATCH_DEFAULT_ONLY);
+        final ArrayList<ResolveInfo> browsers = new ArrayList<>();
+        if (resolved != null) {
+            for (ResolveInfo info : resolved) {
+                if (info.activityInfo == null || context.getPackageName().equals(info.activityInfo.packageName)) {
+                    continue;
+                }
+                browsers.add(info);
+            }
+        }
+        if (browsers.isEmpty()) {
+            BulletinFactory.of(this).createSimpleBulletin(R.raw.info, LocaleController.getString(R.string.PaymentOpenInBrowserNoApp)).show();
+            return;
+        }
+        // One browser needs no choice; more than one must not silently open the
+        // OS default: the payer asked to finish outside the app, and which
+        // browser they trust with bank details is theirs to pick.
+        final CharSequence[] items = new CharSequence[browsers.size()];
+        for (int i = 0; i < browsers.size(); i++) {
+            CharSequence label = browsers.get(i).loadLabel(activity.getPackageManager());
+            items[i] = label != null ? label : browsers.get(i).activityInfo.packageName;
+        }
+        final BottomSheet.Builder builder = new BottomSheet.Builder(context, false, resourcesProvider)
+            .setTitle(LocaleController.getString(R.string.PaymentOpenInBrowserChoose))
+            .setItems(items, (dialog, which) -> launchPaymentInBrowser(activity, browsers.get(which).activityInfo.packageName));
+        showDialog(builder.create());
+    }
+
+    private void launchPaymentInBrowser(Activity activity, String packageName) {
+        final Intent launch = new Intent(Intent.ACTION_VIEW, Uri.parse(paymentForm.url))
+            .setPackage(packageName)
+            .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+        try {
+            activity.startActivity(launch);
+        } catch (ActivityNotFoundException e) {
+            FileLog.e(e);
+            BulletinFactory.of(this).createSimpleBulletin(R.raw.info, LocaleController.getString(R.string.PaymentOpenInBrowserNoApp)).show();
+            return;
+        }
+        openInBrowserContinue = null;
+        NotificationCenter.getInstance(currentAccount).postNotificationName(NotificationCenter.paymentFinished);
+        showDialog(new AlertDialog.Builder(activity, resourcesProvider)
+            .setTitle(LocaleController.getString(R.string.PaymentCheckout))
+            .setMessage(LocaleController.getString(R.string.PaymentOpenInBrowserHint))
+            .setPositiveButton(LocaleController.getString(R.string.OK), (dialog, which) -> {
+                final INavigationLayout layout = getParentLayout();
+                if (layout != null) {
+                    for (BaseFragment fragment : new ArrayList<>(layout.getFragmentStack())) {
+                        if (fragment instanceof PaymentFormActivity) {
+                            fragment.removeSelfFromStack();
+                        }
+                    }
+                } else if (!isFinishing()) {
+                    finishFragment();
+                }
+            })
+            .create());
     }
 
     private boolean onCheckoutSuccess(INavigationLayout parentLayout, Activity parentActivity) {
