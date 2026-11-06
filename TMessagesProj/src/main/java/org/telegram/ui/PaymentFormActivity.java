@@ -328,7 +328,6 @@ public class PaymentFormActivity extends BaseFragment implements NotificationCen
     // chain refuses embedded webviews, so this step only picks the browser and
     // confirms; the server settles the purchase from its callback.
     private boolean openInBrowser;
-    private Runnable openInBrowserContinue;
 
     private Theme.ResourcesProvider resourcesProvider;
     private PaymentFormCallback paymentFormCallback;
@@ -3351,14 +3350,6 @@ public class PaymentFormActivity extends BaseFragment implements NotificationCen
     public void onBecomeFullyVisible() {
         super.onBecomeFullyVisible();
 
-        if (openInBrowser && openInBrowserContinue != null) {
-            // Once per page visit: coming back from the browser or a dialog
-            // must not re-open the chooser under the buyer.
-            final Runnable once = openInBrowserContinue;
-            openInBrowserContinue = null;
-            once.run();
-            return;
-        }
         if (currentStep == STEP_CHECKOUT) {
             if (needPayAfterTransition) {
                 needPayAfterTransition = false;
@@ -3648,12 +3639,6 @@ public class PaymentFormActivity extends BaseFragment implements NotificationCen
             return false;
         }
         openInBrowser = true;
-        openInBrowserContinue = () -> {
-            if (getParentActivity() == null) {
-                return;
-            }
-            showBrowserChooser(context);
-        };
         return true;
     }
 
@@ -3672,6 +3657,16 @@ public class PaymentFormActivity extends BaseFragment implements NotificationCen
         hint.setText(LocaleController.getString(R.string.PaymentOpenInBrowserHint));
         layout.addView(hint, LayoutHelper.createLinear(LayoutHelper.MATCH_PARENT, LayoutHelper.WRAP_CONTENT, 21, 0, 21, 8));
         linearLayout2.addView(layout, LayoutHelper.createLinear(LayoutHelper.MATCH_PARENT, LayoutHelper.WRAP_CONTENT));
+        // Open the chooser once the page is on screen. Posting to the scroll
+        // view (rather than a transition callback) is what makes it appear:
+        // the fragment was presented without waiting for the animation, so
+        // onBecomeFullyVisible is not a dependable hook here.
+        scrollView.postDelayed(() -> {
+            if (!openInBrowser || getParentActivity() == null) {
+                return;
+            }
+            showBrowserChooser(getParentActivity());
+        }, 350);
     }
 
     private void showBrowserChooser(Context context) {
@@ -3691,7 +3686,22 @@ public class PaymentFormActivity extends BaseFragment implements NotificationCen
             }
         }
         if (browsers.isEmpty()) {
-            BulletinFactory.of(this).createSimpleBulletin(R.raw.info, LocaleController.getString(R.string.PaymentOpenInBrowserNoApp)).show();
+            // Some devices expose only WebView-backed handlers, which the
+            // filter above removes. Falling back to the OS chooser still lets
+            // the buyer pay instead of leaving them stuck on this page.
+            final Intent any = new Intent(Intent.ACTION_VIEW, Uri.parse(paymentForm.url));
+            if (any.resolveActivity(activity.getPackageManager()) == null) {
+                BulletinFactory.of(this).createSimpleBulletin(R.raw.info, LocaleController.getString(R.string.PaymentOpenInBrowserNoApp)).show();
+                return;
+            }
+            try {
+                activity.startActivity(Intent.createChooser(any, LocaleController.getString(R.string.PaymentOpenInBrowser)));
+            } catch (Exception e) {
+                FileLog.e(e);
+                BulletinFactory.of(this).createSimpleBulletin(R.raw.info, LocaleController.getString(R.string.PaymentOpenInBrowserNoApp)).show();
+                return;
+            }
+            confirmAfterLaunch(activity);
             return;
         }
         // One browser needs no choice; more than one must not silently open the
@@ -3719,7 +3729,10 @@ public class PaymentFormActivity extends BaseFragment implements NotificationCen
             BulletinFactory.of(this).createSimpleBulletin(R.raw.info, LocaleController.getString(R.string.PaymentOpenInBrowserNoApp)).show();
             return;
         }
-        openInBrowserContinue = null;
+        confirmAfterLaunch(activity);
+    }
+
+    private void confirmAfterLaunch(Activity activity) {
         NotificationCenter.getInstance(currentAccount).postNotificationName(NotificationCenter.paymentFinished);
         showDialog(new AlertDialog.Builder(activity, resourcesProvider)
             .setTitle(LocaleController.getString(R.string.PaymentCheckout))
