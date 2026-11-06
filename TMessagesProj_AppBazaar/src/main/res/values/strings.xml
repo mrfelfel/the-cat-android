@@ -1,5 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
+    <string name="BazaarErrorMessage">The Bazaar payment service ran into a problem. Nothing was lost: any purchase you already paid for is kept and sent to the server automatically, and you can try again.</string>
+
     <string name="SmsJobsMenu">SMS Statistics</string>
 
     <string name="SmsJobsPremiumHintTitle">Premium Subscription **for free**</string>

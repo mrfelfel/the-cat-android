@@ -100,6 +100,14 @@ public class BillingController implements PurchasesUpdatedListener, BillingClien
     }
 
     public String formatCurrency(long amount, String currency, int exp) {
+        // The Cat: IRT amounts are whole tomans by contract. Callers pass this
+        // exp from the assets map (which defaults to 0 for unknown codes), but
+        // pinning it here means a missing entry can never turn 5,000,000 تومان
+        // into 50,000,000.
+        final int fixed = TheCatMoney.currencyExp(currency);
+        if (fixed >= 0) {
+            exp = fixed;
+        }
         return formatCurrency(amount, currency, exp, false);
     }
 

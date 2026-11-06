@@ -1671,6 +1671,15 @@ public class LocaleController {
         return stringBuilder.toString();
     }
 
+    // The Cat: the same number with the trailing unit ("100 T" → "100 Toman").
+    // LocaleController.getString does not call String.format, so a Toman amount
+    // passed as the only argument to a string *containing* %d is dropped along
+    // with the placeholder — the checkout's "مجموع" row came out as "مجموع | 0".
+    // The whole number is appended instead, which every language string can do.
+    public static String formatNumberWithUnit(long count, char symbol, int unitRes) {
+        return formatNumber(count, symbol) + " " + getString(unitRes);
+    }
+
     public static String formatNumberWithMillion(long count, char symbol) {
         if (count < 1_000_000) {
             return formatNumber(count, symbol);
@@ -1973,6 +1982,11 @@ public class LocaleController {
 
     public static int getCurrencyExpDivider(String type) {
         switch (type) {
+            // The Cat: IRT is whole tomans, exponent 0. Without this the server's
+            // whole-toman amounts fell through to the /100 default and a 5,000
+            // تومان pack rendered as 50.
+            case "IRT":
+                return 1;
             case "CLF":
                 return 10000;
             case "BHD":
@@ -2016,6 +2030,12 @@ public class LocaleController {
         String customFormat;
         double doubleAmount;
         amount = Math.abs(amount);
+        // The Cat: this variant feeds the tip and amount inputs, so it renders the
+        // bare whole-toman number the buyer types — no /100, no currency symbol,
+        // no grouping. IRT is exponent 0 by contract, so the packed %d is right.
+        if ("IRT".equals(type)) {
+            return String.format(Locale.US, "%d", amount);
+        }
         switch (type) {
             case "CLF":
                 customFormat = " %.4f";

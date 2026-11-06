@@ -1199,22 +1199,23 @@ public class PremiumPreviewFragment extends BaseFragment implements Notification
             final Activity activity = fragment != null ? fragment.getParentActivity() : LaunchActivity.instance;
             if (activity instanceof LaunchActivity) {
                 final LaunchActivity launchActivity = (LaunchActivity) activity;
-                if (selectedTier == null || selectedTier.subscriptionOption == null || selectedTier.subscriptionOption.bot_url == null) {
-                    final MessagesController messagesController = MessagesController.getInstance(account);
-                    if (!TextUtils.isEmpty(messagesController.premiumBotUsername)) {
-                        launchActivity.setNavigateToPremiumBot(true);
-                        launchActivity.onNewIntent(new Intent(Intent.ACTION_VIEW, Uri.parse("https://cr0.ir/" + messagesController.premiumBotUsername + "?start=" + source)), (Browser.Progress) null);
-                    } else if (!TextUtils.isEmpty(messagesController.premiumInvoiceSlug)) {
-                        launchActivity.onNewIntent(new Intent(Intent.ACTION_VIEW, Uri.parse("https://cr0.ir/$" + messagesController.premiumInvoiceSlug)), (Browser.Progress) null);
-                    }
-                } else {
-                    final Uri uri = Uri.parse(selectedTier.subscriptionOption.bot_url);
-                    if (uri.getHost().equals("cr0.ir")) {
-                        if (!uri.getPath().startsWith("/$") && !uri.getPath().startsWith("/invoice/")) {
-                            launchActivity.setNavigateToPremiumBot(true);
-                        }
-                    }
-                    Browser.openUrl(launchActivity, tier.subscriptionOption.bot_url);
+                if (selectedTier != null && selectedTier.subscriptionOption != null && selectedTier.subscriptionOption.months > 0
+                        && !TextUtils.isEmpty(selectedTier.subscriptionOption.currency) && selectedTier.subscriptionOption.amount > 0) {
+                    // The app's own Toman payment form: the gift-code invoice
+                    // addressed to the buyer carries the exact tier and the
+                    // catalog's fiat price, and settles through the payment
+                    // sheet instead of the @premiumbot Stars flow.
+                    buyPremiumWithCheckoutForm(account, selectedTier);
+                    return;
+                }
+                // No priced tier to open a checkout for: the storefront bot is
+                // the only remaining catalog.
+                final MessagesController messagesController = MessagesController.getInstance(account);
+                if (!TextUtils.isEmpty(messagesController.premiumBotUsername)) {
+                    launchActivity.setNavigateToPremiumBot(true);
+                    launchActivity.onNewIntent(new Intent(Intent.ACTION_VIEW, Uri.parse("https://cr0.ir/" + messagesController.premiumBotUsername + "?start=" + source)), (Browser.Progress) null);
+                } else if (!TextUtils.isEmpty(messagesController.premiumInvoiceSlug)) {
+                    launchActivity.onNewIntent(new Intent(Intent.ACTION_VIEW, Uri.parse("https://cr0.ir/$" + messagesController.premiumInvoiceSlug)), (Browser.Progress) null);
                 }
             }
             return;
@@ -1364,6 +1365,58 @@ public class PremiumPreviewFragment extends BaseFragment implements Notification
             }
             ((LaunchActivity) fragment.getParentActivity()).getFireworksOverlay().start();
         }
+    }
+
+    /**
+     * Opens the app's own Toman checkout for the selected tier. The invoice is a
+     * gift code addressed to the buyer: it is the one input invoice that carries
+     * the exact months and the catalog's fiat price, and the server settles it as
+     * a self-subscription through the payment form.
+     */
+    private static void buyPremiumWithCheckoutForm(int account, SubscriptionTier tier) {
+        TLRPC.TL_premiumSubscriptionOption option = tier.subscriptionOption;
+        TLRPC.TL_inputStorePaymentPremiumGiftCode purpose = new TLRPC.TL_inputStorePaymentPremiumGiftCode();
+        purpose.users = new ArrayList<>();
+        purpose.users.add(MessagesController.getInstance(account).getInputUser(UserConfig.getInstance(account).getCurrentUser()));
+        purpose.currency = option.currency;
+        purpose.amount = option.amount;
+
+        TLRPC.TL_premiumGiftCodeOption giftCodeOption = new TLRPC.TL_premiumGiftCodeOption();
+        giftCodeOption.users = 1;
+        giftCodeOption.months = option.months;
+        giftCodeOption.currency = option.currency;
+        giftCodeOption.amount = option.amount;
+
+        TLRPC.TL_inputInvoicePremiumGiftCode invoice = new TLRPC.TL_inputInvoicePremiumGiftCode();
+        invoice.purpose = purpose;
+        invoice.option = giftCodeOption;
+
+        TLRPC.TL_payments_getPaymentForm req = new TLRPC.TL_payments_getPaymentForm();
+        req.invoice = invoice;
+        ConnectionsManager.getInstance(account).sendRequest(req, (response, error) -> AndroidUtilities.runOnUIThread(() -> {
+            if (error != null) {
+                AlertsCreator.processError(account, error, null, req);
+                return;
+            }
+            if (!(response instanceof TLRPC.PaymentForm)) {
+                return;
+            }
+            TLRPC.PaymentForm form = (TLRPC.PaymentForm) response;
+            MessagesController.getInstance(account).putUsers(form.users, false);
+            PaymentFormActivity paymentFormActivity = new PaymentFormActivity(form, invoice, null);
+            final BaseFragment lastFragment = LaunchActivity.getLastFragment();
+            if (lastFragment == null) {
+                return;
+            }
+            if (AndroidUtilities.hasDialogOnTop(lastFragment)) {
+                BaseFragment.BottomSheetParams bottomSheetParams = new BaseFragment.BottomSheetParams();
+                bottomSheetParams.transitionFromLeft = true;
+                bottomSheetParams.allowNestedScroll = false;
+                lastFragment.showAsSheet(paymentFormActivity, bottomSheetParams);
+            } else {
+                lastFragment.presentFragment(paymentFormActivity);
+            }
+        }));
     }
 
     public static String getPremiumButtonText(int currentAccount, SubscriptionTier tier) {

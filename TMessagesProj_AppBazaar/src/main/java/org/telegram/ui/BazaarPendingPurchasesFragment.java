@@ -15,6 +15,7 @@ import androidx.recyclerview.widget.RecyclerView;
 import org.telegram.messenger.AndroidUtilities;
 import org.telegram.messenger.FileLog;
 import org.telegram.messenger.billing.BazaarBillingBridge;
+import org.telegram.messenger.billing.BazaarErrors;
 import org.telegram.messenger.billing.BazaarReceiptQueue;
 import org.telegram.messenger.billing.StoreBilling;
 import org.telegram.messenger.web.R;
@@ -30,11 +31,8 @@ import java.util.Date;
 import java.util.List;
 import java.util.Locale;
 
-import ir.cafebazaar.poolakey.Payment;
-import ir.cafebazaar.poolakey.callback.PurchaseQueryCallback;
 import ir.cafebazaar.poolakey.entity.PurchaseInfo;
 import kotlin.Unit;
-import kotlin.jvm.functions.Function1;
 
 /**
  * Operator-facing screen listing Bazaar purchases that are not yet reflected on
@@ -124,50 +122,51 @@ public class BazaarPendingPurchasesFragment extends BaseFragment {
         }
     }
 
-    /** Queries Bazaar directly for what the user owns, bypassing our queue. */
+    @Override
+    public void onFragmentDestroy() {
+        super.onFragmentDestroy();
+        listView = null;
+        adapter = null;
+    }
+
+    /**
+     * Queries Bazaar directly for what the user owns, bypassing our queue. Goes
+     * through the bridge so the store is bound first: Poolakey silently drops a
+     * query issued before connect(), and reports its failure through a callback
+     * that is null once the Bazaar service has disconnected.
+     */
     private void loadStorePurchases() {
-        if (StoreBilling.get() instanceof BazaarBillingBridge) {
-            Payment payment = ((BazaarBillingBridge) StoreBilling.get()).getPaymentForDebug();
-            payment.getSubscribedProducts(new Function1<PurchaseQueryCallback, Unit>() {
-                @Override
-                public Unit invoke(PurchaseQueryCallback cb) {
-                    cb.querySucceed(new Function1<List<PurchaseInfo>, Unit>() {
-                        @Override
-                        public Unit invoke(List<PurchaseInfo> list) {
-                            AndroidUtilities.runOnUIThread(() -> {
-                                storeError = null;
-                                storePurchases.clear();
-                                if (list != null) {
-                                    storePurchases.addAll(list);
-                                }
-                                rebuild();
-                            });
-                            return Unit.INSTANCE;
+        if (!(StoreBilling.get() instanceof BazaarBillingBridge)) {
+            return;
+        }
+        ((BazaarBillingBridge) StoreBilling.get()).querySubscribedProducts(
+                list -> {
+                    AndroidUtilities.runOnUIThread(() -> {
+                        storeError = null;
+                        storePurchases.clear();
+                        if (list != null) {
+                            storePurchases.addAll(list);
                         }
-                    });
-                    cb.queryFailed(new Function1<Throwable, Unit>() {
-                        @Override
-                        public Unit invoke(Throwable t) {
-                            FileLog.e("BazaarPending: store query failed", t);
-                            AndroidUtilities.runOnUIThread(() -> {
-                                storeError = t.getMessage() == null ? "Bazaar store query failed." : t.getMessage();
-                                rebuild();
-                            });
-                            return Unit.INSTANCE;
-                        }
+                        rebuild();
                     });
                     return Unit.INSTANCE;
-                }
-            });
-        }
+                },
+                t -> {
+                    AndroidUtilities.runOnUIThread(() -> {
+                        storeError = t == null || t.getMessage() == null ? "Bazaar store query failed." : t.getMessage();
+                        rebuild();
+                    });
+                    return Unit.INSTANCE;
+                });
     }
 
     private void resendAll() {
-        BazaarReceiptQueue.flush(() -> AndroidUtilities.runOnUIThread(this::rebuild));
+        BazaarErrors.guard(getParentActivity(), "resend receipts",
+                () -> BazaarReceiptQueue.flush(() -> AndroidUtilities.runOnUIThread(this::rebuild)));
     }
 
     private void drop(final BazaarReceiptQueue.QueuedReceipt receipt) {
-        BazaarReceiptQueue.remove(receipt.key);
+        BazaarErrors.guard(getParentActivity(), "drop receipt", () -> BazaarReceiptQueue.remove(receipt.key));
         rebuild();
     }
 

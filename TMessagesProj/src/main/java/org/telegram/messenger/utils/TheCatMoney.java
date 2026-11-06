@@ -77,6 +77,24 @@ public class TheCatMoney {
                 + " " + LocaleController.getString(R.string.Toman);
     }
 
+    /**
+     * The currency's exponent. The app has two sources and they disagree on
+     * unknown codes: the Billing assets map defaults to 0 (whole units) while
+     * LocaleController's divider defaults to 100. IRT is whole tomans in both,
+     * so it is answered here rather than left to either default.
+     */
+    public static int currencyExp(String currency) {
+        if (currency == null) {
+            return 0;
+        }
+        switch (currency.toUpperCase()) {
+            case "IRT":
+            case "IRR":
+                return 0;
+        }
+        return -1;
+    }
+
     /** Toman-only display for a fiat amount in minor units (10^exp of one unit). */
     public static String formatFiat(long amount, String currency, int exp) {
         boolean negative = amount < 0;

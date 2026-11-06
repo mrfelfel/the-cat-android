@@ -15,12 +15,14 @@ import org.telegram.messenger.utils.BillingUtilities;
 import org.telegram.tgnet.ConnectionsManager;
 import org.telegram.tgnet.TLRPC;
 
+import java.util.List;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 import ir.cafebazaar.poolakey.Payment;
 import ir.cafebazaar.poolakey.callback.ConnectionCallback;
 import ir.cafebazaar.poolakey.callback.ConsumeCallback;
 import ir.cafebazaar.poolakey.callback.PurchaseCallback;
+import ir.cafebazaar.poolakey.callback.PurchaseQueryCallback;
 import ir.cafebazaar.poolakey.config.PaymentConfiguration;
 import ir.cafebazaar.poolakey.config.SecurityCheck;
 import ir.cafebazaar.poolakey.entity.PurchaseInfo;
@@ -99,6 +101,10 @@ public class BazaarBillingBridge implements StoreBillingBridge {
         // Let the durable outbox consume a stars/gift receipt once the server
         // finally confirms it during a delayed retry, so the user can rebuy.
         BazaarReceiptQueue.setConsumeHandler(this::consumeQuietly);
+        // Bind now rather than on first purchase: the startup auto-flush and the
+        // pending-purchases screen both touch this store before any purchase.
+        ensureConnected(() -> {
+        }, new GuardedCallback(NO_OP_CALLBACK));
     }
 
     @Override
@@ -109,6 +115,46 @@ public class BazaarBillingBridge implements StoreBillingBridge {
     /** Debug-only accessor so the pending-purchases screen can query the store. */
     public Payment getPaymentForDebug() {
         return payment();
+    }
+
+    /**
+     * Queries what Bazaar thinks the user owns. Runs only after a real bind:
+     * Poolakey drops (without reporting) any call made while its communicator
+     * is unset, which is the state right after a close/restart of Bazaar.
+     */
+    public void querySubscribedProducts(Function1<List<PurchaseInfo>, Unit> onResult, Function1<Throwable, Unit> onFailure) {
+        ensureConnected(() -> {
+            try {
+                payment().getSubscribedProducts(new Function1<PurchaseQueryCallback, Unit>() {
+                    @Override
+                    public Unit invoke(PurchaseQueryCallback cb) {
+                        cb.querySucceed(onResult);
+                        cb.queryFailed(onFailure);
+                        return Unit.INSTANCE;
+                    }
+                });
+            } catch (Throwable t) {
+                BazaarErrors.report(appContext, "query purchases", t);
+                onFailure.invoke(t);
+            }
+        }, new GuardedCallback(new Callback() {
+            @Override
+            public void onSuccess() {
+            }
+
+            @Override
+            public void onError(String message) {
+                onFailure.invoke(new IllegalStateException(message));
+            }
+
+            @Override
+            public void onCanceled() {
+            }
+
+            @Override
+            public void onQueued() {
+            }
+        }));
     }
 
     @Override
@@ -179,7 +225,7 @@ public class BazaarBillingBridge implements StoreBillingBridge {
                 payment().purchaseProduct(registry, request, purchaseCallbacks(holder));
             }
         } catch (Throwable t) {
-            FileLog.e("Bazaar billing: could not start " + holder.sku, t);
+            BazaarErrors.report(appContext, "start " + holder.sku, t);
             holder.callback.error("Could not open Bazaar payment: " + messageOf(t));
             return;
         }
@@ -311,11 +357,21 @@ public class BazaarBillingBridge implements StoreBillingBridge {
      * Consumes a purchased INAPP product so the user can buy it again. Fire and
      * forget: the receipt has already been accepted by the server, so a consume
      * failure must not affect the purchase result.
+     *
+     * Poolakey only forwards a call to Bazaar while {@code billingCommunicator}
+     * is set, and that field is cleared by disconnect(). Calling consumeProduct
+     * on a Payment that was never connected (startup auto-flush, a retry after
+     * the Bazaar service died) is silently swallowed, so bind first. The
+     * consume itself keeps retrying through {@link BazaarReceiptQueue}.
      */
     private void consumeQuietly(String purchaseToken) {
         if (TextUtils.isEmpty(purchaseToken)) {
             return;
         }
+        ensureConnected(() -> consumeNow(purchaseToken), new GuardedCallback(NO_OP_CALLBACK));
+    }
+
+    private void consumeNow(String purchaseToken) {
         try {
             payment().consumeProduct(purchaseToken, new Function1<ConsumeCallback, Unit>() {
                 @Override
@@ -338,7 +394,7 @@ public class BazaarBillingBridge implements StoreBillingBridge {
                 }
             });
         } catch (Throwable t) {
-            FileLog.e("Bazaar billing: consume threw for " + purchaseToken, t);
+            BazaarErrors.report(appContext, "consume", t);
         }
     }
 
@@ -389,7 +445,10 @@ public class BazaarBillingBridge implements StoreBillingBridge {
                         @Override
                         public Unit invoke(Throwable t) {
                             connected = false;
-                            FileLog.e("Bazaar billing: connection failed", t);
+                            // Force a fresh Payment on the next attempt: a failed
+                            // connect leaves this one with a dead HandlerThread.
+                            payment = null;
+                            BazaarErrors.report(appContext, "connect", t);
                             guard(() -> callback.error(connectionErrorMessage(t)));
                             return Unit.INSTANCE;
                         }
@@ -409,7 +468,8 @@ public class BazaarBillingBridge implements StoreBillingBridge {
             });
         } catch (Throwable t) {
             connected = false;
-            FileLog.e("Bazaar billing: connect threw", t);
+            payment = null;
+            BazaarErrors.report(appContext, "connect", t);
             guard(() -> callback.error(connectionErrorMessage(t)));
         }
     }
@@ -445,20 +505,13 @@ public class BazaarBillingBridge implements StoreBillingBridge {
         return TextUtils.isEmpty(message) ? t.getClass().getSimpleName() : message;
     }
 
-    private static void guard(Runnable body) {
-        try {
-            body.run();
-        } catch (Throwable t) {
-            FileLog.e("Bazaar billing: callback threw", t);
-        }
+    private void guard(Runnable body) {
+        BazaarErrors.guard(appContext, "callback", body::run);
     }
 
-    private static void startOrReport(Runnable body, GuardedCallback callback) {
-        try {
-            body.run();
-        } catch (Throwable t) {
-            FileLog.e("Bazaar billing: could not start purchase", t);
-            callback.error("Could not open Bazaar payment: " + messageOf(t));
+    private void startOrReport(Runnable body, GuardedCallback callback) {
+        if (!BazaarErrors.guard(appContext, "start purchase", body::run)) {
+            callback.error("Could not open Bazaar payment.");
         }
     }
 
@@ -512,11 +565,7 @@ public class BazaarBillingBridge implements StoreBillingBridge {
             if (!fired.compareAndSet(false, true)) {
                 return;
             }
-            try {
-                body.run();
-            } catch (Throwable t) {
-                FileLog.e("Bazaar billing: " + what + " callback threw", t);
-            }
+            BazaarErrors.guard(null, what + " callback", body::run);
         }
     }
 
