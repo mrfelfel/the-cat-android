@@ -1,0 +1,180 @@
+name: Release
+
+# Builds, signs and publishes a GitHub Release with the artifacts stores and
+# direct downloads need:
+#   TheCat-<ver>-ARM-ZeroHub.apk        direct ARM APK (THE priority build)
+#   TheCat-<ver>-ZeroHub.apk            direct all-ABIs APK
+#   TheCat-<ver>-ZeroHub.aab            direct Android App Bundle (all ABIs)
+#   TheCat-<ver>-Bazaar-ARM-ZeroHub.apk Bazaar ARM APK (sideload / manual install)
+#   TheCat-<ver>-Bazaar-ZeroHub.apk     Bazaar all-ABIs APK
+#   TheCat-<ver>-Bazaar-ZeroHub.aab     Bazaar App Bundle (all ABIs)
+# AABs are what Play-style stores want nowadays: one bundle carries every
+# ABI/density and the store serves per-device splits. The Bazaar APKs are for
+# sideloading and for Bazaar's APK upload path, which does not take an AAB.
+#
+# Triggers: manual run (Actions tab), or push a tag starting with v.
+# Signing material comes from repo secrets (KEYSTORE_B64 + RELEASE_* creds).
+#
+# Two jobs on purpose: the native build takes ~1h, so its outputs are kept as
+# an artifact and the publish step runs in its own job — a release hiccup
+# re-runs in seconds ("Re-run failed jobs") instead of rebuilding everything.
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Release tag (leave empty for v<versionName>-<versionCode>)'
+        required: false
+        default: ''
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.meta.outputs.version }}
+      code: ${{ steps.meta.outputs.code }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Install Android SDK packages
+        run: |
+          SDKMANAGER="$(find "$ANDROID_HOME/cmdline-tools" -name sdkmanager -type f 2>/dev/null | head -1)"
+          [ -n "$SDKMANAGER" ] || { echo "sdkmanager not found under $ANDROID_HOME"; exit 1; }
+          yes | "$SDKMANAGER" --licenses > /dev/null
+          "$SDKMANAGER" --install "platforms;android-36" "build-tools;36.0.0" "ndk;27.2.12479018" "cmake;3.22.1"
+
+      - name: Restore signing keystore
+        env:
+          KEYSTORE_B64: ${{ secrets.KEYSTORE_B64 }}
+        run: printf '%s' "$KEYSTORE_B64" | base64 -d > TMessagesProj/config/release.keystore
+
+      - name: Build APKs and AABs
+        env:
+          ORG_GRADLE_PROJECT_RELEASE_KEY_ALIAS: ${{ secrets.RELEASE_KEY_ALIAS }}
+          ORG_GRADLE_PROJECT_RELEASE_KEY_PASSWORD: ${{ secrets.RELEASE_KEY_PASSWORD }}
+          ORG_GRADLE_PROJECT_RELEASE_STORE_PASSWORD: ${{ secrets.RELEASE_STORE_PASSWORD }}
+        run: |
+          ./gradlew --no-daemon \
+            :TMessagesProj_AppStandalone:assembleAarmStoreStandalone \
+            :TMessagesProj_AppStandalone:assembleAfatStoreStandalone \
+            :TMessagesProj_AppStandalone:bundleAfatStoreStandalone \
+            :TMessagesProj_AppBazaar:assembleAarmStoreBazaar \
+            :TMessagesProj_AppBazaar:assembleAfatStoreBazaar \
+            :TMessagesProj_AppBazaar:bundleAfatStoreBazaar
+
+      - name: Collect and verify artifacts
+        id: meta
+        run: |
+          set -euo pipefail
+          VERSION="$(grep '^APP_VERSION_NAME=' gradle.properties | cut -d= -f2)"
+          CODE="$(grep '^APP_VERSION_CODE=' gradle.properties | cut -d= -f2)"
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "code=$CODE" >> "$GITHUB_OUTPUT"
+          echo "Building The Cat $VERSION ($CODE)"
+
+          echo "=== outputs tree ==="
+          find TMessagesProj_AppStandalone/build/outputs TMessagesProj_AppBazaar/build/outputs \
+            -type f \( -name '*.apk' -o -name '*.aab' \) | sort
+
+          # discover outputs instead of hardcoding AGP's directory layout
+          pick() {
+            local dir="$1" name="$2" pat="${3:-}"
+            if [ -n "$pat" ]; then
+              find "$dir" -type f -name "$name" -path "*$pat*" | head -1
+            else
+              find "$dir" -type f -name "$name" | head -1
+            fi
+          }
+          STAND_ARM="$(pick TMessagesProj_AppStandalone/build/outputs/apk app.apk aarmStore)"
+          STAND_FAT="$(pick TMessagesProj_AppStandalone/build/outputs/apk app.apk afatStore)"
+          STAND_AAB="$(pick TMessagesProj_AppStandalone/build/outputs/bundle app.aab)"
+          [ -n "$STAND_AAB" ] || STAND_AAB="$(pick TMessagesProj_AppStandalone/build/outputs '*.aab')"
+          BAZAAR_ARM="$(pick TMessagesProj_AppBazaar/build/outputs/apk app.apk aarmStore)"
+          BAZAAR_FAT="$(pick TMessagesProj_AppBazaar/build/outputs/apk app.apk afatStore)"
+          BAZAAR_AAB="$(pick TMessagesProj_AppBazaar/build/outputs/bundle app.aab)"
+          [ -n "$BAZAAR_AAB" ] || BAZAAR_AAB="$(pick TMessagesProj_AppBazaar/build/outputs '*.aab')"
+
+          for f in "$STAND_ARM" "$STAND_FAT" "$STAND_AAB" "$BAZAAR_ARM" "$BAZAAR_FAT" "$BAZAAR_AAB"; do
+            [ -n "$f" ] && [ -f "$f" ] || { echo "ERROR: artifact not found (see tree above)"; exit 1; }
+          done
+
+          mkdir -p dist
+          cp "$STAND_ARM"  "dist/TheCat-$VERSION-ARM-ZeroHub.apk"
+          cp "$STAND_FAT"  "dist/TheCat-$VERSION-ZeroHub.apk"
+          cp "$STAND_AAB"  "dist/TheCat-$VERSION-ZeroHub.aab"
+          cp "$BAZAAR_ARM" "dist/TheCat-$VERSION-Bazaar-ARM-ZeroHub.apk"
+          cp "$BAZAAR_FAT" "dist/TheCat-$VERSION-Bazaar-ZeroHub.apk"
+          cp "$BAZAAR_AAB" "dist/TheCat-$VERSION-Bazaar-ZeroHub.aab"
+
+          APKSIGNER="$ANDROID_HOME/build-tools/36.0.0/apksigner"
+          for apk in dist/*.apk; do
+            "$APKSIGNER" verify --print-certs "$apk" > /dev/null
+            unzip -l "$apk" | grep -q 'lib/.*/libgojni.so' \
+              || { echo "catnet native lib missing in $apk"; exit 1; }
+            unzip -p "$apk" 'classes*.dex' | strings | grep -q 'catnet/mobile' \
+              || { echo "catnet classes missing in $apk"; exit 1; }
+          done
+          for aab in dist/*.aab; do
+            unzip -l "$aab" | grep -q 'base/lib/.*libgojni.so' \
+              || { echo "catnet native lib missing in $aab"; exit 1; }
+          done
+          ls -la dist/
+
+      - name: Keep build outputs
+        uses: actions/upload-artifact@v4
+        with:
+          name: dist
+          path: dist/
+          if-no-files-found: error
+
+  release:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Fetch build outputs
+        uses: actions/download-artifact@v4
+        with:
+          name: dist
+          path: dist
+
+      - name: Create GitHub Release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+          VERSION: ${{ needs.build.outputs.version }}
+          CODE: ${{ needs.build.outputs.code }}
+        run: |
+          set -euo pipefail
+          if [ "${{ github.event_name }}" = "push" ]; then
+            TAG="$GITHUB_REF_NAME"
+          elif [ -n "${{ inputs.tag }}" ]; then
+            TAG="${{ inputs.tag }}"
+          else
+            TAG="v$VERSION-$CODE"
+          fi
+          if gh release view "$TAG" > /dev/null 2>&1; then
+            gh release upload "$TAG" dist/* --clobber
+          else
+            gh release create "$TAG" dist/* \
+              --title "The Cat $VERSION ($CODE)" \
+              --target "$GITHUB_SHA" \
+              --generate-notes
+          fi
