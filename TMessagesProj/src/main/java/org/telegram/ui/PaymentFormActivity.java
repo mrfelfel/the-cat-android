@@ -162,6 +162,7 @@ import java.util.Arrays;
 import java.util.Calendar;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Objects;
@@ -334,6 +335,14 @@ public class PaymentFormActivity extends BaseFragment implements NotificationCen
     private InvoiceStatus invoiceStatus;
     private boolean paymentStatusSent;
     private TLRPC.InputInvoice invoiceInput;
+
+    // Browsers worth asking for by name when the intent query does not list
+    // them; package ids per Browser.getBrowserPackageName.
+    private static final String[] KNOWN_BROWSER_PACKAGES = {
+        "com.android.chrome", "org.mozilla.firefox", "com.microsoft.emmx", "com.brave.browser",
+        "com.opera.browser", "com.opera.mini.native", "com.sec.android.app.sbrowser", "com.vivaldi.browser",
+        "com.duckduckgo.mobile.android", "com.UCMobile.intl", "com.kiwibrowser.browser", "org.torproject.torbrowser"
+    };
 
     private final static int done_button = 1;
 
@@ -3669,70 +3678,158 @@ public class PaymentFormActivity extends BaseFragment implements NotificationCen
         }, 350);
     }
 
+    // Opening the bank page outside the app, most specific way first. Every
+    // step falls through to the next one, so a device with an unusual browser
+    // setup still gets a way to pay:
+    //   1. our own picker over every resolvable external app;
+    //   2. the system's "open with" chooser;
+    //   3. a package that is known by name;
+    //   4. finally, load the page in this activity's webview.
     private void showBrowserChooser(Context context) {
         final Activity activity = getParentActivity();
         if (activity == null) {
             return;
         }
+        final ArrayList<BrowserChoice> browsers = resolveBrowserChoices(activity, context);
+        if (!browsers.isEmpty()) {
+            if (browsers.size() == 1) {
+                // Nothing to choose between: go straight through.
+                if (launchInBrowser(activity, browsers.get(0).packageName)) {
+                    confirmAfterLaunch(activity);
+                }
+                return;
+            }
+            final CharSequence[] items = new CharSequence[browsers.size()];
+            for (int i = 0; i < browsers.size(); i++) {
+                items[i] = browsers.get(i).label;
+            }
+            final BottomSheet.Builder builder = new BottomSheet.Builder(context, false, resourcesProvider)
+                .setTitle(LocaleController.getString(R.string.PaymentOpenInBrowserChoose))
+                .setItems(items, (dialog, which) -> {
+                    if (launchInBrowser(activity, browsers.get(which).packageName)) {
+                        confirmAfterLaunch(activity);
+                    }
+                });
+            showDialog(builder.create());
+            return;
+        }
+        if (launchSystemChooser(activity)) {
+            confirmAfterLaunch(activity);
+            return;
+        }
+        if (launchInBrowser(activity, null)) {
+            confirmAfterLaunch(activity);
+            return;
+        }
+        FileLog.d("checkout: no external browser, falling back to the in-app webview");
+        fallBackToInAppWebView(context);
+    }
+
+    private static class BrowserChoice {
+        final String packageName;
+        final CharSequence label;
+
+        BrowserChoice(String packageName, CharSequence label) {
+            this.packageName = packageName;
+            this.label = label;
+        }
+    }
+
+    private ArrayList<BrowserChoice> resolveBrowserChoices(Activity activity, Context context) {
+        final ArrayList<BrowserChoice> out = new ArrayList<>();
+        final HashSet<String> seen = new HashSet<>();
         final Intent probe = new Intent(Intent.ACTION_VIEW, Uri.parse(paymentForm.url));
         // Not MATCH_DEFAULT_ONLY: a browser that never declares itself the
         // default still opens http links, and hiding it here is how the picker
         // could come up empty on a phone that does have browsers.
-        final List<ResolveInfo> resolved = activity.getPackageManager().queryIntentActivities(probe, 0);
-        final ArrayList<ResolveInfo> browsers = new ArrayList<>();
+        List<ResolveInfo> resolved = null;
+        try {
+            resolved = activity.getPackageManager().queryIntentActivities(probe, 0);
+        } catch (Throwable e) {
+            FileLog.e(e);
+        }
         if (resolved != null) {
             for (ResolveInfo info : resolved) {
                 if (info.activityInfo == null || context.getPackageName().equals(info.activityInfo.packageName)) {
                     continue;
                 }
-                browsers.add(info);
+                final String pkg = info.activityInfo.packageName;
+                if (!seen.add(pkg)) {
+                    continue;
+                }
+                CharSequence label = null;
+                try {
+                    label = info.loadLabel(activity.getPackageManager());
+                } catch (Throwable ignore) {
+                }
+                out.add(new BrowserChoice(pkg, label != null ? label : pkg));
             }
         }
-        if (browsers.isEmpty()) {
-            // Some devices expose only WebView-backed handlers, which the
-            // filter above removes. Falling back to the OS chooser still lets
-            // the buyer pay instead of leaving them stuck on this page.
-            final Intent any = new Intent(Intent.ACTION_VIEW, Uri.parse(paymentForm.url));
-            if (any.resolveActivity(activity.getPackageManager()) == null) {
-                BulletinFactory.of(this).createSimpleBulletin(R.raw.info, LocaleController.getString(R.string.PaymentOpenInBrowserNoApp)).show();
-                return;
+        // A package the query missed can still be installed (a restricted
+        // device, a browser that declares nothing for this URL). Ask for the
+        // well-known ones by name rather than trusting one query.
+        for (String pkg : KNOWN_BROWSER_PACKAGES) {
+            if (seen.contains(pkg)) {
+                continue;
             }
             try {
-                activity.startActivity(Intent.createChooser(any, LocaleController.getString(R.string.PaymentOpenInBrowser)));
-            } catch (Exception e) {
-                FileLog.e(e);
-                BulletinFactory.of(this).createSimpleBulletin(R.raw.info, LocaleController.getString(R.string.PaymentOpenInBrowserNoApp)).show();
-                return;
+                final Intent named = new Intent(Intent.ACTION_VIEW, Uri.parse(paymentForm.url)).setPackage(pkg);
+                final List<ResolveInfo> named_ = activity.getPackageManager().queryIntentActivities(named, 0);
+                if (named_ != null && !named_.isEmpty()) {
+                    final ResolveInfo info = named_.get(0);
+                    CharSequence label = info.loadLabel(activity.getPackageManager());
+                    if (label == null) {
+                        label = Browser.getBrowserPackageName(pkg);
+                    }
+                    seen.add(pkg);
+                    out.add(new BrowserChoice(pkg, label != null ? label : pkg));
+                }
+            } catch (Throwable ignore) {
             }
-            confirmAfterLaunch(activity);
-            return;
         }
-        // One browser needs no choice; more than one must not silently open the
-        // OS default: the payer asked to finish outside the app, and which
-        // browser they trust with bank details is theirs to pick.
-        final CharSequence[] items = new CharSequence[browsers.size()];
-        for (int i = 0; i < browsers.size(); i++) {
-            CharSequence label = browsers.get(i).loadLabel(activity.getPackageManager());
-            items[i] = label != null ? label : browsers.get(i).activityInfo.packageName;
-        }
-        final BottomSheet.Builder builder = new BottomSheet.Builder(context, false, resourcesProvider)
-            .setTitle(LocaleController.getString(R.string.PaymentOpenInBrowserChoose))
-            .setItems(items, (dialog, which) -> launchPaymentInBrowser(activity, browsers.get(which).activityInfo.packageName));
-        showDialog(builder.create());
+        return out;
     }
 
-    private void launchPaymentInBrowser(Activity activity, String packageName) {
+    private boolean launchSystemChooser(Activity activity) {
+        try {
+            final Intent any = new Intent(Intent.ACTION_VIEW, Uri.parse(paymentForm.url));
+            if (any.resolveActivity(activity.getPackageManager()) == null) {
+                return false;
+            }
+            activity.startActivity(Intent.createChooser(any, LocaleController.getString(R.string.PaymentOpenInBrowser)));
+            return true;
+        } catch (Throwable e) {
+            FileLog.e(e);
+            return false;
+        }
+    }
+
+    // A null package asks the system for the default handler.
+    private boolean launchInBrowser(Activity activity, String packageName) {
         final Intent launch = new Intent(Intent.ACTION_VIEW, Uri.parse(paymentForm.url))
-            .setPackage(packageName)
             .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+        if (packageName != null) {
+            launch.setPackage(packageName);
+        }
         try {
             activity.startActivity(launch);
-        } catch (ActivityNotFoundException e) {
+            return true;
+        } catch (Throwable e) {
             FileLog.e(e);
-            BulletinFactory.of(this).createSimpleBulletin(R.raw.info, LocaleController.getString(R.string.PaymentOpenInBrowserNoApp)).show();
-            return;
+            return false;
         }
-        confirmAfterLaunch(activity);
+    }
+
+    // Last resort: render the gateway page here. The bank may refuse to run
+    // inside it, but that is better than a page that offers nothing at all.
+    private void fallBackToInAppWebView(Context context) {
+        openInBrowser = false;
+        BulletinFactory.of(this).createSimpleBulletin(R.raw.info, LocaleController.getString(R.string.PaymentOpenInBrowserNoApp)).show();
+        final PaymentFormActivity retry = new PaymentFormActivity(invoiceInput, paymentForm, messageObject, invoiceSlug, STEP_PAYMENT_INFO, requestedInfo, shippingOption, tipAmount, null, cardName, validateRequest, saveCardInfo, null, parentFragment, allowUnregistered)
+            .setCustomResultReceiver(customResultReceiver)
+            .setCustomAnyResultReceiver(customAnyResultReceiver);
+        retry.setDelegate(delegate);
+        presentFragment(retry, true);
     }
 
     private void confirmAfterLaunch(Activity activity) {
