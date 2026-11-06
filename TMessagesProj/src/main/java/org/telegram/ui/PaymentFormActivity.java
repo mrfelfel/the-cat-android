@@ -1961,7 +1961,7 @@ public class PaymentFormActivity extends BaseFragment implements NotificationCen
             totalCell = new TextPriceCell(context);
             totalCell.setBackgroundColor(getThemedColor(Theme.key_windowBackgroundWhite));
             totalPrice[0] = getTotalPriceString(prices);
-            totalCell.setTextAndValue(LocaleController.getString(R.string.PaymentTransactionTotal), totalPrice[0], true);
+            totalCell.setTextAndValue(getTotalRowLabel(prices), totalPrice[0], true);
 
             if (currentStep == STEP_CHECKOUT && (paymentForm.invoice.flags & 256) != 0) {
                 ViewGroup container = new FrameLayout(context);
@@ -2064,7 +2064,11 @@ public class PaymentFormActivity extends BaseFragment implements NotificationCen
                         }
                         int idx = indexOfComma(text);
                         boolean dotEntered = idx >= 0;
-                        int exp = LocaleController.getCurrencyExpDivider(paymentForm.invoice.currency);
+                        // IRT is whole tomans (exponent 0): the buyer types
+                        // the same number they see, so a typed 5,000 is 5,000
+                        // and not five hundred thousand once scaled.
+                        int exp = "IRT".equalsIgnoreCase(paymentForm.invoice.currency) ? 1
+                                : LocaleController.getCurrencyExpDivider(paymentForm.invoice.currency);
                         String wholeStr = idx >= 0 ? text.substring(0, idx) : text;
                         String reminderStr = idx >= 0 ? text.substring(idx + 1) : "";
                         long whole = Utilities.parseLong(PhoneFormat.stripExceptNumbers(wholeStr)) * exp;
@@ -3261,6 +3265,20 @@ public class PaymentFormActivity extends BaseFragment implements NotificationCen
                         FileLog.e("isReadyToPay failed", task1.getException());
                     }
                 });
+    }
+
+    // The price rows repeat the provider's own label ("100 ستاره"), so a bare
+    // "مجموع" over the same number reads as a duplicate. On such a form the
+    // total row carries the star label and leaves the amount row to the
+    // formatter, which is also the only side that can render تومان.
+    private String getTotalRowLabel(ArrayList<TLRPC.TL_labeledPrice> prices) {
+        if (prices.size() == 1) {
+            String label = prices.get(0).label;
+            if (!TextUtils.isEmpty(label) && label.contains("ستاره")) {
+                return label;
+            }
+        }
+        return LocaleController.getString(R.string.PaymentTransactionTotal);
     }
 
     private String getTotalPriceString(ArrayList<TLRPC.TL_labeledPrice> prices) {

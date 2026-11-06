@@ -1884,9 +1884,13 @@ public class LocaleController {
         double doubleAmount;
         boolean discount = amount < 0;
         amount = Math.abs(amount);
-        if (!editText && !StarsController.currency.equals(type)) {
-            // The Cat: display all fiat amounts in tomans only (TheCatMoney).
-            double units = amount / (double) getCurrencyExpDivider(type);
+        if (isFiatDisplay(type, editText)) {
+            // The Cat: every fiat amount the buyer sees is whole tomans
+            // (TheCatMoney) — never the invoice's own minor units, never a
+            // currency symbol. "IRT" is pinned to exponent 0 here as well as
+            // in getCurrencyExpDivider, so no caller can reintroduce the /100
+            // that turned a 5,000 تومان pack into "50".
+            double units = "IRT".equals(type) ? amount : amount / (double) getCurrencyExpDivider(type);
             return (discount ? "-" : "") + TheCatMoney.formatToman(TheCatMoney.toToman(units, type));
         }
         Currency currency = Currency.getInstance(type);
@@ -1978,6 +1982,13 @@ public class LocaleController {
             return result;
         }
         return (discount ? "-" : "") + String.format(Locale.US, type + customFormat, doubleAmount);
+    }
+
+    // Stars (XTR) and the amount input are not fiat display: the first is a
+    // star count, the second is the raw number the buyer types, which must
+    // stay in the invoice's own unit so a typed value means what it says.
+    private static boolean isFiatDisplay(String type, boolean editText) {
+        return !editText && !StarsController.currency.equals(type);
     }
 
     public static int getCurrencyExpDivider(String type) {
