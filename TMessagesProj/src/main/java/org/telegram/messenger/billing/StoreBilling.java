@@ -3,6 +3,7 @@ package org.telegram.messenger.billing;
 import android.app.Activity;
 
 import org.telegram.messenger.ApplicationLoader;
+import org.telegram.messenger.BuildVars;
 import org.telegram.tgnet.TLRPC;
 
 /**
@@ -29,9 +30,15 @@ public final class StoreBilling {
         return ApplicationLoader.applicationLoaderInstance.getStoreBillingBridge();
     }
 
-    /** Convenience: true only on builds that registered a store bridge. */
+    /**
+     * True only when a bridge is registered AND that store's app is actually on
+     * the device. The Bazaar APK can land on a phone without Cafe Bazaar
+     * installed: there is no store to bill through there, so every caller must
+     * fall through to the direct/invoice path instead of failing inside the
+     * store.
+     */
     public static boolean isAvailable() {
-        return get() != null;
+        return get() != null && BuildVars.isBazaarAppInstalled();
     }
 
     /**

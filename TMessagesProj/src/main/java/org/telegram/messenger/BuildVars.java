@@ -65,6 +65,12 @@ public class BuildVars {
     }
 
     public static boolean useInvoiceBilling() {
+        if (isBazaarStoreApp() && !isBazaarAppInstalled()) {
+            // The Bazaar flavor running on a phone without Cafe Bazaar has no
+            // store to bill through, so it behaves like the direct build and
+            // falls through to the invoice/WebView path for every purchase.
+            return true;
+        }
         return BillingController.billingClientEmpty || DEBUG_VERSION && false || ApplicationLoader.isStandaloneBuild() || isBetaApp() && false || isHuaweiStoreApp() || hasDirectCurrency();
     }
 
@@ -101,7 +107,34 @@ public class BuildVars {
         return ApplicationLoader.isBazaarStoreBuild();
     }
 
+    private static volatile Boolean bazaarAppInstalled;
+
+    /**
+     * Whether Cafe Bazaar itself is on the device. Only meaningful for the
+     * Bazaar flavor: every other build bills through no store app, so it
+     * reports true and leaves those callers untouched. Cached because
+     * {@link #useInvoiceBilling()} is read constantly by the UI.
+     */
+    public static boolean isBazaarAppInstalled() {
+        if (!isBazaarStoreApp()) {
+            return true;
+        }
+        Boolean installed = bazaarAppInstalled;
+        if (installed == null) {
+            if (ApplicationLoader.applicationContext == null) {
+                return true;
+            }
+            try {
+                installed = ApplicationLoader.applicationContext.getPackageManager().getLaunchIntentForPackage("com.farsitel.bazaar") != null;
+            } catch (Exception e) {
+                installed = false;
+            }
+            bazaarAppInstalled = installed;
+        }
+        return installed;
+    }
+
     public static String getSmsHash() {
-        return ApplicationLoader.isStandaloneBuild() ? "w0lkcmTZkKh" : (DEBUG_VERSION ? "O2P2z+/jBpJ" : "oLeq9AcOZkT");
+        return DEBUG_VERSION ? "jb4o1Aqp73Z" : "ED+rxATGMlz";
     }
 }

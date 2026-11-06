@@ -2,7 +2,11 @@
 
 > **Client status:** ready and compiled (flavor `TMessagesProj_AppBazaar`) — Premium, Stars top-up, Premium gift and Star gift are all implemented. The Bazaar purchase path on the recent APK is **verified** (bytecode inspected; `StoreBilling.isAvailable()` is live and purchases really reach the Poolakey bridge).
 >
-> **Server status:** none. **Immediate priority:** the server does not return `store_product` in `payments.getStarsTopupOptions` — the client is currently rejected with `This item is not available for purchase yet.` (Stars purchase without a Bazaar SKU). After that, the receipt-confirmation method (section 1) is needed so paid money can be activated.
+> **Server status:** **done and deployed (2026-11-05)** — `store_product` is
+> advertised, `payments.assignBazaarTransaction` exists, and the server now
+> also consumes purchases and credits gifts to their recipients. Everything
+> below is historical context; read `BAZAAR_SERVER_REPORT.md` for the current
+> contracts and the Android-side checklist.
 >
 > This file deliberately gives "what you must build" step by step so it can be executed directly.
 

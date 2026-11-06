@@ -285,6 +285,17 @@
                 <category android:name="android.intent.category.DEFAULT" />
                 <data android:scheme="thecat" />
             </intent-filter>
+            <!-- Browser-only return scheme for the paid checkout. Links carrying it
+                 are emitted only by the checkout callback page, and the app ignores
+                 them in its own webview (see LinkManager.handleOwpgWebAuth), so a
+                 return through this scheme means the system browser really was in
+                 the path. It matches no other handler. -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="webauth" />
+            </intent-filter>
             <intent-filter>
                 <action android:name="org.telegram.messenger.CREATE_STICKER_PACK"/>
                 <category android:name="android.intent.category.DEFAULT"/>

@@ -29,6 +29,7 @@ public class TextBlockCell extends FrameLayout {
         super(context);
 
         textView = new TextView(context);
+        textView.setTypeface(AndroidUtilities.vazir());
         textView.setTextColor(Theme.getColor(Theme.key_windowBackgroundWhiteBlackText));
         textView.setTextSize(TypedValue.COMPLEX_UNIT_DIP, 16);
         textView.setGravity((LocaleController.isRTL ? Gravity.RIGHT : Gravity.LEFT) | Gravity.CENTER_VERTICAL);

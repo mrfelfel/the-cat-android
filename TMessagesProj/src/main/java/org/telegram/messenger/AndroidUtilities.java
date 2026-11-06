@@ -296,6 +296,7 @@ public class AndroidUtilities {
     public static float touchSlop;
     private static int prevOrientation = -10;
     private static boolean waitingForSms = false;
+    private static boolean smsRetrieverStarted = false;
     private static boolean waitingForCall = false;
     private static final Object smsLock = new Object();
     private static final Object callLock = new Object();
@@ -2460,9 +2461,16 @@ public class AndroidUtilities {
 
     public static void setWaitingForSms(boolean value) {
         synchronized (smsLock) {
+            // stay latched across the brief off/on flips LoginActivity does while it
+            // switches auth views; startSmsRetriever only listens for 5 minutes
+            if (value && smsRetrieverStarted) {
+                waitingForSms = true;
+                return;
+            }
             waitingForSms = value;
             try {
                 if (waitingForSms) {
+                    smsRetrieverStarted = true;
                     SmsRetrieverClient client = SmsRetriever.getClient(ApplicationLoader.applicationContext);
                     Task<Void> task = client.startSmsRetriever();
                     task.addOnSuccessListener(aVoid -> {

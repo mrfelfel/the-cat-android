@@ -34,6 +34,7 @@ import org.telegram.tgnet.tl.TL_account;
 import org.telegram.tgnet.tl.TL_aicompose;
 import org.telegram.tgnet.tl.TL_phone;
 import org.telegram.tgnet.tl.TL_update;
+import org.telegram.thecat.TheCatServers;
 import org.telegram.ui.ActionBar.AlertDialog;
 import org.telegram.ui.ActionBar.BaseFragment;
 import org.telegram.ui.ActionBar.INavigationLayout;
@@ -94,6 +95,9 @@ public class LinkManager {
         if ("thecat".equalsIgnoreCase(scheme))
             return handleOwpg(uri);
 
+        if ("webauth".equalsIgnoreCase(scheme))
+            return handleWebAuth(uri);
+
         return false;
     }
 
@@ -118,6 +122,48 @@ public class LinkManager {
         }
 
         return false;
+    }
+
+    // webauth://<host>/?from=checkout — the paid checkout hands the buyer back
+    // through this scheme only from the callback page the system browser is
+    // showing. Inside the app's own webview the link is inert: a session that
+    // never left for the bank must not be able to report "back from the
+    // browser", or a buyer would be told the purchase is confirmed when no
+    // payment happened. The purchase itself is settled by the server (the
+    // callback page settles and pushes the updates), so nothing is sent here;
+    // the app only refreshes the buyer's own state.
+    private boolean handleWebAuth(Uri uri) {
+        if (isExternalIntent) {
+            return handleCheckoutReturn(uri);
+        }
+        // Came from the app's own webview: drop it without doing anything.
+        return true;
+    }
+
+    private boolean handleCheckoutReturn(Uri uri) {
+        // Only a live app can be handed a link from the browser; the
+        // cold-start path re-interprets the scheme as a username and would
+        // turn the return into a search.
+        if (LaunchActivity.instance == null) {
+            return false;
+        }
+        final String host = uri.getHost();
+        final int selected = TheCatServers.findTheCatAccountForHost(host);
+        final int account = selected >= 0 ? selected : currentAccount;
+        if (!"checkout".equalsIgnoreCase(uri.getQueryParameter("from"))) {
+            return true;
+        }
+        // The bank, not this callback, is the authority; it only says the buyer
+        // is back. Refresh what it may have changed so the app shows the
+        // purchase without a restart.
+        ConnectionsManager.getInstance(account).resumeNetworkMaybe();
+        StarsController.getInstance(account).invalidateBalance();
+        final TLRPC.User self = UserConfig.getInstance(account).getCurrentUser();
+        if (self != null) {
+            MessagesController.getInstance(account).loadFullUser(self, 0, true);
+        }
+        MediaDataController.getInstance(account).loadPremiumPromo(false);
+        return true;
     }
 
     private boolean handleTonsite(Uri uri) {
