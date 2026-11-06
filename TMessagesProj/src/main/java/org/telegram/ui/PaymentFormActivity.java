@@ -3675,7 +3675,10 @@ public class PaymentFormActivity extends BaseFragment implements NotificationCen
             return;
         }
         final Intent probe = new Intent(Intent.ACTION_VIEW, Uri.parse(paymentForm.url));
-        final List<ResolveInfo> resolved = activity.getPackageManager().queryIntentActivities(probe, PackageManager.MATCH_DEFAULT_ONLY);
+        // Not MATCH_DEFAULT_ONLY: a browser that never declares itself the
+        // default still opens http links, and hiding it here is how the picker
+        // could come up empty on a phone that does have browsers.
+        final List<ResolveInfo> resolved = activity.getPackageManager().queryIntentActivities(probe, 0);
         final ArrayList<ResolveInfo> browsers = new ArrayList<>();
         if (resolved != null) {
             for (ResolveInfo info : resolved) {
