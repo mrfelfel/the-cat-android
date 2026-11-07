@@ -42,7 +42,20 @@ go tool gomobile bind \
   -target=android \
   -androidapi 21 \
   -o "$AAR" \
+  -javapkg org.telegram.thecat.catnet \
   github.com/mrfelfel/the-cat-network-base/mobile
+
+# The Java API must land in the package CatNetResolver imports. Without
+# -javapkg gomobile emits go.* and mobile.* at the root, which compiles fine as
+# an AAR and then fails the app's javac with "package does not exist".
+if ! unzip -p "$AAR" classes.jar > "$TMP/classes.jar"; then
+  echo "ERROR: the AAR has no classes.jar"
+  exit 1
+fi
+unzip -Z1 "$TMP/classes.jar" | grep -qx 'org/telegram/thecat/catnet/mobile/Client.class' || {
+  echo "ERROR: the AAR does not expose org.telegram.thecat.catnet.mobile.Client"
+  exit 1
+}
 
 if ! unzip -Z1 "$AAR" | grep -qx 'jni/arm64-v8a/libgojni.so'; then
   echo "ERROR: the AAR has no native libs for arm64-v8a; gomobile produced nothing"
