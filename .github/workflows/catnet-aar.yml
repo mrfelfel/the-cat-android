@@ -1,0 +1,101 @@
+name: Catnet AAR
+
+# Rebuilds TMessagesProj/libs/catnet.aar from the network-base submodule and
+# pushes it to the branch that triggered the run.
+#
+# The AAR is a build output and network-base does not commit it, but the Gradle
+# build links it as a plain file — so without this job an APK built after a Go
+# change would still ship the previous address finder. It runs on its own, not
+# inside release.yml, because a gomobile failure and a Gradle failure are
+# different problems and only one of them is worth an hour-long rebuild.
+#
+# Triggers: any push touching network-base/, scripts/build-catnet-aar.sh or
+# this file, or a manual run. Skips itself when the committed AAR already
+# matches the submodule's content.
+#
+# The resulting commit carries [skip ci]; release.yml's push trigger is tags
+# only, so no release is started by it.
+
+on:
+  workflow_dispatch:
+  push:
+    branches: ['**']
+    paths:
+      - 'network-base/**'
+      - 'scripts/build-catnet-aar.sh'
+      - '.github/workflows/catnet-aar.yml'
+
+permissions:
+  contents: write
+
+concurrency:
+  group: catnet-aar-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+          fetch-depth: 0
+
+      - name: Skip if the AAR is current
+        id: check
+        run: |
+          set -euo pipefail
+          PIN="$(git rev-parse "HEAD:network-base")"
+          if git show HEAD:TMessagesProj/libs/catnet.aar > /tmp/current.aar 2>/dev/null; then
+            STAMP="$(unzip -p /tmp/current.aar assets/catnet-build.txt 2>/dev/null || true)"
+            if [ "$(printf '%s' "$STAMP" | tr -d '\r\n')" = "$PIN" ]; then
+              echo "AAR already built from $PIN"
+              echo "needed=false" >> "$GITHUB_OUTPUT"
+              exit 0
+            fi
+          fi
+          echo "needed=true" >> "$GITHUB_OUTPUT"
+
+      - name: Set up Go
+        if: steps.check.outputs.needed == 'true'
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: network-base/go.mod
+          cache-dependency-path: network-base/go.sum
+
+      - name: Set up NDK
+        if: steps.check.outputs.needed == 'true'
+        env:
+          NDK_VERSION: '27.2.12479018'
+        run: |
+          set -euo pipefail
+          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --install "ndk;$NDK_VERSION" > /dev/null
+          echo "ANDROID_NDK_HOME=$ANDROID_HOME/ndk/$NDK_VERSION" >> "$GITHUB_ENV"
+
+      - name: Build the AAR
+        if: steps.check.outputs.needed == 'true'
+        run: |
+          set -euo pipefail
+          scripts/build-catnet-aar.sh
+          # Build stamp: how the skip check above knows this AAR is current.
+          # Assets travel inside the AAR untouched and the app never reads them.
+          mkdir -p /tmp/stamp/assets
+          git rev-parse "HEAD:network-base" > /tmp/stamp/assets/catnet-build.txt
+          ( cd /tmp/stamp && zip -q -r "$GITHUB_WORKSPACE/TMessagesProj/libs/catnet.aar" assets )
+          unzip -l TMessagesProj/libs/catnet.aar | grep -E 'libgojni|classes.jar|catnet-build'
+
+      - name: Commit and push
+        if: steps.check.outputs.needed == 'true'
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add TMessagesProj/libs/catnet.aar
+          if git diff --cached --quiet; then
+            echo "AAR unchanged"
+            exit 0
+          fi
+          PIN="$(git rev-parse "HEAD:network-base")"
+          git commit -m "chore(catnet): rebuild AAR from network-base @ ${PIN:0:7} [skip ci]"
+          git push

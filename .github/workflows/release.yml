@@ -37,7 +37,44 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  catnet:
+    # The AAR is a build output the repo links as a plain file. Build it here
+    # rather than reuse the committed one, so a release can never ship a
+    # catnet older than the source it was cut from. Its own workflow
+    # (catnet-aar.yml) covers ordinary pushes; this is the release guard.
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: network-base/go.mod
+          cache-dependency-path: network-base/go.sum
+
+      - name: Set up NDK
+        env:
+          NDK_VERSION: '27.2.12479018'
+        run: |
+          set -euo pipefail
+          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --install "ndk;$NDK_VERSION" > /dev/null
+          echo "ANDROID_NDK_HOME=$ANDROID_HOME/ndk/$NDK_VERSION" >> "$GITHUB_ENV"
+
+      - name: Build the AAR
+        run: scripts/build-catnet-aar.sh
+
+      - name: Hand the AAR to the build job
+        uses: actions/upload-artifact@v4
+        with:
+          name: catnet-aar
+          path: TMessagesProj/libs/catnet.aar
+          if-no-files-found: error
+
   build:
+    needs: catnet
     runs-on: ubuntu-latest
     outputs:
       version: ${{ steps.meta.outputs.version }}
@@ -47,6 +84,12 @@ jobs:
         uses: actions/checkout@v4
         with:
           submodules: recursive
+
+      - name: Fetch the freshly built AAR
+        uses: actions/download-artifact@v4
+        with:
+          name: catnet-aar
+          path: TMessagesProj/libs
 
       - name: Set up JDK 17
         uses: actions/setup-java@v4
