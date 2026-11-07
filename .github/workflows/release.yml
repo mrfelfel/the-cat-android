@@ -66,6 +66,17 @@ jobs:
       - name: Build the AAR
         run: scripts/build-catnet-aar.sh
 
+      - name: Check the Java API matches the app
+        run: |
+          set -euo pipefail
+          # The app's javac is the first thing that would notice a missing or
+          # wrongly packaged class, 40 minutes into the native build.
+          unzip -p TMessagesProj/libs/catnet.aar classes.jar > /tmp/classes.jar
+          unzip -Z1 /tmp/classes.jar | grep -qx 'org/telegram/thecat/catnet/mobile/Client.class' || {
+            echo "ERROR: CatNetResolver imports org.telegram.thecat.catnet.mobile.*, which the AAR does not contain"
+            exit 1
+          }
+
       - name: Hand the AAR to the build job
         uses: actions/upload-artifact@v4
         with:
