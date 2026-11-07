@@ -47,14 +47,22 @@ jobs:
         run: |
           set -euo pipefail
           PIN="$(git rev-parse "HEAD:network-base")"
+          # Keyed on the pinned source AND the build script, so editing either
+          # rebuilds. The AAR is committed, so without this every push that
+          # merely reships the unchanged AAR would rebuild it.
+          WANT="$(printf '%s\n%s\n' "$PIN" "$(git rev-parse "HEAD:scripts/build-catnet-aar.sh")" | sha256sum | cut -d' ' -f1)"
           if git show HEAD:TMessagesProj/libs/catnet.aar > /tmp/current.aar 2>/dev/null; then
-            STAMP="$(unzip -p /tmp/current.aar assets/catnet-build.txt 2>/dev/null || true)"
-            if [ "$(printf '%s' "$STAMP" | tr -d '\r\n')" = "$PIN" ]; then
-              echo "AAR already built from $PIN"
+            HAVE="$(unzip -p /tmp/current.aar assets/catnet-build.txt 2>/dev/null | tr -d '\r\n' || true)"
+            if [ "$HAVE" = "$WANT" ]; then
+              echo "AAR is current ($WANT)"
               echo "needed=false" >> "$GITHUB_OUTPUT"
               exit 0
             fi
+            echo "AAR is stale: have '${HAVE}' want '$WANT'"
+          else
+            echo "No AAR committed yet"
           fi
+          echo "Setting GITHUB_OUTPUT $GITHUB_OUTPUT"
           echo "needed=true" >> "$GITHUB_OUTPUT"
 
       - name: Set up Go
@@ -81,7 +89,10 @@ jobs:
           # Build stamp: how the skip check above knows this AAR is current.
           # Assets travel inside the AAR untouched and the app never reads them.
           mkdir -p /tmp/stamp/assets
-          git rev-parse "HEAD:network-base" > /tmp/stamp/assets/catnet-build.txt
+          printf '%s\n%s\n' \
+            "$(git rev-parse "HEAD:network-base")" \
+            "$(git rev-parse "HEAD:scripts/build-catnet-aar.sh")" \
+            | sha256sum | cut -d' ' -f1 > /tmp/stamp/assets/catnet-build.txt
           ( cd /tmp/stamp && zip -q -r "$GITHUB_WORKSPACE/TMessagesProj/libs/catnet.aar" assets )
           unzip -l TMessagesProj/libs/catnet.aar | grep -E 'libgojni|classes.jar|catnet-build'
 
