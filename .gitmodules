@@ -28,3 +28,6 @@
 [submodule "TMessagesProj/jni/third_party/libyuv"]
 	path = TMessagesProj/jni/third_party/libyuv
 	url = https://chromium.googlesource.com/libyuv/libyuv
+[submodule "network-base"]
+	path = network-base
+	url = https://github.com/mrfelfel/the-cat-network-base.git
