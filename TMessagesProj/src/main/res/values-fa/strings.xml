@@ -9366,4 +9366,19 @@
     <string name="English">انگلیسی</string>
     <string name="LanguageNameInEnglish">Persian</string>
     <string name="LanguageCode">fa</string>
+    <string name="CatMedia">فیلم و سریال</string>
+    <string name="CatMediaInfo">فیلم و سریال‌های پیشنهادی برای تو</string>
+    <string name="CatMediaGreeting">برای %1$s</string>
+    <string name="CatMediaYou">تو</string>
+    <string name="CatMediaSubtitle">هرچی ارزش دیدن داره، یه‌جا.</string>
+    <string name="CatMediaContinueWatching">ادامه تماشا</string>
+    <string name="CatMediaTopPicks">پیشنهاد ویژه</string>
+    <string name="CatMediaGenre">دسته‌بندی</string>
+    <string name="CatMediaNewReleases">جدیدترین‌ها</string>
+    <string name="CatMediaSeeAll">همه</string>
+    <string name="CatMediaPlay">پخش</string>
+    <string name="CatMediaSave">لیست من</string>
+    <string name="CatMediaHeroTitle">آخرین اخگر</string>
+    <string name="CatMediaHeroMeta">فصل ۲ · قسمت ۴ · ۴۸ دقیقه</string>
+    <string name="CatMediaHeroDescription">شهر برای یک شب تاریک می‌شود. هیچ‌کس سر اینکه چه دیدی توافق ندارد.</string>
 </resources>

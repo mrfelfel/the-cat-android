@@ -757,6 +757,7 @@ public class SettingsActivity extends BaseFragment implements NotificationCenter
             items.add(UItem.asShadow(null));
 
         items.add(UItem.asHeader(getString(R.string.SettingsHelp)));
+        items.add(SettingCell.Factory.of(27, 0xFF8E5BD8, 0xFF5B2FA8, R.drawable.settings_cat_media, getString(R.string.CatMedia), getString(R.string.CatMediaInfo)));
         // Cat-specific help entries (About Us, Cat Room market, Privacy Policy,
         // Terms) — all catroom.ir. The Telegram-only entries (Ask a Question,
         // Telegram FAQ / Features) are gone with the Telegram server.
@@ -893,6 +894,9 @@ public class SettingsActivity extends BaseFragment implements NotificationCenter
                 break;
             case 26:
                 Browser.openUrl(getParentActivity(), LocaleController.getString(R.string.TermsOfServiceUrl));
+                break;
+            case 27:
+                presentFragment(new CatMediaFragment());
                 break;
 
             case 20:

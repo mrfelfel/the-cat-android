@@ -11251,4 +11251,19 @@
     <string name="UnsupportedMessageTitle">Unsupported Message</string>
     <string name="UnsupportedMessageMessage">Update The Cat to view this message</string>
     <string name="UnsupportedUpdate">Update</string>
+    <string name="CatMedia">Movies &amp; Series</string>
+    <string name="CatMediaInfo">Browse films and series picked for you</string>
+    <string name="CatMediaGreeting">For %1$s</string>
+    <string name="CatMediaYou">you</string>
+    <string name="CatMediaSubtitle">Everything worth watching, in one place.</string>
+    <string name="CatMediaContinueWatching">Continue watching</string>
+    <string name="CatMediaTopPicks">Top picks for you</string>
+    <string name="CatMediaGenre">Browse by genre</string>
+    <string name="CatMediaNewReleases">New releases</string>
+    <string name="CatMediaSeeAll">See all</string>
+    <string name="CatMediaPlay">Play</string>
+    <string name="CatMediaSave">My list</string>
+    <string name="CatMediaHeroTitle">The Last Ember</string>
+    <string name="CatMediaHeroMeta">Season 2 · Episode 4 · 48 min</string>
+    <string name="CatMediaHeroDescription">The city goes dark for one night. Nobody agrees on what they saw.</string>
 </resources>
