@@ -30,8 +30,13 @@ echo "gomobile: $(go list -m -f '{{.Version}}' golang.org/x/mobile)"
 TMP="${TMPDIR:-/tmp}/catnet-aar-$$"; mkdir -p "$TMP"
 trap 'rm -rf "$TMP"' EXIT
 
+# gomobile finds gobind only through PATH, and `go tool` does not put it
+# there. Install it from the same pin so gomobile and gobind cannot mismatch.
+GOBIN="$TMP/bin" go install golang.org/x/mobile/cmd/gobind
+export PATH="$TMP/bin:$PATH"
+
 # Bind by import path from the module root. From inside mobile/ with ".", the
-# tool reports success and writes a 22-byte AAR with no jni/ and no classes.
+# tool reports success and writes a small AAR with no jni/ and no classes.
 AAR="$TMP/catnet.aar"
 go tool gomobile bind \
   -target=android \
