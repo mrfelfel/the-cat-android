@@ -46,8 +46,9 @@ go tool gomobile bind \
   github.com/mrfelfel/the-cat-network-base/mobile
 
 # The Java API must land in the package CatNetResolver imports. Without
-# -javapkg gomobile emits go.* and mobile.* at the root, which compiles fine as
-# an AAR and then fails the app's javac with "package does not exist".
+# -javapkg gomobile emits go.* and mobile.* at the jar root, which still packs
+# into a valid AAR and only fails later, in the app's javac. This check is what
+# turns that hour-long failure into an instant one.
 if ! unzip -p "$AAR" classes.jar > "$TMP/classes.jar"; then
   echo "ERROR: the AAR has no classes.jar"
   exit 1
