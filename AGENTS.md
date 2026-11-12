@@ -49,6 +49,7 @@ Local branches here carry pre-rebrand history — **never push them to the fork*
 - Rebranded client UI strings to The Cat; pinned chat-list header name; header star opens the status dialog directly.
 - Removed the multi-server surface and scoped-cache layer (user decision: single Cat server, stock loaders). The 13.0.2 upstream merge was tried and **reverted** (2026-10-15) — stay on 12.10.1.
 - Cafe Bazaar IAB (Poolakey) for premium/stars/gifts with offline queue + pending-purchases UI. Standalone flavor keeps the invoice/WebView payment path.
+- **canalyze** (2026-11-12): install analytics + client diagnostics, wired into `TMessagesProj` so all five flavors get it. Crashes, ANRs, MTProto failures (with DC and network), slow requests and retry loops are folded client-side and shipped to `https://canalyze.cr0.ir`. Carries two app keys so a rotation never 401s the fleet. **Full details, R8 verification commands and the device checklist: [`docs/CANALYZE_INTEGRATION.md`](docs/CANALYZE_INTEGRATION.md).**
 
 ## Commit history
 
