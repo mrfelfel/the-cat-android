@@ -129,6 +129,16 @@
     public org.telegram.messenger.billing.StoreBillingBridge getStoreBillingBridge();
 }
 
+# The Bazaar receipt RPC. Same trap as the bridge above, one layer down: this TL
+# class is DEFINED in the library but instantiated only by the Bazaar app module's
+# BazaarReceiptQueue / BazaarBillingBridge, so the library's own R8 pass sees no
+# reference at all and strips it. The app module then fails at runtime with
+# NoClassDefFoundError the moment a purchase receipt is sent -- i.e. after the
+# user has already paid. The app-module `-dontwarn` for this class was hiding
+# R8's missing-class warning rather than fixing it; that rule is now gone.
+# Verified by grepping the class name out of the shipped classes.dex.
+-keep class org.telegram.tgnet.TLRPC$TL_payments_assignBazaarTransaction { *; }
+
 # Dev-server flavor flag. Same failure mode as the store bridge above: the
 # library's own R8 pass sees only the base ApplicationLoader (returns false),
 # so anything the base folds from it is baked to the STORE value and the dev

@@ -11,7 +11,9 @@ import org.json.JSONObject;
 import org.telegram.messenger.AccountInstance;
 import org.telegram.messenger.AndroidUtilities;
 import org.telegram.messenger.FileLog;
+import org.telegram.messenger.LocaleController;
 import org.telegram.messenger.utils.BillingUtilities;
+import org.telegram.messenger.web.R;
 import org.telegram.tgnet.ConnectionsManager;
 import org.telegram.tgnet.TLRPC;
 
@@ -20,7 +22,6 @@ import java.util.concurrent.atomic.AtomicBoolean;
 
 import ir.cafebazaar.poolakey.Payment;
 import ir.cafebazaar.poolakey.callback.ConnectionCallback;
-import ir.cafebazaar.poolakey.callback.ConsumeCallback;
 import ir.cafebazaar.poolakey.callback.PurchaseCallback;
 import ir.cafebazaar.poolakey.callback.PurchaseQueryCallback;
 import ir.cafebazaar.poolakey.config.PaymentConfiguration;
@@ -98,9 +99,6 @@ public class BazaarBillingBridge implements StoreBillingBridge {
     public BazaarBillingBridge(Context context) {
         this.appContext = context.getApplicationContext();
         payment();
-        // Let the durable outbox consume a stars/gift receipt once the server
-        // finally confirms it during a delayed retry, so the user can rebuy.
-        BazaarReceiptQueue.setConsumeHandler(this::consumeQuietly);
         // Bind now rather than on first purchase: the startup auto-flush and the
         // pending-purchases screen both touch this store before any purchase.
         ensureConnected(() -> {
@@ -182,7 +180,7 @@ public class BazaarBillingBridge implements StoreBillingBridge {
         ensureConnected(new Runnable() {
             @Override
             public void run() {
-                PaymentRequestHolder holder = new PaymentRequestHolder(sku, payload, accountInstance, purpose, guarded, false);
+                PaymentRequestHolder holder = new PaymentRequestHolder(sku, payload, accountInstance, purpose, guarded);
                 startPurchase(registry, holder, true);
             }
         }, guarded);
@@ -210,7 +208,7 @@ public class BazaarBillingBridge implements StoreBillingBridge {
         ensureConnected(new Runnable() {
             @Override
             public void run() {
-                PaymentRequestHolder holder = new PaymentRequestHolder(sku, payload, accountInstance, purpose, guarded, true);
+                PaymentRequestHolder holder = new PaymentRequestHolder(sku, payload, accountInstance, purpose, guarded);
                 startPurchase(registry, holder, false);
             }
         }, guarded);
@@ -310,6 +308,13 @@ public class BazaarBillingBridge implements StoreBillingBridge {
             if (sent) {
                 return;
             }
+            // NoClassDefFoundError here means the shrinker dropped the TL class.
+            // Queueing the receipt would only crash again on the next flush, so
+            // report a build-level failure rather than pretending it is safe.
+            if (t instanceof LinkageError) {
+                holder.callback.error(LocaleController.getString(R.string.BazaarBuildIncompleteError));
+                return;
+            }
             // Money already taken: keep the receipt so it retries, and tell the
             // UI the purchase is safe rather than lost.
             queueReceipt(holder, built, token, messageOf(t));
@@ -321,11 +326,11 @@ public class BazaarBillingBridge implements StoreBillingBridge {
         try {
             if (response instanceof TLRPC.Updates) {
                 holder.accountInstance.getMessagesController().processUpdates((TLRPC.Updates) response, false);
-                // A consumable (stars/gift) must be consumed at the store once the
-                // server has credited it, or the user can never buy it again.
-                if (holder.consumable) {
-                    consumeQuietly(key);
-                }
+                // Consuming the purchase is the SERVER's job: assignBazaarTransaction
+                // calls Bazaar's consume endpoint before crediting anything. The
+                // client must not consume too -- doing so raced the server and, when
+                // the client won, made Bazaar report the product as already consumed
+                // while the grant was still in flight.
                 holder.callback.success();
             } else {
                 // Queue for automatic retry instead of failing the purchase. The
@@ -347,54 +352,9 @@ public class BazaarBillingBridge implements StoreBillingBridge {
             return;
         }
         try {
-            BazaarReceiptQueue.enqueue(holder.accountInstance.getCurrentAccount(), receiptJson, holder.payload, key, error, holder.consumable);
+            BazaarReceiptQueue.enqueue(holder.accountInstance.getCurrentAccount(), receiptJson, holder.payload, key, error);
         } catch (Throwable t) {
             FileLog.e("Bazaar billing: could not queue receipt " + key, t);
-        }
-    }
-
-    /**
-     * Consumes a purchased INAPP product so the user can buy it again. Fire and
-     * forget: the receipt has already been accepted by the server, so a consume
-     * failure must not affect the purchase result.
-     *
-     * Poolakey only forwards a call to Bazaar while {@code billingCommunicator}
-     * is set, and that field is cleared by disconnect(). Calling consumeProduct
-     * on a Payment that was never connected (startup auto-flush, a retry after
-     * the Bazaar service died) is silently swallowed, so bind first. The
-     * consume itself keeps retrying through {@link BazaarReceiptQueue}.
-     */
-    private void consumeQuietly(String purchaseToken) {
-        if (TextUtils.isEmpty(purchaseToken)) {
-            return;
-        }
-        ensureConnected(() -> consumeNow(purchaseToken), new GuardedCallback(NO_OP_CALLBACK));
-    }
-
-    private void consumeNow(String purchaseToken) {
-        try {
-            payment().consumeProduct(purchaseToken, new Function1<ConsumeCallback, Unit>() {
-                @Override
-                public Unit invoke(ConsumeCallback cb) {
-                    cb.consumeSucceed(new Function0<Unit>() {
-                        @Override
-                        public Unit invoke() {
-                            FileLog.d("Bazaar billing: consumed " + purchaseToken);
-                            return Unit.INSTANCE;
-                        }
-                    });
-                    cb.consumeFailed(new Function1<Throwable, Unit>() {
-                        @Override
-                        public Unit invoke(Throwable t) {
-                            FileLog.e("Bazaar billing: consume failed for " + purchaseToken, t);
-                            return Unit.INSTANCE;
-                        }
-                    });
-                    return Unit.INSTANCE;
-                }
-            });
-        } catch (Throwable t) {
-            BazaarErrors.report(appContext, "consume", t);
         }
     }
 
@@ -575,18 +535,15 @@ public class BazaarBillingBridge implements StoreBillingBridge {
         final AccountInstance accountInstance;
         final TLRPC.InputStorePaymentPurpose purpose;
         final GuardedCallback callback;
-        /** True for stars/gifts: consume at the store once the server confirms. */
-        final boolean consumable;
         /** False until the purchase flow is on screen; filters stale results. */
         volatile boolean armed;
 
-        PaymentRequestHolder(String sku, String payload, AccountInstance accountInstance, TLRPC.InputStorePaymentPurpose purpose, GuardedCallback callback, boolean consumable) {
+        PaymentRequestHolder(String sku, String payload, AccountInstance accountInstance, TLRPC.InputStorePaymentPurpose purpose, GuardedCallback callback) {
             this.sku = sku;
             this.payload = payload;
             this.accountInstance = accountInstance;
             this.purpose = purpose;
             this.callback = callback;
-            this.consumable = consumable;
         }
     }
 }

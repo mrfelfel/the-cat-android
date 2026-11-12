@@ -290,10 +290,37 @@ The first Bazaar release build fails with an R8 error:
 ```
 Missing class org.telegram.tgnet.TLRPC$TL_payments_assignBazaarTransaction
 ```
-This is a **false positive** — the class is compiled and present in the APK. Only the Bazaar flavor references it (`BazaarReceiptQueue`) and the standalone flavor never takes the Bazaar receipt path, so R8 does not resolve it during minify. Fix: a `-dontwarn` rule in [TMessagesProj_AppBazaar/proguard-rules.pro](../TMessagesProj_AppBazaar/proguard-rules.pro) (R8 itself generated it in `missing_rules.txt`).
+**This is NOT a false positive** — the earlier note here said it was, and that
+was wrong. The class is *defined* in `:TMessagesProj` but instantiated only by
+the Bazaar app module (`BazaarReceiptQueue`, `BazaarBillingBridge`). The
+library is minified by its **own** R8 pass before the app module is seen, so
+that pass sees no reference and strips the class; the app module's keep rules
+never reach it.
 
-### ⚠️ Behavior without the server
-The Bazaar APK **builds and installs without the server implementation**, but **does not activate Premium/Stars**: the client takes the money from the Bazaar wallet, sends the receipt, and since the server has no `assignBazaarTransaction` method the receipt is stored in the **offline queue** and re-sent automatically. The user sees "Payment received…" and can track the purchase in the **"Pending purchases" screen** (side menu). Real activation only happens after the server is implemented (sections 4/5 of this report + [BAZAAR_SERVER_TODO.md](BAZAAR_SERVER_TODO.md)) and SKUs are defined in the Bazaar panel.
+Suppressing the warning with `-dontwarn` in
+`TMessagesProj_AppBazaar/proguard-rules.pro` let the build through and shipped
+an APK with the class missing. The result on device was
+`NoClassDefFoundError: TLRPC$TL_payments_assignBazaarTransaction` on the first
+queued receipt — and because `BazaarReceiptQueue.scheduleAutoFlush()` runs at
+every app start, a stranded receipt crash-looped the app on launch.
+
+The real fix is a keep in the **library's** rules, next to the other
+library-R8 rules: [TMessagesProj/proguard-rules.pro](../TMessagesProj/proguard-rules.pro).
+CI now asserts the class is present in every shipped Bazaar artifact
+(`release.yml`, "Collect and verify artifacts").
+
+### Server status
+`payments.assignBazaarTransaction` is **implemented and deployed** (2026-11-05);
+see [BAZAAR_SERVER_TODO.md](BAZAAR_SERVER_TODO.md) and BAZAAR_SERVER_REPORT.md.
+The "behavior without the server" paragraph that used to sit here described the
+pre-deployment state and no longer applies.
+
+One consequence of that paragraph is still relevant, though: because receipts
+are persisted in the offline queue and `scheduleAutoFlush()` runs at every app
+start, **any** failure in the receipt path is a launch-time crash loop, not just
+a failed purchase. That is exactly how the R8 strip above surfaced — the user
+paid, the class was missing, and the app then crash-looped until the receipt was
+dropped from the "Pending purchases" screen.
 
 ---
 

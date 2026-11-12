@@ -52,17 +52,8 @@ public final class BazaarReceiptQueue {
     private static final AtomicBoolean flushing = new AtomicBoolean(false);
     private static Runnable scheduledFlush;
     private static long currentBackoffMs = BACKOFF_BASE_MS;
-
-    // Set by the bridge so that a CONSUMABLE receipt (stars/gift), once finally
-    // confirmed by the server during a delayed flush, is consumed at the store.
-    // Without this the user could not buy the same consumable again. Takes the
-    // Bazaar purchaseToken.
-    private static volatile Utilities.Callback<String> consumeHandler;
-
-    /** Registers the store-consume callback (called with a purchaseToken). */
-    public static void setConsumeHandler(Utilities.Callback<String> handler) {
-        consumeHandler = handler;
-    }
+    /** Cleared once the receipt RPC class is found missing; stops all re-arming. */
+    private static volatile boolean rpcAvailable = true;
 
     private BazaarReceiptQueue() {
     }
@@ -77,9 +68,8 @@ public final class BazaarReceiptQueue {
         public final long createdAt;
         public final int attempts;
         public final String lastError;
-        public final boolean consumable;
 
-        QueuedReceipt(String key, int account, String receiptJson, String purposeHex, long createdAt, int attempts, String lastError, boolean consumable) {
+        QueuedReceipt(String key, int account, String receiptJson, String purposeHex, long createdAt, int attempts, String lastError) {
             this.key = key;
             this.account = account;
             this.receiptJson = receiptJson;
@@ -87,7 +77,6 @@ public final class BazaarReceiptQueue {
             this.createdAt = createdAt;
             this.attempts = attempts;
             this.lastError = lastError;
-            this.consumable = consumable;
         }
     }
 
@@ -108,8 +97,7 @@ public final class BazaarReceiptQueue {
                         o.optString("purposeHex", ""),
                         o.optLong("created", 0),
                         o.optInt("attempts", 0),
-                        o.optString("lastError", ""),
-                        o.optBoolean("consumable", false)));
+                        o.optString("lastError", "")));
             }
         } catch (Exception e) {
             FileLog.e("BazaarReceiptQueue: failed to load", e);
@@ -129,7 +117,6 @@ public final class BazaarReceiptQueue {
                 o.put("created", r.createdAt);
                 o.put("attempts", r.attempts);
                 o.put("lastError", r.lastError == null ? "" : r.lastError);
-                o.put("consumable", r.consumable);
                 array.put(o);
             }
             prefs().edit().putString(KEY_ITEMS, array.toString()).apply();
@@ -158,7 +145,7 @@ public final class BazaarReceiptQueue {
      * retry loop. Dedup is by {@code key} (the Bazaar purchaseToken): re-adding
      * the same purchase refreshes its error but never duplicates the row.
      */
-    public static synchronized void enqueue(int account, String receiptJson, String purposeHex, String key, String error, boolean consumable) {
+    public static synchronized void enqueue(int account, String receiptJson, String purposeHex, String key, String error) {
         if (TextUtils.isEmpty(receiptJson)) {
             return;
         }
@@ -166,13 +153,13 @@ public final class BazaarReceiptQueue {
         for (int i = 0; i < items.size(); i++) {
             if (items.get(i).key.equals(key)) {
                 QueuedReceipt old = items.get(i);
-                items.set(i, new QueuedReceipt(key, account, receiptJson, purposeHex, old.createdAt, old.attempts, error, consumable));
+                items.set(i, new QueuedReceipt(key, account, receiptJson, purposeHex, old.createdAt, old.attempts, error));
                 save(items);
                 scheduleFlush();
                 return;
             }
         }
-        items.add(new QueuedReceipt(key, account, receiptJson, purposeHex, System.currentTimeMillis(), 0, error, consumable));
+        items.add(new QueuedReceipt(key, account, receiptJson, purposeHex, System.currentTimeMillis(), 0, error));
         save(items);
         scheduleFlush();
     }
@@ -192,6 +179,9 @@ public final class BazaarReceiptQueue {
 
     /** Kicks the auto-retry loop (idempotent). Safe to call on every app start. */
     public static void scheduleAutoFlush() {
+        if (!rpcAvailable) {
+            return;
+        }
         if (isEmpty()) {
             resetBackoff();
             return;
@@ -209,6 +199,20 @@ public final class BazaarReceiptQueue {
         };
         long delay = isEmpty() ? 0 : currentBackoffMs;
         handler.postDelayed(scheduledFlush, delay);
+    }
+
+    /**
+     * Stops the auto-retry loop for the rest of this process. Used when the
+     * receipt RPC class is absent from the build: no amount of retrying can
+     * succeed, and an unguarded retry loop turns a queued receipt into a crash
+     * loop on every app start. Receipts stay queued so a fixed APK can send them.
+     */
+    private static void stopRetries() {
+        if (scheduledFlush != null) {
+            handler.removeCallbacks(scheduledFlush);
+            scheduledFlush = null;
+        }
+        flushing.set(false);
     }
 
     private static void resetBackoff() {
@@ -248,14 +252,6 @@ public final class BazaarReceiptQueue {
             sendOne(item, ok -> AndroidUtilities.runOnUIThread(() -> {
                 if (ok) {
                     remove(item.key);
-                    // A consumable (stars/gift) that finally got confirmed must be
-                    // consumed at the store, or the user could never rebuy it.
-                    if (item.consumable) {
-                        Utilities.Callback<String> consume = consumeHandler;
-                        if (consume != null) {
-                            consume.run(item.key);
-                        }
-                    }
                 } else {
                     recordFailure(item);
                 }
@@ -263,7 +259,7 @@ public final class BazaarReceiptQueue {
                     flushing.set(false);
                     if (isEmpty()) {
                         resetBackoff();
-                    } else {
+                    } else if (rpcAvailable) {
                         bumpBackoff();
                         scheduleFlush();
                     }
@@ -280,7 +276,7 @@ public final class BazaarReceiptQueue {
         for (int i = 0; i < items.size(); i++) {
             QueuedReceipt cur = items.get(i);
             if (cur.key.equals(item.key)) {
-                items.set(i, new QueuedReceipt(cur.key, cur.account, cur.receiptJson, cur.purposeHex, cur.createdAt, cur.attempts + 1, cur.lastError, cur.consumable));
+                items.set(i, new QueuedReceipt(cur.key, cur.account, cur.receiptJson, cur.purposeHex, cur.createdAt, cur.attempts + 1, cur.lastError));
                 save(items);
                 return;
             }
@@ -299,7 +295,19 @@ public final class BazaarReceiptQueue {
             done.run(true);
             return;
         }
-        TLRPC.TL_payments_assignBazaarTransaction req = new TLRPC.TL_payments_assignBazaarTransaction();
+        final TLRPC.TL_payments_assignBazaarTransaction req;
+        try {
+            req = new TLRPC.TL_payments_assignBazaarTransaction();
+        } catch (LinkageError e) {
+            // The TL class is missing from the APK (shrinker dropped it). Retrying
+            // can never succeed, so stop the loop instead of crash-looping on
+            // every app start; the receipt stays queued for a fixed build.
+            FileLog.e("BazaarReceiptQueue: receipt RPC missing from this build, pausing retries", e);
+            rpcAvailable = false;
+            stopRetries();
+            done.run(false);
+            return;
+        }
         req.receipt = new TLRPC.TL_dataJSON();
         req.receipt.data = item.receiptJson;
         req.purpose = purpose;

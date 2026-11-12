@@ -186,6 +186,15 @@ jobs:
             unzip -p "$apk" 'classes*.dex' | strings | grep -q 'catnet/mobile' \
               || { echo "catnet classes missing in $apk"; exit 1; }
           done
+          # The Bazaar receipt RPC is defined in the :TMessagesProj library but
+          # referenced only by the Bazaar app module, so the library's own R8 pass
+          # strips it unless kept there. That is silent at build time and only
+          # surfaces as NoClassDefFoundError after a user has paid, so assert it.
+          for apk in dist/*Bazaar*.apk; do
+            unzip -p "$apk" 'classes*.dex' | strings | grep -q 'TL_payments_assignBazaarTransaction' \
+              || { echo "Bazaar receipt RPC stripped from $apk"; exit 1; }
+          done
+
           for aab in dist/*.aab; do
             unzip -l "$aab" | grep -q 'base/lib/.*libgojni.so' \
               || { echo "catnet native lib missing in $aab"; exit 1; }
