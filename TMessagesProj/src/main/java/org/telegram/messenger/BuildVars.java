@@ -38,15 +38,26 @@ public class BuildVars {
     public static String HUAWEI_APP_ID = "101184875";
 
     /**
-     * canalyze ingest key and endpoint.
+     * canalyze ingest keys and endpoint.
      *
-     * <p>The key is per app and is shown once by the server; it is not a secret
-     * in the cryptographic sense — it ships inside the APK and is extractable
-     * from any build — but it is the only thing that lets a batch be accepted,
-     * so it is kept here rather than in a resource a decompiler reads first.
-     * Rotating it means a new app registration and a new build.
+     * <p>More than one key is carried on purpose: the server accepts several
+     * per app, so a build that ships both the current and the previous key
+     * keeps working whichever one the server still honours. That is what makes
+     * a rotation produce no 401 at all — the SDK tries them in order and
+     * remembers the first that authenticates.
+     *
+     * <p>Order matters: the current key first, the previous one second. A dead
+     * key costs one wasted round trip on the first flush after a restart, then
+     * is skipped for the life of the process.
+     *
+     * <p>The key is not a secret in the cryptographic sense — it ships inside
+     * the APK and is extractable from any build — but it is the only thing that
+     * lets a batch be accepted.
      */
-    public static String CANALYZE_APP_KEY = "ca_8c145f184d3a0cc75b3602ab4a48c9f37354f42f77077f9d";
+    public static String[] CANALYZE_APP_KEYS = {
+            "ca_771f537e470d714d38fbda7a6c6ef9ece6177cc37ec786b4", // v2-rollout
+            "ca_8c145f184d3a0cc75b3602ab4a48c9f37354f42f77077f9d", // migrated (revoked)
+    };
     public static String CANALYZE_ENDPOINT = "https://canalyze.cr0.ir";
 
     // The Cat has no FCM push infra, so without this the OS kills the socket in

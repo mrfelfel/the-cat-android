@@ -432,14 +432,18 @@ public class ApplicationLoader extends Application {
             if (appId == null || appId.isEmpty()) {
                 appId = applicationContext.getPackageName();
             }
-            io.canalyze.sdk.Canalyze.init(this, new io.canalyze.sdk.Config.Builder()
-                    .appKey(BuildVars.CANALYZE_APP_KEY)
+            io.canalyze.sdk.Config.Builder cfg = new io.canalyze.sdk.Config.Builder()
                     .appId(appId)
                     .endpoint(BuildVars.CANALYZE_ENDPOINT)
                     .collectFingerprint(true)
                     .collectDiagnostics(true)
-                    .debug(BuildVars.DEBUG_VERSION)
-                    .build());
+                    .debug(BuildVars.DEBUG_VERSION);
+            // Every key the build carries, in order. The SDK tries them until
+            // one authenticates, so a rotation never produces a 401.
+            for (String key : BuildVars.CANALYZE_APP_KEYS) {
+                cfg.appKey(key);
+            }
+            io.canalyze.sdk.Canalyze.init(this, cfg.build());
         } catch (Throwable t) {
             FileLog.e("canalyze init failed", t);
         }
