@@ -757,7 +757,13 @@ public class SettingsActivity extends BaseFragment implements NotificationCenter
             items.add(UItem.asShadow(null));
 
         items.add(UItem.asHeader(getString(R.string.SettingsHelp)));
-        items.add(SettingCell.Factory.of(27, 0xFF8E5BD8, 0xFF5B2FA8, R.drawable.settings_cat_media, getString(R.string.CatMedia), getString(R.string.CatMediaInfo)));
+        // Hidden in production. The Framework entry is a component inventory for
+        // development, not a user-facing feature, so it stays behind the same
+        // gate as the debug entries below — reachable in a build with logs on
+        // (debug, or release with "logsEnabled" turned on), absent otherwise.
+        if (BuildVars.LOGS_ENABLED || BuildVars.DEBUG_PRIVATE_VERSION) {
+            items.add(SettingCell.Factory.of(27, 0xFF8E5BD8, 0xFF5B2FA8, R.drawable.settings_cat_media, getString(R.string.CatMedia), getString(R.string.CatMediaInfo)));
+        }
         // Cat-specific help entries (About Us, Cat Room market, Privacy Policy,
         // Terms) — all catroom.ir. The Telegram-only entries (Ask a Question,
         // Telegram FAQ / Features) are gone with the Telegram server.
@@ -896,7 +902,7 @@ public class SettingsActivity extends BaseFragment implements NotificationCenter
                 Browser.openUrl(getParentActivity(), LocaleController.getString(R.string.TermsOfServiceUrl));
                 break;
             case 27:
-                presentFragment(new CatMediaFragment());
+                presentFragment(new CatFrameworkFragment());
                 break;
 
             case 20:

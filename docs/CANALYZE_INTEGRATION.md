@@ -145,7 +145,22 @@ A `0` means R8 stripped the SDK and diagnostics are dead in that build.
 - The MTProto hook firing on real traffic.
 - No conflict with any other uncaught-exception handler in the app.
 
-## 7. Known issue, unrelated
+## 7. The Framework menu entry is hidden in production
+
+`SettingsActivity` has a "Framework" row (item id 27) that opens
+`CatFrameworkFragment` — a component inventory for development, not a
+user-facing feature.
+
+It is gated by `BuildVars.LOGS_ENABLED || BuildVars.DEBUG_PRIVATE_VERSION`, the
+same condition as the debug entries below it. In a shipped release with logs off
+the row is not added at all, so the fragment is unreachable; in a build with logs
+on it is present for testing.
+
+Turning logs on in a release is the existing user-visible setting, so the row
+appears for anyone who enables it. That is deliberate: it keeps the entry
+reachable without a special build.
+
+## 8. Known issue, unrelated
 
 `:TMessagesProj_App:assembleAfatDebug` fails with a manifest merger conflict:
 
@@ -157,7 +172,7 @@ is also present at [:TMessagesProj] AndroidManifest.xml:127 value=(@string/AppNa
 This is **pre-existing** — it reproduces with the canalyze changes stashed. The
 release build does not take that path. Fixing it is a separate change.
 
-## 8. Where the server side lives
+## 9. Where the server side lives
 
 The analytics server is a separate repo at `/Volumes/SADDISK/canalyze`, deployed
 at `https://canalyze.cr0.ir`. Its docs:
@@ -169,7 +184,7 @@ at `https://canalyze.cr0.ir`. Its docs:
 Read endpoints need the bootstrap token; the SDK's app key only reaches
 `POST /v1/ingest`.
 
-## 9. Checklist for the build agent
+## 10. Checklist for the build agent
 
 1. Build the direct ARM release: `scripts/release-apk.sh --arm`.
 2. Run the two `strings` checks in §5 against the produced APK.
