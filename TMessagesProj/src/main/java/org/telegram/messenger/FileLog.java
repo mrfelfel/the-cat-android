@@ -424,6 +424,14 @@ public class FileLog {
     }
 
     public static void e(final Throwable e, boolean logToAppCenter) {
+        // canalyze: report before the LOGS_ENABLED gate. That gate is off in
+        // release builds, and a release build is exactly where a crash or a
+        // caught exception is worth seeing — the file log is a debugging aid,
+        // the diagnostics report is the production signal.
+        try {
+            io.canalyze.sdk.Diagnostics.error("FileLog", e);
+        } catch (Throwable ignored) {
+        }
         if (!BuildVars.LOGS_ENABLED) {
             return;
         }

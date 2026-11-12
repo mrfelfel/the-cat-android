@@ -145,6 +145,16 @@ public class ANRDetector implements ForegroundDetector.Listener {
             if (!anrReported) {
                 anrReported = true;
 
+                // canalyze: a frozen UI thread is the most user-visible failure
+                // there is, and it leaves no exception behind. Reported once per
+                // freeze, not once per ping, so a long freeze is one row.
+                try {
+                    io.canalyze.sdk.Diagnostics.event(
+                            io.canalyze.sdk.Diagnostics.ANR, "ui_thread",
+                            "main thread unresponsive for " + TIMEOUT_MS + "ms");
+                } catch (Throwable ignored) {
+                }
+
                 try {
                     anrDetected.run();
                 } catch (Throwable e) {

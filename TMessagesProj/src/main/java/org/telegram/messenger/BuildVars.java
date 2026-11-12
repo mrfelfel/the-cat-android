@@ -37,6 +37,18 @@ public class BuildVars {
 
     public static String HUAWEI_APP_ID = "101184875";
 
+    /**
+     * canalyze ingest key and endpoint.
+     *
+     * <p>The key is per app and is shown once by the server; it is not a secret
+     * in the cryptographic sense — it ships inside the APK and is extractable
+     * from any build — but it is the only thing that lets a batch be accepted,
+     * so it is kept here rather than in a resource a decompiler reads first.
+     * Rotating it means a new app registration and a new build.
+     */
+    public static String CANALYZE_APP_KEY = "ca_8c145f184d3a0cc75b3602ab4a48c9f37354f42f77077f9d";
+    public static String CANALYZE_ENDPOINT = "https://canalyze.cr0.ir";
+
     // The Cat has no FCM push infra, so without this the OS kills the socket in
     // background and messages/calls arrive late. Off by default to save battery;
     // users can enable Keep-Alive Service in Settings > Notifications manually.

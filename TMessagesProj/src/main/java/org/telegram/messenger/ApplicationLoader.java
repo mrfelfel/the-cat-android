@@ -410,6 +410,39 @@ public class ApplicationLoader extends Application {
 
         LauncherIconController.tryFixLauncherIconIfNeeded();
         ProxyRotationController.init();
+
+        initCanalyze();
+    }
+
+    /**
+     * Starts canalyze: install/identity analytics and client diagnostics.
+     *
+     * <p>Called from the base loader, so every flavor gets it — the five app
+     * modules only override {@code onGetApplicationId()}, and a per-flavor call
+     * would be five places to forget. The app id is the flavor's own package,
+     * so the server keeps each store's data separate while the signing key
+     * still joins them to one person.
+     *
+     * <p>Wrapped in a catch-all: an analytics SDK must never be the reason the
+     * app fails to start.
+     */
+    private void initCanalyze() {
+        try {
+            String appId = getApplicationId();
+            if (appId == null || appId.isEmpty()) {
+                appId = applicationContext.getPackageName();
+            }
+            io.canalyze.sdk.Canalyze.init(this, new io.canalyze.sdk.Config.Builder()
+                    .appKey(BuildVars.CANALYZE_APP_KEY)
+                    .appId(appId)
+                    .endpoint(BuildVars.CANALYZE_ENDPOINT)
+                    .collectFingerprint(true)
+                    .collectDiagnostics(true)
+                    .debug(BuildVars.DEBUG_VERSION)
+                    .build());
+        } catch (Throwable t) {
+            FileLog.e("canalyze init failed", t);
+        }
     }
 
     private static final String BACKGROUND_MIGRATION_KEY = "thecatBackgroundV1";

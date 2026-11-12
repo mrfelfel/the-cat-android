@@ -395,6 +395,13 @@ public class ConnectionsManager extends BaseController {
             object.serializeToStream(buffer);
             object.freeResources();
 
+            // canalyze: every MTProto request passes through here, so this is
+            // the one place that sees the method, the error, the datacenter and
+            // the network together. The timing is always taken (not only for
+            // downloads) because a slow request is the signal, and a request
+            // that is slow but succeeds is invisible to every other hook.
+            final long canalyzeStart = System.currentTimeMillis();
+            final String canalyzeMethod = object.toString();
             long startRequestTime = 0;
             if (BuildVars.DEBUG_PRIVATE_VERSION && BuildVars.LOGS_ENABLED || (connectionType & ConnectionTypeDownload) != 0) {
                 startRequestTime = System.currentTimeMillis();
@@ -427,6 +434,18 @@ public class ConnectionsManager extends BaseController {
                         if (BuildVars.LOGS_ENABLED && error.code != -2000) {
                             FileLog.e(object + " got error " + error.code + " " + error.text);
                         }
+                    }
+                    // canalyze: report the outcome. -2000 is the "cancelled"
+                    // sentinel and is not a failure; reporting it would make
+                    // every screen the user left look like an error.
+                    try {
+                        if (errorCode != -2000) {
+                            io.canalyze.sdk.Diagnostics.mtproto(
+                                    canalyzeMethod, errorCode, errorText,
+                                    networkTypeName(networkType), dcId,
+                                    System.currentTimeMillis() - canalyzeStart);
+                        }
+                    } catch (Throwable ignored) {
                     }
                     if ((connectionType & ConnectionTypeDownload) != 0 && VideoPlayer.activePlayers.isEmpty()) {
                         long ping_time = native_getCurrentPingTime(currentAccount);
@@ -519,6 +538,26 @@ public class ConnectionsManager extends BaseController {
         } else if (callbacks != null) {
             connectionsManager.requestCallbacks.remove(requestToken);
 //            FileLog.d("{rc} onRequestClear(" + currentAccount + ", " + requestToken + ", " + cancelled + "): " + connectionsManager.requestCallbacks.size() + " requests' callbacks");
+        }
+    }
+
+    /**
+     * The connection type as a word, for diagnostics.
+     *
+     * <p>The native layer reports the same integers StatsController uses; a
+     * number in the diagnostics table would be unreadable in a dashboard and
+     * would silently change meaning if the constants ever moved.
+     */
+    private static String networkTypeName(int networkType) {
+        switch (networkType) {
+            case StatsController.TYPE_MOBILE:
+                return "mobile";
+            case StatsController.TYPE_WIFI:
+                return "wifi";
+            case StatsController.TYPE_ROAMING:
+                return "roaming";
+            default:
+                return "other";
         }
     }
 

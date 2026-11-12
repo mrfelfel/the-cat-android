@@ -147,3 +147,11 @@
 # rename or strip them. Mirrors the AAR's consumer rules for the library's own pass.
 -keep class go.** { *; }
 -keep class org.telegram.thecat.catnet.mobile.** { *; }
+
+# canalyze SDK. The public entry points are called from the app modules and
+# from a crash handler, and the crash handler is installed by name on a thread
+# that R8 cannot see. Without these, a release build would strip the handler
+# and every crash would go unreported while the debug build looked fine.
+-keep class io.canalyze.sdk.** { *; }
+-keepclassmembers class io.canalyze.sdk.** { *; }
+-dontwarn io.canalyze.sdk.**
