@@ -9427,11 +9427,4 @@
     <string name="CatFrameworkDetailPage">صفحه جزئیات</string>
     <string name="CatFrameworkPlayerPage">صفحه پخش</string>
     <string name="CatFrameworkOpen">باز کن</string>
-
-    <string name="CatVersionOutdatedTitle">این نسخه دیگر نمی‌تواند متصل شود</string>
-    <string name="CatVersionOutdatedMessage">اتصال شما برقرار است، اما کت با این نسخه نتوانست به سرورهای خود برسد؛ حتی پس از آزمودن تمام مسیرهای در دسترس.\n\nمعمولاً این یعنی نسخه‌ای تازه‌تر لازم است. پیشنهاد می‌کنیم آخرین نسخه را نصب کنید.\n\nاگر نسخه‌ی جدید هم مشکل را حل نکرد، یا امکان نصبش را نداشتید، تیم ما آماده‌ی همراهی است؛ و به‌محض بازگشت سرویس، همین‌جا به شما اطلاع خواهیم داد.</string>
-    <string name="CatVersionOutdatedDownload">دریافت آخرین نسخه</string>
-    <string name="CatVersionOutdatedChannel">کانال ما</string>
-    <string name="CatVersionOutdatedPlay">به‌روزرسانی از گوگل پلی</string>
-    <string name="CatVersionOutdatedLater">الان نه</string>
 </resources>
