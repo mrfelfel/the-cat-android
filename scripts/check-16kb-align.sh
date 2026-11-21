@@ -11,12 +11,44 @@
 # The alignment is 0x4000 in every PT_LOAD program header. Reading the ELF
 # directly (rather than trusting readelf, which is not on the macOS host) is
 # what makes this work the same on a developer machine and in CI.
+#
+# Only the 64-bit ABIs are enforced, because only they are in scope for Play:
+# "apps that target Android 15+ and use native code must support 16 KB page
+# sizes on 64-bit devices". armeabi-v7a and x86 are 32-bit and Play does not
+# check them. Enforcing all four would fail this build permanently on Google's
+# own com.google.mlkit:language-id, whose 32-bit libraries are 4 KB aligned and
+# which nothing we control can rebuild — a gate that can never go green is a
+# gate that gets deleted, so it is scoped to what actually blocks a release.
+#
+# Third-party libraries are reported separately from our own: a 32-bit miss in
+# MLKit is information, not a decision point, and mixing the two would hide a
+# real regression in libgojni.so behind an unfixable one.
 set -euo pipefail
 
 [ "$#" -gt 0 ] || { echo "usage: $0 <file-or-dir> [...]" >&2; exit 2; }
 
 TMP=$(mktemp -d)
 trap 'rm -rf "$TMP"' EXIT
+
+# ABIs Play enforces. Anything else is reported but does not fail the check.
+enforced_abi() {
+    case "$1" in
+        arm64-v8a|x86_64) return 0 ;;
+        *) return 1 ;;
+    esac
+}
+
+# The ABI a library belongs to, taken from its path (…/lib/<abi>/x.so).
+# `case` rather than sed: BSD sed on the macOS host rejects the alternation.
+abi_of() {
+    case "$1" in
+        */arm64-v8a/*)   echo arm64-v8a ;;
+        */x86_64/*)      echo x86_64 ;;
+        */armeabi-v7a/*) echo armeabi-v7a ;;
+        */x86/*)         echo x86 ;;
+        *)               echo "" ;;
+    esac
+}
 
 # Collect candidate .so files: given .so paths directly, or extracted from
 # archives, or found under directories.
@@ -42,10 +74,18 @@ collect() {
 
 failed=0
 checked=0
+enforced=0
+skipped=0
 while IFS= read -r so; do
     [ -n "$so" ] && [ -f "$so" ] || continue
-    checked=$((checked + 1))
-    if ! python3 -I - "$so" <<'PY'
+    abi="$(abi_of "$so")"
+    if [ -z "$abi" ]; then
+        # No ABI in the path (a bare .so argument): nothing to scope it by, so
+        # check it rather than let an unknown layout slip through.
+        abi="arm64-v8a"
+    fi
+
+    if ! out=$(python3 -I - "$so" <<'PY'
 import struct, sys
 path = sys.argv[1]
 d = open(path, 'rb').read()
@@ -73,9 +113,20 @@ if not aligns or any(a < 0x4000 for a in aligns):
     sys.exit(1)
 print('%s: 16 KB ok' % path)
 PY
-    then
-        failed=1
+    ); then
+        if enforced_abi "$abi"; then
+            echo "$out"
+            failed=1
+        else
+            # Reported, but out of scope for Play and not ours to rebuild.
+            echo "$out  [$abi: 32-bit, not enforced by Play]"
+            skipped=$((skipped + 1))
+        fi
+    else
+        echo "$out"
     fi
+    checked=$((checked + 1))
+    enforced_abi "$abi" && enforced=$((enforced + 1))
 done < <(
     for arg in "$@"; do
         collect "$arg"
@@ -86,5 +137,12 @@ if [ "$checked" -eq 0 ]; then
     echo "no native libraries found in: $*" >&2
     exit 1
 fi
+# A 64-bit library must actually have been seen; otherwise a changed packaging
+# layout could make this pass by checking nothing that matters.
+if [ "$enforced" -eq 0 ]; then
+    echo "no 64-bit native libraries found in: $*" >&2
+    exit 1
+fi
 [ "$failed" -eq 0 ] || { echo "16 KB alignment check FAILED" >&2; exit 1; }
-echo "16 KB alignment ok on $checked libraries"
+echo "16 KB alignment ok on $enforced 64-bit libraries" \
+     "($checked checked, $skipped 32-bit reported)"
