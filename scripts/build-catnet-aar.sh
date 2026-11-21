@@ -70,34 +70,7 @@ fi
 # default, so -extldflags alone reaches no external linker and is silently
 # dropped: the flags above need -linkmode=external to have any effect. A build
 # that regresses to 4 KB must fail here, not at Play.
-unzip -p "$AAR" 'jni/arm64-v8a/libgojni.so' > "$TMP/libgojni.so"
-if ! python3 -I - "$TMP/libgojni.so" <<'PY'
-import struct, sys
-d = open(sys.argv[1], 'rb').read()
-is64 = d[4] == 2
-if is64:
-    phoff, phentsize, phnum = (struct.unpack_from('<Q', d, 0x20)[0],
-                               struct.unpack_from('<H', d, 0x36)[0],
-                               struct.unpack_from('<H', d, 0x38)[0])
-    align_off = 48
-else:
-    phoff, phentsize, phnum = (struct.unpack_from('<I', d, 0x1C)[0],
-                               struct.unpack_from('<H', d, 0x2A)[0],
-                               struct.unpack_from('<H', d, 0x2C)[0])
-    align_off = 28
-aligns = []
-for i in range(phnum):
-    off = phoff + i * phentsize
-    if struct.unpack_from('<I', d, off)[0] == 1:
-        fmt = '<Q' if is64 else '<I'
-        aligns.append(struct.unpack_from(fmt, d, off + align_off)[0])
-if not aligns or any(a < 0x4000 for a in aligns):
-    print('ERROR: libgojni.so is not 16 KB aligned: %s' % [hex(a) for a in aligns])
-    sys.exit(1)
-PY
-then
-  exit 1
-fi
+bash "$ROOT/scripts/check-16kb-align.sh" "$AAR"
 
 mkdir -p "$(dirname "$OUT")"
 mv -f "$AAR" "$OUT"

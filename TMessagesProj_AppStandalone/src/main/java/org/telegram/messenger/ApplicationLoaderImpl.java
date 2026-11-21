@@ -54,6 +54,18 @@ public class ApplicationLoaderImpl extends ApplicationLoader {
         return true;
     }
 
+    /**
+     * The direct build always bills through The Cat's own checkout. Declared
+     * explicitly rather than inherited implicitly through
+     * {@link #isStandalone()}, so the payment route and the self-update/SMS
+     * behaviour stay independently readable — and so a future build can take
+     * one without the other.
+     */
+    @Override
+    public boolean usesDirectPayments() {
+        return true;
+    }
+
     @Override
     protected void startAppCenterInternal(Activity context) {
 

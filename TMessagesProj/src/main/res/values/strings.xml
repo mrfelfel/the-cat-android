@@ -2509,8 +2509,8 @@
       never be shown it, so the base values carry the language-neutral route
       and each localized resource decides what to offer.
     -->
-    <string name="SupportPhone">https://catroom.ir/support</string>
-    <string name="SupportPhoneInfo">Help centre</string>
+    <string name="SupportPhone">https://catroom.ir</string>
+    <string name="SupportPhoneInfo">Cat Room</string>
     <string name="WebAppDisclaimerUrl">https://catroom.ir/terms</string>
     <string name="DeleteLocalizationTitle">Delete language pack</string>
     <string name="DeleteLocalizationText">Are you sure you want to delete **%1$s** language pack?</string>

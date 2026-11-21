@@ -137,7 +137,8 @@ jobs:
             :TMessagesProj_AppStandalone:bundleAfatStoreStandalone \
             :TMessagesProj_AppBazaar:assembleAarmStoreBazaar \
             :TMessagesProj_AppBazaar:assembleAfatStoreBazaar \
-            :TMessagesProj_AppBazaar:bundleAfatStoreBazaar
+            :TMessagesProj_AppBazaar:bundleAfatStoreBazaar \
+            :TMessagesProj_App:bundleAfatRelease
 
       - name: Collect and verify artifacts
         id: meta
@@ -170,13 +171,19 @@ jobs:
           BAZAAR_FAT="$(pick TMessagesProj_AppBazaar/build/outputs/apk app.apk afatStore)"
           BAZAAR_AAB="$(pick TMessagesProj_AppBazaar/build/outputs/bundle app.aab)"
           [ -n "$BAZAAR_AAB" ] || BAZAAR_AAB="$(pick TMessagesProj_AppBazaar/build/outputs '*.aab')"
+          # The Play distribution. Separate module from the standalone AAB: it
+          # carries the Play release manifest (no SEND_SMS) and overrides
+          # usesDirectPayments(), so its purchase buttons reach our own checkout
+          # instead of Play Billing, which an Iranian merchant cannot use.
+          PLAY_AAB="$(pick TMessagesProj_App/build/outputs/bundle app.aab)"
+          [ -n "$PLAY_AAB" ] || PLAY_AAB="$(pick TMessagesProj_App/build/outputs '*.aab')"
           # Dev ships in the release too. Its name carries "DEV" so it can never
           # be mistaken for the store APK; the applicationId differs
           # (com.thecat.messenger.dev, installs side by side) and it talks to the
           # dev backend on :30098, not production on :30001.
           DEV_ARM="$(pick TMessagesProj_AppStandalone/build/outputs/apk app.apk aarmDev)"
 
-          for f in "$STAND_ARM" "$STAND_FAT" "$STAND_AAB" "$BAZAAR_ARM" "$BAZAAR_FAT" "$BAZAAR_AAB" "$DEV_ARM"; do
+          for f in "$STAND_ARM" "$STAND_FAT" "$STAND_AAB" "$PLAY_AAB" "$BAZAAR_ARM" "$BAZAAR_FAT" "$BAZAAR_AAB" "$DEV_ARM"; do
             [ -n "$f" ] && [ -f "$f" ] || { echo "ERROR: artifact not found (see tree above)"; exit 1; }
           done
 
@@ -184,6 +191,7 @@ jobs:
           cp "$STAND_ARM"  "dist/TheCat-$VERSION-ARM-ZeroHub.apk"
           cp "$STAND_FAT"  "dist/TheCat-$VERSION-ZeroHub.apk"
           cp "$STAND_AAB"  "dist/TheCat-$VERSION-ZeroHub.aab"
+          cp "$PLAY_AAB"   "dist/TheCat-$VERSION-Play-ZeroHub.aab"
           cp "$BAZAAR_ARM" "dist/TheCat-$VERSION-Bazaar-ARM-ZeroHub.apk"
           cp "$BAZAAR_FAT" "dist/TheCat-$VERSION-Bazaar-ZeroHub.apk"
           cp "$BAZAAR_AAB" "dist/TheCat-$VERSION-Bazaar-ZeroHub.aab"
@@ -210,6 +218,13 @@ jobs:
             unzip -l "$aab" | grep -q 'base/lib/.*libgojni.so' \
               || { echo "catnet native lib missing in $aab"; exit 1; }
           done
+
+          # 16 KB page alignment on every native library in the Play AAB. Play
+          # rejects a submission whose .so files are 4 KB aligned, and that
+          # rejection only happens at upload time — so it is cheaper to fail
+          # here. Checks each ELF program header rather than trusting the flags
+          # that were asked for, because gomobile's are silently droppable.
+          bash scripts/check-16kb-align.sh "dist/TheCat-$VERSION-Play-ZeroHub.aab"
 
           # Dev-specific checks, beyond the generic signature/catnet loop above
           # which already covered it as part of dist/*.apk. The failure this

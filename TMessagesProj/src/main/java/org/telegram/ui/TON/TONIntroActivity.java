@@ -100,7 +100,13 @@ public class TONIntroActivity extends GradientHeaderActivity implements Notifica
     private ButtonWithCounterView withdrawButton;
 
     public static boolean allowTopUp() {
-        return ApplicationLoader.isStandaloneBuild() || BuildVars.isBetaApp() || BuildVars.isHuaweiStoreApp();
+        // Top-up is a purchase, so it follows the build's payment route: a
+        // direct-payment build (including the Play distribution) can bill, and
+        // arePaymentsAvailable() still hides it for a non-Iranian install.
+        return ApplicationLoader.isStandaloneBuild()
+                || ApplicationLoader.usesDirectPaymentsStatic()
+                || BuildVars.isBetaApp()
+                || BuildVars.isHuaweiStoreApp();
     }
 
     public TONIntroActivity() {

@@ -1792,7 +1792,11 @@ public class MessagesController extends BaseController implements NotificationCe
         channelRevenueWithdrawalEnabled = mainPreferences.getBoolean("channelRevenueWithdrawalEnabled", false);
         newNoncontactPeersRequirePremiumWithoutOwnpremium = mainPreferences.getBoolean("newNoncontactPeersRequirePremiumWithoutOwnpremium", false);
         reactionsUniqMax = mainPreferences.getInt("reactionsUniqMax", 11);
-        premiumManageSubscriptionUrl = mainPreferences.getString("premiumManageSubscriptionUrl", ApplicationLoader.isStandaloneBuild() ? "https://cr0.ir/premiumbot?start=status" : "https://play.google.com/store/account/subscriptions?sku=telegram_premium&package=com.thecat.messenger");
+        // A subscription bought through our own checkout has no Google Play
+        // entry to manage, so any build that bills directly has to point here
+        // rather than at Play — otherwise the Play build would send an Iranian
+        // subscriber to a Play page that knows nothing about their purchase.
+        premiumManageSubscriptionUrl = mainPreferences.getString("premiumManageSubscriptionUrl", ApplicationLoader.isStandaloneBuild() || ApplicationLoader.usesDirectPaymentsStatic() ? "https://cr0.ir/premiumbot?start=status" : "https://play.google.com/store/account/subscriptions?sku=telegram_premium&package=com.thecat.messenger");
         androidDisableRoundCamera2 = mainPreferences.getBoolean("androidDisableRoundCamera2", true);
         storiesPinnedToTopCountMax = mainPreferences.getInt("storiesPinnedToTopCountMax", 3);
         showAnnualPerMonth = mainPreferences.getBoolean("showAnnualPerMonth", false);

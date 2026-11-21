@@ -137,6 +137,28 @@ public class ApplicationLoader extends Application {
         return applicationLoaderInstance != null && applicationLoaderInstance.isDevServerBuild();
     }
 
+    /**
+     * Whether this build bills through the project's own Toman checkout instead
+     * of a store.
+     *
+     * <p>Deliberately a separate flag from {@link #isStandalone()}: that one
+     * also switches on the self-update path and the SMS-jobs menu, so a store
+     * build cannot reuse it just to reach the checkout. The Play build needs
+     * exactly one half of standalone — the payment route — without the other.
+     *
+     * <p>Same R8 constraint as {@link #isDevServerBuild()}: a virtual method
+     * overridden by the app module, never a BuildConfig constant read here,
+     * because the library's own minification pass would fold it to the base
+     * value.
+     */
+    public boolean usesDirectPayments() {
+        return false;
+    }
+
+    public static boolean usesDirectPaymentsStatic() {
+        return applicationLoaderInstance != null && applicationLoaderInstance.usesDirectPayments();
+    }
+
     protected String onGetApplicationId() {
         return null;
     }

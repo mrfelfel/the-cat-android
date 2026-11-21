@@ -133,7 +133,7 @@ public class BuildVars {
             // falls through to the invoice/WebView path for every purchase.
             return true;
         }
-        return BillingController.billingClientEmpty || DEBUG_VERSION && false || ApplicationLoader.isStandaloneBuild() || isBetaApp() && false || isHuaweiStoreApp() || hasDirectCurrency();
+        return BillingController.billingClientEmpty || DEBUG_VERSION && false || ApplicationLoader.isStandaloneBuild() || ApplicationLoader.usesDirectPaymentsStatic() || isBetaApp() && false || isHuaweiStoreApp() || hasDirectCurrency();
     }
 
     private static boolean hasDirectCurrency() {

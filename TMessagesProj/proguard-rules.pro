@@ -152,6 +152,20 @@
     public boolean isDevServerBuild();
 }
 
+# Direct-payment flag. Identical trap to isDevServerBuild above, and it matters
+# more: the Play build overrides this to true so its purchase buttons reach our
+# own checkout. The library's own R8 pass sees only the base (returns false) and
+# would fold every caller to "no direct payments" -- the Play build would then
+# bill through nothing at all, since Play Billing is unavailable to an Iranian
+# merchant. Silent at build time; only visible as dead purchase buttons, or as
+# the invoice WebView never opening.
+-keepclassmembers class org.telegram.messenger.ApplicationLoader {
+    public boolean usesDirectPayments();
+}
+-keepclassmembers class * extends org.telegram.messenger.ApplicationLoader {
+    public boolean usesDirectPayments();
+}
+
 # gomobile address-resolver (catnet.aar). The native side binds these by name via
 # JNI (Java_org_thegram_thecat_catnet_mobile_Mobile_new_ etc.), so R8 must not
 # rename or strip them. Mirrors the AAR's consumer rules for the library's own pass.
