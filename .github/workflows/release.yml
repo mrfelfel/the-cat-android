@@ -77,6 +77,29 @@ jobs:
             exit 1
           }
 
+          # A class being present is not the same as the method being present.
+          # gobind renames on the way to Java — ConfigJSON becomes configJSON,
+          # not configJson — and the wrong spelling costs the full native build
+          # before javac says anything. Check every call site here instead.
+          rm -rf /tmp/api && mkdir -p /tmp/api/cls
+          unzip -q -o /tmp/classes.jar -d /tmp/api/cls
+          javap -classpath /tmp/api/cls org.telegram.thecat.catnet.mobile.Client \
+            org.telegram.thecat.catnet.mobile.Mobile \
+            | grep -oE ' [a-zA-Z_][a-zA-Z_0-9]*\(' | tr -d ' (' | sort -u > /tmp/api/have.txt
+          grep -ohE '(client|Mobile)\.[a-zA-Z_][a-zA-Z_0-9]*\(' \
+            TMessagesProj/src/main/java/org/telegram/thecat/CatNetResolver.java \
+            | sed -E 's/^(client|Mobile)\.//; s/\($//' | sort -u > /tmp/api/want.txt
+          missing="$(comm -23 /tmp/api/want.txt /tmp/api/have.txt)"
+          if [ -n "$missing" ]; then
+            echo "ERROR: CatNetResolver calls methods the AAR does not expose:"
+            echo "$missing" | sed 's/^/  /'
+            echo
+            echo "The AAR exposes:"
+            sed 's/^/  /' /tmp/api/have.txt
+            exit 1
+          fi
+          echo "All $(wc -l < /tmp/api/want.txt) call sites match the AAR."
+
       - name: Hand the AAR to the build job
         uses: actions/upload-artifact@v4
         with:

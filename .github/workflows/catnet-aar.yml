@@ -96,6 +96,36 @@ jobs:
           ( cd /tmp/stamp && zip -q -r "$GITHUB_WORKSPACE/TMessagesProj/libs/catnet.aar" assets )
           unzip -l TMessagesProj/libs/catnet.aar | grep -E 'libgojni|classes.jar|catnet-build'
 
+      # gobind renames Go methods on the way to Java, and not always the way the
+      # eye expects: ConfigJSON becomes configJSON, not configJson. A wrong
+      # spelling compiles against nothing, and the only thing that notices is
+      # javac — which in the release workflow runs half an hour into the native
+      # build. Checking that every call site names a method the AAR actually has
+      # turns that into a two-minute failure.
+      - name: Every catnet call site matches the AAR
+        if: steps.check.outputs.needed == 'true'
+        run: |
+          set -euo pipefail
+          rm -rf /tmp/api && mkdir -p /tmp/api/cls
+          unzip -q -o TMessagesProj/libs/catnet.aar classes.jar -d /tmp/api
+          unzip -q -o /tmp/api/classes.jar -d /tmp/api/cls
+          javap -classpath /tmp/api/cls org.telegram.thecat.catnet.mobile.Client \
+            org.telegram.thecat.catnet.mobile.Mobile \
+            | grep -oE ' [a-zA-Z_][a-zA-Z_0-9]*\(' | tr -d ' (' | sort -u > /tmp/api/have.txt
+          grep -ohE '(client|Mobile)\.[a-zA-Z_][a-zA-Z_0-9]*\(' \
+            TMessagesProj/src/main/java/org/telegram/thecat/CatNetResolver.java \
+            | sed -E 's/^(client|Mobile)\.//; s/\($//' | sort -u > /tmp/api/want.txt
+          missing="$(comm -23 /tmp/api/want.txt /tmp/api/have.txt)"
+          if [ -n "$missing" ]; then
+            echo "ERROR: CatNetResolver calls methods the AAR does not expose:"
+            echo "$missing" | sed 's/^/  /'
+            echo
+            echo "The AAR exposes:"
+            sed 's/^/  /' /tmp/api/have.txt
+            exit 1
+          fi
+          echo "All $(wc -l < /tmp/api/want.txt) call sites match the AAR."
+
       - name: Commit and push
         if: steps.check.outputs.needed == 'true'
         run: |

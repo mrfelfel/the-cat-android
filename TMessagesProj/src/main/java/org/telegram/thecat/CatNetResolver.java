@@ -144,7 +144,12 @@ public final class CatNetResolver {
             return null;
         }
         try {
-            String json = client.configJson(build);
+            // gobind names this configJSON, not configJson: it capitalises an
+            // initialism in the Go method name rather than the whole word, so
+            // ConfigJSON becomes configJSON. Calling the lower-case spelling
+            // compiles against nothing and fails the release build 30 minutes
+            // in, in the native build, on a line that looks correct.
+            String json = client.configJSON(build);
             return TextUtils.isEmpty(json) ? null : json;
         } catch (Throwable t) {
             FileLog.e(t);
