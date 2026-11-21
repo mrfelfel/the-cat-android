@@ -1,0 +1,467 @@
+<!DOCTYPE html>
+<html lang="fa" dir="rtl">
+<head>
+<meta charset="utf-8">
+<title>حامل استگانوگرافی — The Cat</title>
+<style>
+  :root {
+    --bg: #0f1115;
+    --panel: #171a21;
+    --line: #262b36;
+    --text: #e6e8ee;
+    --dim: #8b93a3;
+    --accent: #f2a2c0;
+    --ok: #4ade80;
+    --warn: #fbbf24;
+    --bad: #f87171;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; padding: 32px 20px 64px;
+    background: var(--bg); color: var(--text);
+    font: 15px/1.7 -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+  }
+  .wrap { max-width: 940px; margin: 0 auto; }
+  h1 { font-size: 22px; margin: 0 0 6px; font-weight: 600; }
+  .sub { color: var(--dim); font-size: 13.5px; margin-bottom: 28px; }
+  .panel {
+    background: var(--panel); border: 1px solid var(--line);
+    border-radius: 14px; padding: 22px; margin-bottom: 18px;
+  }
+  label { display: block; font-size: 13px; color: var(--dim); margin-bottom: 8px; }
+  .drop {
+    border: 1.5px dashed var(--line); border-radius: 12px;
+    padding: 34px 20px; text-align: center; cursor: pointer;
+    transition: border-color .15s, background .15s;
+  }
+  .drop:hover, .drop.over { border-color: var(--accent); background: #1b1f28; }
+  .drop strong { display: block; margin-bottom: 4px; font-weight: 600; }
+  .drop span { color: var(--dim); font-size: 13px; }
+  input[type=file] { display: none; }
+  textarea {
+    width: 100%; min-height: 120px; resize: vertical;
+    background: #10131a; color: var(--text);
+    border: 1px solid var(--line); border-radius: 10px;
+    padding: 12px; font: 12.5px/1.55 ui-monospace, SFMono-Regular, Menlo, monospace;
+    direction: ltr; text-align: left;
+  }
+  .row { display: flex; gap: 12px; flex-wrap: wrap; align-items: center; margin-top: 14px; }
+  button {
+    border: 0; border-radius: 10px; padding: 11px 20px;
+    font: inherit; font-weight: 600; cursor: pointer;
+    background: var(--accent); color: #1a1015;
+  }
+  button:disabled { opacity: .4; cursor: not-allowed; }
+  button.ghost { background: transparent; color: var(--text); border: 1px solid var(--line); }
+  .meta { display: flex; gap: 22px; flex-wrap: wrap; margin-top: 14px; font-size: 13px; color: var(--dim); }
+  .meta b { color: var(--text); font-weight: 600; }
+  .status { margin-top: 16px; padding: 12px 14px; border-radius: 10px; font-size: 13.5px; display: none; }
+  .status.show { display: block; }
+  .status.ok { background: #12261a; color: var(--ok); border: 1px solid #1e4230; }
+  .status.bad { background: #2a1517; color: var(--bad); border: 1px solid #4a2226; }
+  .status.warn { background: #2a2212; color: var(--warn); border: 1px solid #4a3a1c; }
+  canvas { max-width: 100%; border-radius: 10px; margin-top: 16px; display: none; }
+  .note { font-size: 12.5px; color: var(--dim); margin-top: 12px; line-height: 1.65; }
+  .capacity { height: 6px; border-radius: 3px; background: #10131a; overflow: hidden; margin-top: 10px; }
+  .capacity > i { display: block; height: 100%; background: var(--accent); width: 0; transition: width .2s; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>حامل استگانوگرافی</h1>
+  <div class="sub">سند امضاشده را داخل یک عکس بگذار — خروجی دقیقاً با استخراج‌کننده‌ی Go در اپ می‌خواند.</div>
+
+  <div class="panel">
+    <label>سند (JSON)</label>
+    <textarea id="doc" spellcheck="false" placeholder="محتوای servers-v2.json را اینجا بچسبانید"></textarea>
+    <div class="row">
+      <button class="ghost" id="loadLive">گرفتن سند زنده از گیت‌هاب</button>
+      <button class="ghost" id="loadFile">انتخاب فایل JSON</button>
+      <input type="file" id="jsonFile" accept=".json,application/json">
+    </div>
+    <div class="meta"><div>اندازه سند <b id="docSize">0</b> بایت</div></div>
+  </div>
+
+  <div class="panel">
+    <label>عکس حامل</label>
+    <div class="drop" id="drop">
+      <strong>عکس را اینجا رها کنید</strong>
+      <span>یا کلیک کنید — PNG / JPEG / WebP</span>
+    </div>
+    <input type="file" id="imgFile" accept="image/*">
+    <div class="capacity"><i id="capBar"></i></div>
+    <div class="meta">
+      <div>ابعاد <b id="dims">—</b></div>
+      <div>ظرفیت <b id="cap">—</b></div>
+      <div>استفاده‌شده <b id="used">—</b></div>
+    </div>
+    <canvas id="preview"></canvas>
+  </div>
+
+  <div class="panel">
+    <label>نحوه‌ی جاسازی</label>
+    <div class="row" style="margin-top:0;gap:10px">
+      <label style="display:flex;align-items:center;gap:8px;margin:0;cursor:pointer;color:var(--text)">
+        <input type="radio" name="mode" value="lsb" checked>
+        <span><b>نامرئی (LSB)</b> — فقط PNG خروجی. کیفیت دست‌نخورده، ولی هر بازفشرده‌سازی داده را نابود می‌کند.</span>
+      </label>
+    </div>
+    <div class="row" style="margin-top:8px;gap:10px">
+      <label style="display:flex;align-items:center;gap:8px;margin:0;cursor:pointer;color:var(--text)">
+        <input type="radio" name="mode" value="qr">
+        <span><b>مقاوم (QR)</b> — خروجی PNG/JPEG/WebP، کیفیت قابل کاهش، متن روی عکس دیده می‌شود.</span>
+      </label>
+    </div>
+    <div class="note" id="modeNote">
+      اگر قرار است عکس از توییتر، اینستاگرام یا هر جایی رد شود که خودش دوباره فشرده می‌کند، حالت <b>QR</b> را انتخاب کنید. JPEG هیچ داده‌ی پنهانی را نگه نمی‌دارد — حتی با کیفیت ۱۰۰٪.
+    </div>
+  </div>
+
+  <div class="panel">
+    <div class="row">
+      <button id="build" disabled>ساختن عکس</button>
+      <button class="ghost" id="download" disabled>ذخیره خروجی</button>
+    </div>
+    <div class="status" id="status"></div>
+    <div class="note">
+      خروجی همیشه <b>PNG</b> است. JPEG بیت‌های کم‌ارزش را بازنویسی می‌کند و داده را از بین می‌برد؛
+      WebP تنها اگر بدون اتلاف ذخیره شود امن است. عکس را هرگز دوباره فشرده نکنید.
+    </div>
+  </div>
+</div>
+
+<script src="qr-encode.js"></script>
+<script>
+// Must match network-base/lib/stego.go byte for byte.
+const MAGIC = "CTSN";
+const VERSION = 1;
+const HEADER_LEN = 41;      // magic(4) + version(1) + length(4) + sha256(32)
+
+const el = (id) => document.getElementById(id);
+let carrier = null;         // { canvas, imageData, w, h }
+let lastBlob = null;
+let lastUrl = null;
+
+function say(kind, text) {
+  const s = el("status");
+  s.className = "status show " + kind;
+  s.textContent = text;
+}
+
+function clearStatus() {
+  el("status").className = "status";
+  el("status").textContent = "";
+}
+
+function bytesOf(str) {
+  return new TextEncoder().encode(str);
+}
+
+function refreshDocMeta() {
+  const n = bytesOf(el("doc").value).length;
+  el("docSize").textContent = n.toLocaleString("fa");
+  refreshCapacity();
+  updateBuildButton();
+}
+
+function capacityBytes() {
+  return carrier ? Math.floor(carrier.w * carrier.h * 3 / 8) : 0;
+}
+
+function refreshCapacity() {
+  if (!carrier) return;
+  const cap = capacityBytes();
+  const docLen = bytesOf(el("doc").value).length;
+  el("cap").textContent = cap.toLocaleString("fa") + " بایت";
+  el("used").textContent = docLen.toLocaleString("fa") + " بایت";
+  const ratio = cap ? Math.min(1, docLen / cap) : 0;
+  el("capBar").style.width = (ratio * 100).toFixed(1) + "%";
+  el("capBar").style.background = docLen > cap ? "var(--bad)" : "var(--accent)";
+}
+
+function updateBuildButton() {
+  const hasDoc = el("doc").value.trim().length > 0;
+  el("build").disabled = !(carrier && hasDoc);
+}
+
+async function sha256(bytes) {
+  const d = await crypto.subtle.digest("SHA-256", bytes);
+  return new Uint8Array(d);
+}
+
+// Minimal zlib-wrapped deflate, matching Go's zlib.NewWriter default
+// (deflate, level 6, zlib header). DecompressionStream gives us the raw
+// deflate stream, so a zlib header and Adler-32 are added by hand.
+async function zlibCompress(bytes) {
+  const cs = new CompressionStream("deflate");
+  const stream = new Blob([bytes]).stream().pipeThrough(cs);
+  const deflated = new Uint8Array(await new Response(stream).arrayBuffer());
+
+  const out = new Uint8Array(2 + deflated.length + 4);
+  out[0] = 0x78;   // CMF: deflate, 32K window
+  out[1] = 0x9c;   // FLG: default compression, checksum-valid pair for 0x78
+  out.set(deflated, 2);
+
+  // Adler-32 over the uncompressed data, big-endian.
+  let a = 1, b = 0;
+  for (let i = 0; i < bytes.length; i++) {
+    a = (a + bytes[i]) % 65521;
+    b = (b + a) % 65521;
+  }
+  const adler = ((b << 16) | a) >>> 0;
+  out[out.length - 4] = (adler >>> 24) & 0xff;
+  out[out.length - 3] = (adler >>> 16) & 0xff;
+  out[out.length - 2] = (adler >>> 8) & 0xff;
+  out[out.length - 1] = adler & 0xff;
+  return out;
+}
+
+function currentMode() {
+  const r = document.querySelector('input[name=mode]:checked');
+  return r ? r.value : "lsb";
+}
+
+async function build() {
+  clearStatus();
+  if (!carrier) return;
+  if (currentMode() === "qr") return buildQR();
+
+  const docBytes = bytesOf(el("doc").value);
+  if (docBytes.length === 0) { say("bad", "سند خالی است."); return; }
+
+  let body;
+  try {
+    body = await zlibCompress(docBytes);
+  } catch (e) {
+    say("bad", "فشرده‌سازی ناموفق: " + e.message);
+    return;
+  }
+
+  const digest = await sha256(docBytes);
+  const frame = new Uint8Array(HEADER_LEN + body.length);
+  frame.set(bytesOf(MAGIC), 0);
+  frame[4] = VERSION;
+  new DataView(frame.buffer).setUint32(5, body.length, false);
+  frame.set(digest, 9);
+  frame.set(body, HEADER_LEN);
+
+  const cap = capacityBytes();
+  if (frame.length > cap) {
+    say("bad", `سند ${frame.length.toLocaleString("fa")} بایت است ولی این عکس فقط ${cap.toLocaleString("fa")} بایت جا دارد. عکس بزرگ‌تری انتخاب کنید.`);
+    return;
+  }
+
+  // Write three bits per pixel into RGB. Alpha untouched, exactly as the Go
+  // side does — including the same row-major, R-then-G-then-B order.
+  const src = carrier.imageData;
+  const out = new Uint8ClampedArray(src.data);
+  let bitIndex = 0;
+  const total = frame.length * 8;
+  for (let p = 0; p < out.length && bitIndex < total; p += 4) {
+    for (let ch = 0; ch < 3 && bitIndex < total; ch++) {
+      const bytePos = bitIndex >> 3;
+      const bit = (frame[bytePos] >> (7 - (bitIndex & 7))) & 1;
+      out[p + ch] = (out[p + ch] & 0xfe) | bit;
+      bitIndex++;
+    }
+  }
+
+  const canvas = el("preview");
+  canvas.width = carrier.w;
+  canvas.height = carrier.h;
+  canvas.style.display = "block";
+  const ctx = canvas.getContext("2d");
+  ctx.putImageData(new ImageData(out, carrier.w, carrier.h), 0, 0);
+
+  canvas.toBlob((blob) => {
+    if (!blob) { say("bad", "ساخت PNG ناموفق بود."); return; }
+    if (lastUrl) URL.revokeObjectURL(lastUrl);
+    lastBlob = blob;
+    lastUrl = URL.createObjectURL(blob);
+    el("download").disabled = false;
+
+    const grew = blob.size / (carrier.originalBytes || blob.size);
+    say("ok",
+      `ساخته شد — ${(blob.size / 1024).toFixed(0)} کیلوبایت PNG ` +
+      `(عکس اصلی ${(carrier.originalBytes / 1024).toFixed(0)} کیلوبایت). ` +
+      `سند ${docBytes.length} بایت، فشرده ${body.length} بایت.`);
+    if (grew > 4) {
+      say("warn",
+        `ساخته شد، ولی خروجی ${grew.toFixed(1)} برابر ورودی است — دانلودش روی شبکه‌ی کند گران می‌شود. ` +
+        `عکس کوچک‌تری بردارید.`);
+    }
+  }, "image/png");
+}
+
+// --- QR carrier -----------------------------------------------------------
+//
+// The document is zlib-compressed and base64-encoded, then drawn into a QR
+// code placed on the picture. This survives re-encoding at any quality, which
+// is what LSB cannot do: JPEG rewrites every pixel, so a hidden bit plane is
+// gone even at quality 100. A QR survives because a decoder reads shapes, not
+// exact values.
+//
+// The trade is visibility. An LSB carrier looks like a photograph; a QR
+// carrier looks like a photograph with a QR code on it. For a picture that
+// will be re-compressed by a third party, that is the only option that works.
+
+async function buildQR() {
+  const docBytes = bytesOf(el("doc").value);
+  if (docBytes.length === 0) { say("bad", "سند خالی است."); return; }
+
+  let payload;
+  try {
+    const z = await zlibCompress(docBytes);
+    let bin = "";
+    for (let i = 0; i < z.length; i++) bin += String.fromCharCode(z[i]);
+    payload = btoa(bin);
+  } catch (e) {
+    say("bad", "آماده‌سازی ناموفق: " + e.message);
+    return;
+  }
+
+  let qr;
+  try {
+    qr = QR.encode(bytesOf(payload), "L");
+  } catch (e) {
+    say("bad", "ساخت QR ناموفق: " + e.message);
+    return;
+  }
+
+  // Place the code in the lower-right corner at about 38% of the short side,
+  // with a white quiet zone so a decoder can find it.
+  const { modules, size } = qr;
+  const canvas = el("preview");
+  canvas.width = carrier.w;
+  canvas.height = carrier.h;
+  canvas.style.display = "block";
+  const ctx = canvas.getContext("2d");
+
+  const src = carrier.imageData;
+  const tmp = document.createElement("canvas");
+  tmp.width = carrier.w; tmp.height = carrier.h;
+  tmp.getContext("2d").putImageData(new ImageData(new Uint8ClampedArray(src.data), carrier.w, carrier.h), 0, 0);
+  ctx.drawImage(tmp, 0, 0);
+
+  const side = Math.min(carrier.w, carrier.h);
+  const target = Math.round(side * 0.38);
+  const quiet = 4;
+  const cell = target / (size + quiet * 2);
+  const originX = carrier.w - target - Math.round(side * 0.02);
+  const originY = carrier.h - target - Math.round(side * 0.02);
+
+  ctx.fillStyle = "#ffffff";
+  ctx.fillRect(originX, originY, target, target);
+  ctx.fillStyle = "#000000";
+  for (let y = 0; y < size; y++) {
+    for (let x = 0; x < size; x++) {
+      if (!modules[y][x]) continue;
+      const px = originX + (x + quiet) * cell;
+      const py = originY + (y + quiet) * cell;
+      ctx.fillRect(Math.floor(px), Math.floor(py), Math.ceil(cell), Math.ceil(cell));
+    }
+  }
+
+  canvas.toBlob((blob) => {
+    if (!blob) { say("bad", "ساخت خروجی ناموفق بود."); return; }
+    if (lastUrl) URL.revokeObjectURL(lastUrl);
+    lastBlob = blob;
+    lastUrl = URL.createObjectURL(blob);
+    el("download").disabled = false;
+    say("ok",
+      `ساخته شد — QR نسخه ${(size - 17) / 4} (${size}×${size} خانه) روی عکس، ` +
+      `خروجی ${(blob.size / 1024).toFixed(0)} کیلوبایت. ` +
+      `این نسخه از فشرده‌سازی دوباره سالم می‌ماند.`);
+  }, "image/png");
+}
+
+async function loadImage(file) {
+  clearStatus();
+  el("download").disabled = true;
+  lastBlob = null;
+
+  const img = new Image();
+  const url = URL.createObjectURL(file);
+  await new Promise((res, rej) => {
+    img.onload = res;
+    img.onerror = () => rej(new Error("تصویر خوانده نشد"));
+    img.src = url;
+  });
+
+  const w = img.naturalWidth, h = img.naturalHeight;
+  const canvas = document.createElement("canvas");
+  canvas.width = w; canvas.height = h;
+  const ctx = canvas.getContext("2d");
+  ctx.drawImage(img, 0, 0);
+
+  carrier = {
+    w, h,
+    imageData: ctx.getImageData(0, 0, w, h),
+    originalBytes: file.size,
+  };
+  URL.revokeObjectURL(url);
+
+  el("dims").textContent = `${w}×${h}`;
+  refreshCapacity();
+  updateBuildButton();
+  say("ok", `عکس بارگذاری شد: ${w}×${h}، ظرفیت ${capacityBytes().toLocaleString("fa")} بایت.`);
+}
+
+el("drop").addEventListener("click", () => el("imgFile").click());
+el("imgFile").addEventListener("change", (e) => {
+  if (e.target.files[0]) loadImage(e.target.files[0]).catch(err => say("bad", err.message));
+});
+["dragenter", "dragover"].forEach(ev =>
+  el("drop").addEventListener(ev, (e) => { e.preventDefault(); el("drop").classList.add("over"); }));
+["dragleave", "drop"].forEach(ev =>
+  el("drop").addEventListener(ev, (e) => { e.preventDefault(); el("drop").classList.remove("over"); }));
+el("drop").addEventListener("drop", (e) => {
+  const f = e.dataTransfer.files[0];
+  if (f) loadImage(f).catch(err => say("bad", err.message));
+});
+
+el("doc").addEventListener("input", refreshDocMeta);
+document.querySelectorAll('input[name=mode]').forEach(r => r.addEventListener("change", () => {
+  const qr = currentMode() === "qr";
+  el("modeNote").innerHTML = qr
+    ? 'حالت <b>QR</b>: سند فشرده و base64 می‌شود و روی عکس به شکل کد QR می‌نشیند. ' +
+      'مقاوم به بازفشرده‌سازی (PNG، WebP، حتی JPEG با کیفیت پایین)، ولی روی عکس دیده می‌شود.'
+    : 'حالت <b>نامرئی</b>: داده در بیت‌های کم‌ارزش پنهان می‌شود. کیفیت دست‌نخورده، ' +
+      'ولی خروجی باید PNG بماند — هر بازفشرده‌سازی داده را نابود می‌کند. JPEG حتی با کیفیت ۱۰۰٪ کار نمی‌کند.';
+  clearStatus();
+}));
+el("build").addEventListener("click", build);
+el("download").addEventListener("click", () => {
+  if (!lastBlob) return;
+  const a = document.createElement("a");
+  a.href = lastUrl;
+  a.download = "catnet-carrier.png";
+  a.click();
+});
+
+el("loadLive").addEventListener("click", async () => {
+  clearStatus();
+  try {
+    const r = await fetch("https://raw.githubusercontent.com/mrfelfel/the-cat-network-base/main/servers-v2.json", { cache: "no-store" });
+    if (!r.ok) throw new Error("HTTP " + r.status);
+    el("doc").value = await r.text();
+    refreshDocMeta();
+    say("ok", "سند زنده گرفته شد.");
+  } catch (e) {
+    say("bad", "گرفتن سند ناموفق: " + e.message + " — فایل را دستی انتخاب کنید.");
+  }
+});
+
+el("loadFile").addEventListener("click", () => el("jsonFile").click());
+el("jsonFile").addEventListener("change", async (e) => {
+  const f = e.target.files[0];
+  if (!f) return;
+  el("doc").value = await f.text();
+  refreshDocMeta();
+  say("ok", "سند از فایل خوانده شد.");
+});
+
+refreshDocMeta();
+</script>
+</body>
+</html>
