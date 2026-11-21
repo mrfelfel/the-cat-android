@@ -4,6 +4,8 @@ import android.content.Context;
 import android.os.SystemClock;
 
 import org.telegram.messenger.ApplicationLoader;
+import android.text.TextUtils;
+
 import org.telegram.messenger.FileLog;
 import org.telegram.thecat.catnet.mobile.Client;
 import org.telegram.thecat.catnet.mobile.Mobile;
@@ -34,8 +36,22 @@ public final class CatNetResolver {
     // Rate-limit re-runs: the native connection-stall callback and the
     // connectivity receiver can both fire in bursts while an outage lasts.
     private static final long REFRESH_MIN_INTERVAL_MS = 15000L;
-    // Must match the cache path mobile.New() builds inside the AAR.
-    private static final String CACHE_FILE = "catnet-servers.json";
+    /**
+     * The document this client reads.
+     *
+     * <p>A separate file from {@code servers.json}, not a new section inside
+     * it. The document gained a config block, and a client from before that
+     * change refuses any document carrying a field it does not know — with
+     * {@code DisallowUnknownFields} the whole parse failed and catnet fell
+     * back to the seed. Reading a different path is what lets this build use
+     * the new document while the installed base keeps the one it understands.
+     *
+     * <p>The cache file is derived from this by the AAR, so the two documents
+     * can never be served from each other's cache.
+     */
+    private static final String DOCUMENT = "servers-v2.json";
+    // Must match the cache path mobile.NewForFile() builds inside the AAR.
+    private static final String CACHE_FILE = "catnet-servers-v2.json.cache";
 
     private static volatile CatNetResolver instance;
 
@@ -80,6 +96,44 @@ public final class CatNetResolver {
      */
     public synchronized boolean isRunning() {
         return running;
+    }
+
+    /**
+     * The document's payment switch for this build, or null when no document
+     * has been read yet (the caller must then keep its own default).
+     *
+     * <p>The decision is made in Go against the signed document, not here: the
+     * rules live with the data they interpret, so changing a rule does not
+     * need a client release.
+     */
+    public synchronized Boolean paymentsEnabled(String build) {
+        if (client == null) {
+            return null;
+        }
+        try {
+            return client.paymentsEnabled(build);
+        } catch (Throwable t) {
+            FileLog.e(t);
+            return null;
+        }
+    }
+
+    /**
+     * The document's configuration as JSON, or null when it carried none.
+     * Used for support details and public URLs, each of which falls back to
+     * the compiled-in value when absent.
+     */
+    public synchronized String configJson(String build) {
+        if (client == null) {
+            return null;
+        }
+        try {
+            String json = client.configJson(build);
+            return TextUtils.isEmpty(json) ? null : json;
+        } catch (Throwable t) {
+            FileLog.e(t);
+            return null;
+        }
     }
 
     /**
@@ -148,7 +202,7 @@ public final class CatNetResolver {
                 Client c;
                 synchronized (this) {
                     if (client == null) {
-                        client = Mobile.new_(cacheDir, seeds, TIMEOUT_MS);
+                        client = Mobile.newForFile(cacheDir, seeds, TIMEOUT_MS, DOCUMENT);
                     }
                     c = client;
                 }

@@ -120,7 +120,40 @@ public class BuildVars {
      * payments to a foreign user is not.
      */
     public static boolean arePaymentsAvailable() {
-        return CatAudience.canPay(CatAudienceStore.current());
+        return CatAudience.canPay(CatAudienceStore.current()) && remotePaymentsEnabled();
+    }
+
+    /**
+     * The distribution name this build reports to the address document, so a
+     * config published there can switch one distribution without the others.
+     */
+    public static String buildName() {
+        if (isBazaarStoreApp()) {
+            return "bazaar";
+        }
+        if (ApplicationLoader.isStandaloneBuild()) {
+            return "standalone";
+        }
+        return "play";
+    }
+
+    /**
+     * The operator's remote switch, read from the signed address document.
+     *
+     * <p>Placed above the audience check in {@link #arePaymentsAvailable()}
+     * because it is the only kill switch that still works when the server —
+     * and thus {@code help.getAppConfig} — is unreachable, which is exactly
+     * when an operator needs to turn payments off. Defaults to true when the
+     * document says nothing, so a client with no config behaves as before.
+     */
+    private static boolean remotePaymentsEnabled() {
+        try {
+            org.telegram.thecat.CatNetResolver r = org.telegram.thecat.CatNetResolver.getInstance();
+            Boolean v = r.paymentsEnabled(buildName());
+            return v == null || v;
+        } catch (Throwable t) {
+            return true;
+        }
     }
 
     public static boolean useInvoiceBilling() {
