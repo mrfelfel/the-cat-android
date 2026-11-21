@@ -229,10 +229,19 @@ jobs:
             echo "apkanalyzer failed to read $DEV_APK (tool problem, not a build problem)"; exit 1; }
           [ -n "$DEV_MANIFEST" ] || {
             echo "apkanalyzer produced no manifest for $DEV_APK (tool problem)"; exit 1; }
-          echo "$DEV_MANIFEST" | grep -q 'package="com.thecat.messenger.dev"' \
-            || { echo "dev APK has the wrong applicationId"; exit 1; }
-          echo "$DEV_MANIFEST" | grep -q 'permission.READ_CALL_LOG' \
-            || { echo "dev APK lacks the standalone manifest (READ_CALL_LOG) — wrong build type"; exit 1; }
+          # `case` rather than `echo ... | grep -q`: with `pipefail`, grep exiting
+          # on its first match can SIGPIPE the writer, and the pipeline then
+          # returns nonzero even though the match succeeded. That is a timing
+          # race, so it would fail one run in some number — exactly the kind of
+          # flake that gets a real assertion deleted. No pipe, no race.
+          case "$DEV_MANIFEST" in
+            *'package="com.thecat.messenger.dev"'*) ;;
+            *) echo "dev APK has the wrong applicationId"; exit 1 ;;
+          esac
+          case "$DEV_MANIFEST" in
+            *'permission.READ_CALL_LOG'*) ;;
+            *) echo "dev APK lacks the standalone manifest (READ_CALL_LOG) — wrong build type"; exit 1 ;;
+          esac
 
           ls -la dist/
 
