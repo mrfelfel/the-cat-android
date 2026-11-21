@@ -236,6 +236,16 @@ public class ApplicationLoader extends Application {
         applicationInited = true;
         NativeLoader.initNativeLibs(ApplicationLoader.applicationContext);
 
+        // Before the first screen is built, so the language default and the
+        // payment gate both read a settled answer rather than UNKNOWN. Must run
+        // on every launch, not only the first: the answer is cached, but a
+        // confirmed one still has to be loaded before anything asks for it.
+        try {
+            org.telegram.messenger.utils.CatAudienceStore.refreshGuess();
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+
         try {
             LocaleController.getInstance(); //TODO improve
         } catch (Exception e) {

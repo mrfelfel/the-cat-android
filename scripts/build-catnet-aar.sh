@@ -41,6 +41,7 @@ AAR="$TMP/catnet.aar"
 go tool gomobile bind \
   -target=android \
   -androidapi 21 \
+  -ldflags='-linkmode=external -extldflags=-Wl,-z,max-page-size=16384' \
   -o "$AAR" \
   -javapkg org.telegram.thecat.catnet \
   github.com/mrfelfel/the-cat-network-base/mobile
@@ -60,6 +61,41 @@ unzip -Z1 "$TMP/classes.jar" | grep -qx 'org/telegram/thecat/catnet/mobile/Clien
 
 if ! unzip -Z1 "$AAR" | grep -qx 'jni/arm64-v8a/libgojni.so'; then
   echo "ERROR: the AAR has no native libs for arm64-v8a; gomobile produced nothing"
+  exit 1
+fi
+
+# 16 KB page alignment. Play rejects a submission whose native libraries are
+# aligned to 4 KB while the app targets a recent SDK, and the failure is only
+# visible on upload. gomobile accepts -ldflags but Go links internally by
+# default, so -extldflags alone reaches no external linker and is silently
+# dropped: the flags above need -linkmode=external to have any effect. A build
+# that regresses to 4 KB must fail here, not at Play.
+unzip -p "$AAR" 'jni/arm64-v8a/libgojni.so' > "$TMP/libgojni.so"
+if ! python3 -I - "$TMP/libgojni.so" <<'PY'
+import struct, sys
+d = open(sys.argv[1], 'rb').read()
+is64 = d[4] == 2
+if is64:
+    phoff, phentsize, phnum = (struct.unpack_from('<Q', d, 0x20)[0],
+                               struct.unpack_from('<H', d, 0x36)[0],
+                               struct.unpack_from('<H', d, 0x38)[0])
+    align_off = 48
+else:
+    phoff, phentsize, phnum = (struct.unpack_from('<I', d, 0x1C)[0],
+                               struct.unpack_from('<H', d, 0x2A)[0],
+                               struct.unpack_from('<H', d, 0x2C)[0])
+    align_off = 28
+aligns = []
+for i in range(phnum):
+    off = phoff + i * phentsize
+    if struct.unpack_from('<I', d, off)[0] == 1:
+        fmt = '<Q' if is64 else '<I'
+        aligns.append(struct.unpack_from(fmt, d, off + align_off)[0])
+if not aligns or any(a < 0x4000 for a in aligns):
+    print('ERROR: libgojni.so is not 16 KB aligned: %s' % [hex(a) for a in aligns])
+    sys.exit(1)
+PY
+then
   exit 1
 fi
 

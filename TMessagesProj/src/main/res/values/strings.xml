@@ -2482,7 +2482,7 @@
     <string name="LanguageUnsupportedError">There is no such language.</string>
     <string name="LanguageSame">You are already using this language pack (**%1$s**). You can change your language at any time in Settings.</string>
     <string name="LanguageUnknownCustomAlert">Unfortunately, this custom language pack (**%1$s**) doesn\'t contain data for The Cat Android.</string>
-    <string name="AskAQuestionInfo">Please note that The Cat Support is done by volunteers. We try to respond as quickly as possible, but it may take a while.\n\nFor help and troubleshooting, visit [Cat Room](https://catroom.ir) or contact our support center at 02187210128 (ext. 2).</string>
+    <string name="AskAQuestionInfo">Please note that The Cat Support is done by volunteers. We try to respond as quickly as possible, but it may take a while.\n\nFor help and troubleshooting, visit [Cat Room](https://catroom.ir).</string>
     <string name="AskButton">Ask a volunteer</string>
     <string name="TelegramFAQ">The Cat FAQ</string>
     <string name="TelegramFaq">The Cat FAQ</string>
@@ -2501,10 +2501,16 @@
     <string name="CatRoomUrl">https://catroom.ir</string>
     <string name="CatRoomInfo">Get The Cat app and discover more from our Android market.</string>
     <string name="AboutUs">About Us</string>
-    <string name="AboutUsInfo">Hi! This is a custom messenger built for Generation Z, made especially for Gen Z.\n\nThe Cat is an independent messenger with its own servers, focused on speed, privacy and a clean experience.\n\nSupport: 02187210128 (ext. 2)</string>
+    <string name="AboutUsInfo">Hi! This is a custom messenger built for Generation Z, made especially for Gen Z.\n\nThe Cat is an independent messenger with its own servers, focused on speed, privacy and a clean experience.</string>
     <string name="ContactUs">Contact Us</string>
-    <string name="SupportPhone">02187210128</string>
-    <string name="SupportPhoneInfo">Support center — internal extension 2</string>
+    <!--
+      Support contact for users outside Iran. The Iranian support centre number
+      belongs only to values-fa; an install whose audience is not Iranian must
+      never be shown it, so the base values carry the language-neutral route
+      and each localized resource decides what to offer.
+    -->
+    <string name="SupportPhone">https://catroom.ir/support</string>
+    <string name="SupportPhoneInfo">Help centre</string>
     <string name="WebAppDisclaimerUrl">https://catroom.ir/terms</string>
     <string name="DeleteLocalizationTitle">Delete language pack</string>
     <string name="DeleteLocalizationText">Are you sure you want to delete **%1$s** language pack?</string>

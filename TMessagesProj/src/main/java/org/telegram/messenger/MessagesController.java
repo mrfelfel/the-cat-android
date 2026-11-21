@@ -740,14 +740,24 @@ public class MessagesController extends BaseController implements NotificationCe
     public boolean starsLocked;
     public boolean emailSignupEnabled;
 
+    /**
+     * The server's own lock, plus the install-level payment gate.
+     *
+     * <p>A store that has not blocked these features still should not offer
+     * them to an install outside Iran: Play Billing cannot pay out to an
+     * Iranian merchant, and the direct checkout is Toman-only. Folding the
+     * audience check in here rather than at each call site means every entry
+     * point — Settings, Stars, Premium, gifts — hides itself from the same
+     * answer, and none can be missed when one is added later.
+     */
     public boolean starsPurchaseAvailable() {
-        return !starsLocked;
+        return !starsLocked && BuildVars.arePaymentsAvailable();
     }
     public boolean premiumFeaturesBlocked() {
-        return premiumLocked && !getUserConfig().isPremium();
+        return (premiumLocked || !BuildVars.arePaymentsAvailable()) && !getUserConfig().isPremium();
     }
     public boolean premiumPurchaseBlocked() {
-        return premiumLocked;
+        return premiumLocked || !BuildVars.arePaymentsAvailable();
     }
 
     public List<String> directPaymentsCurrency = new ArrayList<>();

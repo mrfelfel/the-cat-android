@@ -144,6 +144,7 @@ import org.telegram.messenger.SRPHelper;
 import org.telegram.messenger.SharedConfig;
 import org.telegram.messenger.UserConfig;
 import org.telegram.messenger.Utilities;
+import org.telegram.messenger.utils.CatAudienceStore;
 import org.telegram.messenger.utils.CatPhone;
 import org.telegram.thecat.EmailSignupPhone;
 import org.telegram.thecat.TheCatServers;
@@ -1673,6 +1674,13 @@ public class LoginActivity extends BaseFragment implements NotificationCenter.No
     private boolean pendingSwitchingAccount;
 
     private void onAuthSuccess(TLRPC.TL_auth_authorization res, boolean afterSignup) {
+        // The signed-in number is the only conclusive audience signal we ever
+        // get, so it is applied here — the one place every login path passes
+        // through. It replaces whatever the device signals guessed earlier and
+        // locks it for the life of the install.
+        if (res.user != null && res.user.phone != null) {
+            CatAudienceStore.forPhone(res.user.phone);
+        }
         MessagesController.getInstance(currentAccount).cleanup();
         ConnectionsManager.getInstance(currentAccount).setUserId(res.user.id);
         UserConfig.getInstance(currentAccount).clearConfig();

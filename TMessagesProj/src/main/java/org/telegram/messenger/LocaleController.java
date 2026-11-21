@@ -38,6 +38,8 @@ import org.telegram.messenger.time.JalaliCalendar;
 import org.telegram.tgnet.Vector;
 import org.telegram.ui.Components.TypefaceSpan;
 import org.telegram.ui.Stars.StarsController;
+import org.telegram.messenger.utils.CatAudience;
+import org.telegram.messenger.utils.CatAudienceStore;
 import org.telegram.messenger.utils.TheCatMoney;
 import org.telegram.tgnet.ConnectionsManager;
 import org.telegram.tgnet.TLObject;
@@ -751,11 +753,20 @@ public class LocaleController {
             }
 
             if (currentInfo == null) {
-                // The Cat: Persian is the default on first launch; persist it so
-                // it survives configuration changes like a user-chosen language.
-                currentInfo = getLanguageFromDict("fa");
-                if (currentInfo != null) {
-                    override = true;
+                // The Cat: an Iranian install opens in Persian, everyone else
+                // falls through to their own system language. This used to give
+                // every install Persian, which meant a user who does not read it
+                // met the app in a language they never chose.
+                //
+                // Deliberately only on the first launch (no stored "language"
+                // yet): the result is persisted by applyLanguage below, so a
+                // user who switches away from it keeps that choice.
+                int audience = CatAudienceStore.refreshGuess();
+                if (audience == CatAudience.IRAN) {
+                    currentInfo = getLanguageFromDict("fa");
+                    if (currentInfo != null) {
+                        override = true;
+                    }
                 }
             }
 

@@ -58,7 +58,13 @@ public class AboutFragment extends BaseFragment {
 
         // Support section
         content.addView(makeSectionHeader(context, LocaleController.getString(R.string.ContactUs)), LayoutHelper.createLinear(LayoutHelper.MATCH_PARENT, LayoutHelper.WRAP_CONTENT, 0, 8, 0, 4));
-        content.addView(makeLinkRow(context, LocaleController.getString(R.string.SupportPhoneInfo), LocaleController.getString(R.string.SupportPhone), "tel:02187210128"), LayoutHelper.createLinear(LayoutHelper.MATCH_PARENT, LayoutHelper.WRAP_CONTENT, 0, 0, 0, 4));
+        // SupportPhone is a dialable number in values-fa and a help-centre URL
+        // everywhere else, so the scheme has to follow the resource rather than
+        // be hardcoded — a fixed tel: link would dial the Iranian number from
+        // a build whose resources no longer mention it.
+        String support = LocaleController.getString(R.string.SupportPhone);
+        String supportUri = support.startsWith("http") ? support : "tel:" + support;
+        content.addView(makeLinkRow(context, LocaleController.getString(R.string.SupportPhoneInfo), support, supportUri), LayoutHelper.createLinear(LayoutHelper.MATCH_PARENT, LayoutHelper.WRAP_CONTENT, 0, 0, 0, 4));
 
         // Links section
         content.addView(makeSectionHeader(context, LocaleController.getString(R.string.CatRoom)), LayoutHelper.createLinear(LayoutHelper.MATCH_PARENT, LayoutHelper.WRAP_CONTENT, 0, 16, 0, 4));

@@ -14,6 +14,9 @@ import android.os.Build;
 
 import com.android.billingclient.api.ProductDetails;
 
+import org.telegram.messenger.utils.CatAudience;
+import org.telegram.messenger.utils.CatAudienceStore;
+
 import java.util.Objects;
 
 public class BuildVars {
@@ -102,7 +105,28 @@ public class BuildVars {
         }
     }
 
+    /**
+     * Whether payments are offered to this install at all.
+     *
+     * <p>An install outside Iran gets none: neither our own checkout nor Google
+     * Play's, since a Play-billed purchase would be revenue Google cannot pay
+     * out to an Iranian merchant anyway. This gate is checked before the
+     * billing-path choice below so the two can never disagree — a store build
+     * whose audience is foreign hides payment instead of falling through to
+     * Play Billing.
+     *
+     * <p>UNKNOWN (no conclusive signal yet) also hides payments: it is
+     * reversible the moment a phone code arrives, whereas wrongly showing
+     * payments to a foreign user is not.
+     */
+    public static boolean arePaymentsAvailable() {
+        return CatAudience.canPay(CatAudienceStore.current());
+    }
+
     public static boolean useInvoiceBilling() {
+        if (!arePaymentsAvailable()) {
+            return false;
+        }
         if (isBazaarStoreApp() && !isBazaarAppInstalled()) {
             // The Bazaar flavor running on a phone without Cafe Bazaar has no
             // store to bill through, so it behaves like the direct build and
