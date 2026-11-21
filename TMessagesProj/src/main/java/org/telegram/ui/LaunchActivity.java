@@ -126,6 +126,7 @@ import org.telegram.messenger.MessageObject;
 import org.telegram.messenger.MessagesController;
 import org.telegram.messenger.MessagesStorage;
 import org.telegram.messenger.NotificationCenter;
+import org.telegram.thecat.CatConnectionFailure;
 import org.telegram.thecat.TheCatServer;
 import org.telegram.thecat.TheCatServers;
 import org.telegram.messenger.NotificationsController;
@@ -8332,6 +8333,64 @@ public class LaunchActivity extends BasePermissionsActivity implements INavigati
         }
     }
 
+    /**
+     * The "this version may no longer work" prompt.
+     *
+     * <p>Only fires for the one case it is written for: a device with a live
+     * connection that has failed long enough for every route to have been
+     * tried. {@link org.telegram.thecat.CatConnectionFailure} owns that decision,
+     * including the timing and the address-finder check, so this only presents
+     * the outcome.
+     *
+     * <p>The offered routes differ by audience. An Iranian install gets the
+     * direct download and the channel, since Play has no update path for an
+     * app it does not distribute there; everyone else gets Play, which is the
+     * only channel they can actually use.
+     */
+    private void maybeShowVersionOutdatedPrompt(int account) {
+        if (versionOutdatedShowing) {
+            return;
+        }
+        if (!CatConnectionFailure.shouldPrompt(currentConnectionState, account)) {
+            return;
+        }
+        versionOutdatedShowing = true;
+        CatConnectionFailure.onPromptShown();
+
+        final boolean iran = org.telegram.messenger.utils.CatAudienceStore.current()
+                == org.telegram.messenger.utils.CatAudience.IRAN;
+        final AlertDialog.Builder builder = new AlertDialog.Builder(LaunchActivity.this);
+        builder.setTitle(LocaleController.getString(R.string.CatVersionOutdatedTitle));
+        builder.setMessage(LocaleController.getString(R.string.CatVersionOutdatedMessage));
+        builder.setNegativeButton(LocaleController.getString(R.string.CatVersionOutdatedLater),
+                (d, w) -> versionOutdatedShowing = false);
+        if (iran) {
+            builder.setPositiveButton(LocaleController.getString(R.string.CatVersionOutdatedDownload), (d, w) -> {
+                versionOutdatedShowing = false;
+                Browser.openUrl(LaunchActivity.this, "https://catroom.ir/dl");
+            });
+            builder.setNeutralButton(LocaleController.getString(R.string.CatVersionOutdatedChannel), (d, w) -> {
+                versionOutdatedShowing = false;
+                Browser.openUrl(LaunchActivity.this, "https://t.me/thecatir");
+            });
+        } else {
+            builder.setPositiveButton(LocaleController.getString(R.string.CatVersionOutdatedPlay), (d, w) -> {
+                versionOutdatedShowing = false;
+                try {
+                    final String pkg = ApplicationLoader.applicationContext.getPackageName();
+                    startActivity(new Intent(Intent.ACTION_VIEW, Uri.parse("market://details?id=" + pkg)));
+                } catch (Exception e) {
+                    Browser.openUrl(LaunchActivity.this, "https://play.google.com/store/apps/details?id="
+                            + ApplicationLoader.applicationContext.getPackageName());
+                }
+            });
+        }
+        builder.setOnDismissListener(d -> versionOutdatedShowing = false);
+        showAlertDialog(builder);
+    }
+
+    private boolean versionOutdatedShowing;
+
     private void updateCurrentConnectionState(int account) {
         if (actionBarLayout == null) {
             return;
@@ -8340,6 +8399,7 @@ public class LaunchActivity extends BasePermissionsActivity implements INavigati
         int titleId = 0;
         Runnable action = null;
         currentConnectionState = ConnectionsManager.getInstance(currentAccount).getConnectionState();
+        maybeShowVersionOutdatedPrompt(currentAccount);
         if (currentConnectionState == ConnectionsManager.ConnectionStateWaitingForNetwork) {
             title = "WaitingForNetwork";
             titleId = R.string.WaitingForNetwork;

@@ -11318,4 +11318,16 @@
     <string name="CatFrameworkDetailPage">Detail screen</string>
     <string name="CatFrameworkPlayerPage">Player screen</string>
     <string name="CatFrameworkOpen">open</string>
+
+    <!--
+      Shown when the device has a working connection but no address the app
+      knows will answer, after the address finder has finished every attempt.
+      Deliberately not shown for an offline device, and never for a slow link.
+    -->
+    <string name="CatVersionOutdatedTitle">This version can no longer connect</string>
+    <string name="CatVersionOutdatedMessage">Your connection is working, but The Cat could not reach its servers with this version, even after trying every route available to it.\n\nThis usually means a newer version is required. We recommend installing the latest release.\n\nIf a new version does not help, or you cannot install one, our team is ready to assist — and we will make sure you are notified here once service resumes.</string>
+    <string name="CatVersionOutdatedDownload">Download the latest version</string>
+    <string name="CatVersionOutdatedChannel">Open our channel</string>
+    <string name="CatVersionOutdatedPlay">Update on Google Play</string>
+    <string name="CatVersionOutdatedLater">Not now</string>
 </resources>

@@ -74,6 +74,15 @@ public final class CatNetResolver {
     }
 
     /**
+     * True while a resolve attempt is in flight. Read by the connection-failure
+     * detector: an app that is still looking for an address has not exhausted
+     * what it knows how to do, so it must not be told to update yet.
+     */
+    public synchronized boolean isRunning() {
+        return running;
+    }
+
+    /**
      * Kick off resolution in the background (idempotent). {@code seedHost:seedPort}
      * is the configured fallback: used as a probe target and kept if resolution
      * fails. {@code onNewAddress} runs (on a background thread) whenever the
