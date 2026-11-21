@@ -144,6 +144,7 @@ import org.telegram.messenger.SRPHelper;
 import org.telegram.messenger.SharedConfig;
 import org.telegram.messenger.UserConfig;
 import org.telegram.messenger.Utilities;
+import org.telegram.messenger.utils.CatPhone;
 import org.telegram.thecat.EmailSignupPhone;
 import org.telegram.thecat.TheCatServers;
 import org.telegram.tgnet.ConnectionsManager;
@@ -2598,7 +2599,10 @@ public class LoginActivity extends BaseFragment implements NotificationCenter.No
                     }
                     int start = phoneField.getSelectionStart();
                     String phoneChars = "0123456789";
-                    String str = phoneField.getText().toString();
+                    // The Cat: Persian/Arabic keyboards type U+06F0.. and U+0660..
+                    // digits, which the ASCII filter below would otherwise erase,
+                    // wiping the field as the user types.
+                    String str = CatPhone.normalizeDigits(phoneField.getText().toString());
                     if (characterAction == 3) {
                         str = str.substring(0, actionPosition) + str.substring(actionPosition + 1);
                         start--;
@@ -2753,14 +2757,22 @@ public class LoginActivity extends BaseFragment implements NotificationCenter.No
             if (country != null) {
                 setCountry(languageMap, country.toUpperCase());
             } else {
+                // The Cat: Iran is the default country, so a user never faces an
+                // empty country field. The server's answer still wins when it
+                // names a country we know; otherwise we keep the default.
+                boolean iranApplied = setCountry(languageMap, "IR");
                 TLRPC.TL_help_getNearestDc req = new TLRPC.TL_help_getNearestDc();
                 getAccountInstance().getConnectionsManager().sendRequest(req, (response, error) -> AndroidUtilities.runOnUIThread(() -> {
-                    if (response == null) {
+                    if (!(response instanceof TLRPC.TL_nearestDc)) {
                         return;
                     }
                     TLRPC.TL_nearestDc res = (TLRPC.TL_nearestDc) response;
                     if (codeField.length() == 0) {
-                        setCountry(languageMap, res.country.toUpperCase());
+                        // Keep the Iran fallback when the server names a country
+                        // this build's list does not contain.
+                        if (!setCountry(languageMap, res.country.toUpperCase()) && iranApplied) {
+                            setCountry(languageMap, "IR");
+                        }
                     }
                 }), ConnectionsManager.RequestFlagWithoutLogin | ConnectionsManager.RequestFlagFailOnServerErrors);
             }
@@ -3021,12 +3033,16 @@ public class LoginActivity extends BaseFragment implements NotificationCenter.No
             countryOutlineView.animateSelection(cs != null ? 1f : 0f);
         }
 
-        private void setCountry(HashMap<String, String> languageMap, String country) {
+        /** Applies {@code country} to the country field; false when the build has no such country. */
+        private boolean setCountry(HashMap<String, String> languageMap, String country) {
             String name = languageMap.get(country);
             if (name != null && countriesArray != null) {
                 CountrySelectActivity.Country countryWithCode = null;
                 for (int i = 0; i < countriesArray.size(); i++) {
-                    if (countriesArray.get(i) != null && countriesArray.get(i).name.equals(country)) {
+                    // The Cat: `country` is an ISO code ("IR"). The upstream loop
+                    // compared it against the *display* name, so it never matched
+                    // anything and the default country was silently never applied.
+                    if (countriesArray.get(i) != null && country.equalsIgnoreCase(countriesArray.get(i).shortname)) {
                         countryWithCode = countriesArray.get(i);
                         break;
                     }
@@ -3034,8 +3050,10 @@ public class LoginActivity extends BaseFragment implements NotificationCenter.No
                 if (countryWithCode != null) {
                     codeField.setText(countryWithCode.code);
                     countryState = COUNTRY_STATE_NOT_SET_OR_VALID;
+                    return true;
                 }
             }
+            return false;
         }
 
         @Override
@@ -3074,7 +3092,10 @@ public class LoginActivity extends BaseFragment implements NotificationCenter.No
                 onFieldError(phoneOutlineView, false);
                 return;
             }
-            String phoneNumber = "+" + codeField.getText() + " " + phoneField.getText();
+            // The Cat: the number the user typed may still carry a trunk zero, a
+            // second copy of the country code, or Persian digits. Normalise once
+            // here so every downstream path sends the same clean number.
+            String phoneNumber = "+" + codeField.getText() + " " + CatPhone.normalizeNational(codeField.getText().toString(), phoneField.getText().toString());
             if (!confirmedNumber) {
                 if (AndroidUtilities.displaySize.x > AndroidUtilities.displaySize.y && !isCustomKeyboardVisible() && sizeNotifierFrameLayout.measureKeyboardHeight() > AndroidUtilities.dp(20)) {
                     keyboardHideCallback = () -> postDelayed(()-> onNextPressed(code), 200);
@@ -3252,7 +3273,7 @@ public class LoginActivity extends BaseFragment implements NotificationCenter.No
                 needHideProgress(false);
                 return;
             }
-            String phone = PhoneFormat.stripExceptNumbers("" + codeField.getText() + phoneField.getText());
+            String phone = CatPhone.digitsOnly(codeField.getText() + CatPhone.normalizeNational(codeField.getText().toString(), phoneField.getText().toString()));
             if (activityMode == MODE_LOGIN) {
                 if (getParentActivity() instanceof LaunchActivity) {
                     for (int a = 0; a < UserConfig.MAX_ACCOUNT_COUNT; a++) {

@@ -48,6 +48,7 @@ protected:
     void onReceivedData(NativeByteBuffer *buffer) override;
     void onDisconnected(int32_t reason, int32_t error) override;
     void onConnected() override;
+    void onNetworkProfileChanged(int32_t profile) override;
     bool hasPendingRequests() override;
     void reconnect();
 
@@ -98,6 +99,10 @@ private:
     bool waitForReconnectTimer = false;
     bool connectionInProcess = false;
     uint32_t lastReconnectTimeout = 100;
+    // Consecutive reconnect cycles since the link last worked. Drives the
+    // backoff; reset to 0 in onConnected so a single dropout does not leave the
+    // next one waiting at the cap.
+    uint32_t reconnectAttempts = 1;
     int64_t usefullDataReceiveTime;
     uint32_t currentTimeout = 4;
     uint32_t receivedDataAmount = 0;

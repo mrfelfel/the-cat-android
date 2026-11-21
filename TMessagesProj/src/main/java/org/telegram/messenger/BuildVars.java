@@ -37,6 +37,44 @@ public class BuildVars {
 
     public static String HUAWEI_APP_ID = "101184875";
 
+    /**
+     * canalyze ingest keys and endpoint.
+     *
+     * <p>More than one key is carried on purpose: the server accepts several
+     * per app, so a build that ships both the current and the previous key
+     * keeps working whichever one the server still honours. That is what makes
+     * a rotation produce no 401 at all — the SDK tries them in order and
+     * remembers the first that authenticates.
+     *
+     * <p>Order matters: the current key first, the previous one second. A dead
+     * key costs one wasted round trip on the first flush after a restart, then
+     * is skipped for the life of the process.
+     *
+     * <p>The key is not a secret in the cryptographic sense — it ships inside
+     * the APK and is extractable from any build — but it is the only thing that
+     * lets a batch be accepted.
+     */
+    public static String[] CANALYZE_APP_KEYS = {
+            "ca_771f537e470d714d38fbda7a6c6ef9ece6177cc37ec786b4", // v2-rollout
+            "ca_8c145f184d3a0cc75b3602ab4a48c9f37354f42f77077f9d", // migrated (revoked)
+    };
+    public static String CANALYZE_ENDPOINT = "https://canalyze.cr0.ir";
+
+    /**
+     * The id canalyze registered for this app — NOT the Android package name.
+     *
+     * <p>The server compares the batch's `app` field against the registered id
+     * and rejects a mismatch with 400, which the SDK drops as unrecoverable.
+     * Passing `BuildConfig.APPLICATION_ID` here shipped every batch to a silent
+     * 400 for the whole first integration; the package a flavor installs under
+     * and the id an app is registered under are two different things.
+     *
+     * <p>Per-store separation does not need a different id: the SDK already
+     * sends `install_source` (the installer package), which is where a store
+     * distinction belongs.
+     */
+    public static String CANALYZE_APP_ID = "thecat";
+
     // The Cat has no FCM push infra, so without this the OS kills the socket in
     // background and messages/calls arrive late. Off by default to save battery;
     // users can enable Keep-Alive Service in Settings > Notifications manually.

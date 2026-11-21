@@ -354,7 +354,8 @@ public class TheCatServers {
                 mainDc,
                 key,
                 fingerprint,
-                resetKeys);
+                resetKeys,
+                !isDevFlavorBuild());
     }
 
     /**

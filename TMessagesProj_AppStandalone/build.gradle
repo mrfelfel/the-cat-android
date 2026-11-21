@@ -162,9 +162,18 @@ android {
 
     variantFilter { variant ->
         def names = variant.flavors*.name
-        if (variant.buildType.name != "release" && !names.contains("afat") && !names.contains("aarm")) {
+        // `standalone` is this module's release build type (minified + signed
+        // with signingConfigs.release); `debug` is the local one. AGP adds an
+        // implicit `release` type of its own, which has no signingConfig and
+        // does not get the standalone sourceSets — a variant on it builds
+        // cleanly and produces an APK that installs nowhere
+        // ("Missing META-INF/MANIFEST.MF" / "App not installed"). Android
+        // Studio lists such variants, so no variant may use that type.
+        if (variant.buildType.name != "standalone" && variant.buildType.name != "debug") {
             setIgnore(true)
+            return
         }
+        // Dev ships only as ARM.
         if (names.contains("dev") && !names.contains("aarm")) {
             setIgnore(true)
         }

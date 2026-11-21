@@ -15,7 +15,19 @@ Maker: Felfel (Mohammad Javad Yahyahi). Ecosystem: Shalgham & Sefr ta Sad.
 - `github.com/mrfelfel/thecat`: old private repo — left untouched on GitHub by user decision, but disconnected from this checkout. Do not push to it and do not delete it unless the user asks.
 - `github.com/mrfelfel/the-cat-network-base` (public, open source): cloned at `network-base/`. Committing to it is fine — it can live here as a git submodule or as the primary source, either way its changes are ours to make. Public by design: everything in it is open, EXCEPT secrets (signing keys never).
 
-## Publishing (the only publish path)
+## Publishing
+
+**User directive, 2026-11-21: one repo, no worktrees, no series rebuild.** Push
+straight to `fork` `main`. The only thing that must never be committed is the
+private signing keystore and its passwords (already gitignored).
+
+CI: a push to `main` only runs `version-bump.yml`. To actually produce APKs, run
+`release.yml` (`gh workflow run release.yml`) or push a `v*` tag.
+
+The series-rebuild procedure below is kept for reference only — do not follow it.
+
+<details>
+<summary>Historical: series rebuild (superseded)</summary>
 
 Local branches here carry pre-rebrand history — **never push them to the fork**; it would poison the clean series. Publish = rebuild the series:
 
@@ -25,11 +37,14 @@ Local branches here carry pre-rebrand history — **never push them to the fork*
 4. `git fetch fork main`, commit on top of it, `git push fork HEAD:refs/heads/main`.
 5. Signing material already lives in the fork's Actions secrets — never re-derive, never echo.
 
+</details>
+
 ## Build priority (user directive, 2026-06-30)
 
 1. **Direct (standalone) ARM is THE build.** `scripts/release-apk.sh --arm` → `dist/TheCat-<ver>-ARM-ZeroHub.apk`. The direct Android ARM release is what matters.
 2. Bazaar (`scripts/release-apk-bazaar.sh`) only when a Bazaar build is explicitly needed.
 3. Fat (all-ABIs) builds on request.
+4. Dev (`scripts/release-apk.sh --dev`, ARM only) → `dist/TheCat-<ver>-DEV-Standalone-ARM-ZeroHub.apk`. ApplicationId `com.thecat.messenger.dev`, dev server, installs side by side with the store build. Never hand-run Gradle for it: the variant is `<abi>DevStandalone`, and `<abi>DevRelease` is an AGP implicit variant with no signingConfig and no standalone sourceSets — it builds an APK that installs nowhere.
 
 ## What's in the tree right now (working tree, uncommitted)
 
@@ -49,6 +64,7 @@ Local branches here carry pre-rebrand history — **never push them to the fork*
 - Rebranded client UI strings to The Cat; pinned chat-list header name; header star opens the status dialog directly.
 - Removed the multi-server surface and scoped-cache layer (user decision: single Cat server, stock loaders). The 13.0.2 upstream merge was tried and **reverted** (2026-10-15) — stay on 12.10.1.
 - Cafe Bazaar IAB (Poolakey) for premium/stars/gifts with offline queue + pending-purchases UI. Standalone flavor keeps the invoice/WebView payment path.
+- **canalyze** (2026-11-12): install analytics + client diagnostics, wired into `TMessagesProj` so all five flavors get it. Crashes, ANRs, MTProto failures (with DC and network), slow requests and retry loops are folded client-side and shipped to `https://canalyze.cr0.ir`. Carries two app keys so a rotation never 401s the fleet. **Full details, R8 verification commands and the device checklist: [`docs/CANALYZE_INTEGRATION.md`](docs/CANALYZE_INTEGRATION.md).**
 
 ## Commit history
 

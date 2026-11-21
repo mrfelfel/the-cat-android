@@ -90,8 +90,8 @@ public class ApplicationLoaderImpl extends ApplicationLoader {
     @Override
     public void onCreate() {
         super.onCreate();
-        // Eagerly create the store bridge so its receipt-consume handler is
-        // registered before any auto-flush or UI purchase can run.
+        // Eagerly create the store bridge so it is bound to the Bazaar service
+        // before any auto-flush or UI purchase can run.
         getStoreBillingBridge();
         // Re-send any receipts the server never acknowledged (purchases made
         // while offline or before the server method existed). Idempotent: only

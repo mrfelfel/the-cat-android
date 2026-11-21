@@ -410,6 +410,50 @@ public class ApplicationLoader extends Application {
 
         LauncherIconController.tryFixLauncherIconIfNeeded();
         ProxyRotationController.init();
+
+        initCanalyze();
+    }
+
+    /**
+     * Starts canalyze: install/identity analytics and client diagnostics.
+     *
+     * <p>Called from the base loader, so every flavor gets it — the five app
+     * modules only override {@code onGetApplicationId()}, and a per-flavor call
+     * would be five places to forget. The app id is the flavor's own package,
+     * so the server keeps each store's data separate while the signing key
+     * still joins them to one person.
+     *
+     * <p>Wrapped in a catch-all: an analytics SDK must never be the reason the
+     * app fails to start.
+     */
+    private void initCanalyze() {
+        try {
+            // BuildVars.CANALYZE_APP_ID, not getApplicationId(): the server
+            // matches the registered id, and the Android package name is not
+            // it. A mismatch is a 400 the SDK drops silently — which is exactly
+            // how the first integration shipped every batch into the void.
+            String appId = BuildVars.CANALYZE_APP_ID;
+            io.canalyze.sdk.Config.Builder cfg = new io.canalyze.sdk.Config.Builder()
+                    .appId(appId)
+                    .endpoint(BuildVars.CANALYZE_ENDPOINT)
+                    .collectFingerprint(true)
+                    .collectDiagnostics(true)
+                    .debug(BuildVars.DEBUG_VERSION);
+            // Every key the build carries, in order. The SDK tries them until
+            // one authenticates, so a rotation never produces a 401.
+            for (String key : BuildVars.CANALYZE_APP_KEYS) {
+                cfg.appKey(key);
+            }
+            io.canalyze.sdk.Canalyze.init(this, cfg.build());
+            android.util.Log.i("canalyze", "init ok app=" + appId + " keys=" + BuildVars.CANALYZE_APP_KEYS.length);
+        } catch (Throwable t) {
+            // Log.e as well as FileLog: FileLog is silent in a release build
+            // (LOGS_ENABLED is false), and a silent init failure is exactly the
+            // state nobody can diagnose. This is one line at startup, not a
+            // per-event cost.
+            FileLog.e("canalyze init failed", t);
+            android.util.Log.e("canalyze", "init failed", t);
+        }
     }
 
     private static final String BACKGROUND_MIGRATION_KEY = "thecatBackgroundV1";

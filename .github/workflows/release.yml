@@ -37,7 +37,55 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  catnet:
+    # The AAR is a build output the repo links as a plain file. Build it here
+    # rather than reuse the committed one, so a release can never ship a
+    # catnet older than the source it was cut from. Its own workflow
+    # (catnet-aar.yml) covers ordinary pushes; this is the release guard.
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: network-base/go.mod
+          cache-dependency-path: network-base/go.sum
+
+      - name: Set up NDK
+        env:
+          NDK_VERSION: '27.2.12479018'
+        run: |
+          set -euo pipefail
+          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --install "ndk;$NDK_VERSION" > /dev/null
+          echo "ANDROID_NDK_HOME=$ANDROID_HOME/ndk/$NDK_VERSION" >> "$GITHUB_ENV"
+
+      - name: Build the AAR
+        run: scripts/build-catnet-aar.sh
+
+      - name: Check the Java API matches the app
+        run: |
+          set -euo pipefail
+          # The app's javac is the first thing that would notice a missing or
+          # wrongly packaged class, 40 minutes into the native build.
+          unzip -p TMessagesProj/libs/catnet.aar classes.jar > /tmp/classes.jar
+          unzip -Z1 /tmp/classes.jar | grep -qx 'org/telegram/thecat/catnet/mobile/Client.class' || {
+            echo "ERROR: CatNetResolver imports org.telegram.thecat.catnet.mobile.*, which the AAR does not contain"
+            exit 1
+          }
+
+      - name: Hand the AAR to the build job
+        uses: actions/upload-artifact@v4
+        with:
+          name: catnet-aar
+          path: TMessagesProj/libs/catnet.aar
+          if-no-files-found: error
+
   build:
+    needs: catnet
     runs-on: ubuntu-latest
     outputs:
       version: ${{ steps.meta.outputs.version }}
@@ -47,6 +95,12 @@ jobs:
         uses: actions/checkout@v4
         with:
           submodules: recursive
+
+      - name: Fetch the freshly built AAR
+        uses: actions/download-artifact@v4
+        with:
+          name: catnet-aar
+          path: TMessagesProj/libs
 
       - name: Set up JDK 17
         uses: actions/setup-java@v4
@@ -72,9 +126,14 @@ jobs:
           ORG_GRADLE_PROJECT_RELEASE_KEY_PASSWORD: ${{ secrets.RELEASE_KEY_PASSWORD }}
           ORG_GRADLE_PROJECT_RELEASE_STORE_PASSWORD: ${{ secrets.RELEASE_STORE_PASSWORD }}
         run: |
+          # The dev variant is <abi>DevStandalone, NOT <abi>DevRelease:
+          # `release` is an implicit AGP build type here, with no signingConfig
+          # and no standalone sourceSet, so a build on it produces an APK that
+          # installs nowhere. See docs/DEV_FLAVOR_PORT_PROBE.md.
           ./gradlew --no-daemon \
             :TMessagesProj_AppStandalone:assembleAarmStoreStandalone \
             :TMessagesProj_AppStandalone:assembleAfatStoreStandalone \
+            :TMessagesProj_AppStandalone:assembleAarmDevStandalone \
             :TMessagesProj_AppStandalone:bundleAfatStoreStandalone \
             :TMessagesProj_AppBazaar:assembleAarmStoreBazaar \
             :TMessagesProj_AppBazaar:assembleAfatStoreBazaar \
@@ -111,8 +170,13 @@ jobs:
           BAZAAR_FAT="$(pick TMessagesProj_AppBazaar/build/outputs/apk app.apk afatStore)"
           BAZAAR_AAB="$(pick TMessagesProj_AppBazaar/build/outputs/bundle app.aab)"
           [ -n "$BAZAAR_AAB" ] || BAZAAR_AAB="$(pick TMessagesProj_AppBazaar/build/outputs '*.aab')"
+          # Dev ships in the release too. Its name carries "DEV" so it can never
+          # be mistaken for the store APK; the applicationId differs
+          # (com.thecat.messenger.dev, installs side by side) and it talks to the
+          # dev backend on :30098, not production on :30001.
+          DEV_ARM="$(pick TMessagesProj_AppStandalone/build/outputs/apk app.apk aarmDev)"
 
-          for f in "$STAND_ARM" "$STAND_FAT" "$STAND_AAB" "$BAZAAR_ARM" "$BAZAAR_FAT" "$BAZAAR_AAB"; do
+          for f in "$STAND_ARM" "$STAND_FAT" "$STAND_AAB" "$BAZAAR_ARM" "$BAZAAR_FAT" "$BAZAAR_AAB" "$DEV_ARM"; do
             [ -n "$f" ] && [ -f "$f" ] || { echo "ERROR: artifact not found (see tree above)"; exit 1; }
           done
 
@@ -123,6 +187,7 @@ jobs:
           cp "$BAZAAR_ARM" "dist/TheCat-$VERSION-Bazaar-ARM-ZeroHub.apk"
           cp "$BAZAAR_FAT" "dist/TheCat-$VERSION-Bazaar-ZeroHub.apk"
           cp "$BAZAAR_AAB" "dist/TheCat-$VERSION-Bazaar-ZeroHub.aab"
+          cp "$DEV_ARM"    "dist/TheCat-$VERSION-DEV-Standalone-ARM-ZeroHub.apk"
 
           APKSIGNER="$ANDROID_HOME/build-tools/36.0.0/apksigner"
           for apk in dist/*.apk; do
@@ -132,10 +197,43 @@ jobs:
             unzip -p "$apk" 'classes*.dex' | strings | grep -q 'catnet/mobile' \
               || { echo "catnet classes missing in $apk"; exit 1; }
           done
+          # The Bazaar receipt RPC is defined in the :TMessagesProj library but
+          # referenced only by the Bazaar app module, so the library's own R8 pass
+          # strips it unless kept there. That is silent at build time and only
+          # surfaces as NoClassDefFoundError after a user has paid, so assert it.
+          for apk in dist/*Bazaar*.apk; do
+            unzip -p "$apk" 'classes*.dex' | strings | grep -q 'TL_payments_assignBazaarTransaction' \
+              || { echo "Bazaar receipt RPC stripped from $apk"; exit 1; }
+          done
+
           for aab in dist/*.aab; do
             unzip -l "$aab" | grep -q 'base/lib/.*libgojni.so' \
               || { echo "catnet native lib missing in $aab"; exit 1; }
           done
+
+          # Dev-specific checks, beyond the generic signature/catnet loop above
+          # which already covered it as part of dist/*.apk. The failure this
+          # guards against: an APK built on the implicit `release` build type is
+          # unsigned and lacks the standalone AndroidManifest, so it installs
+          # nowhere. Both are silent until a device rejects it, so assert the
+          # manifest content here.
+          # apkanalyzer is found rather than assumed for the same reason
+          # sdkmanager is: cmdline-tools is not reliably under `latest`.
+          DEV_APK="dist/TheCat-$VERSION-DEV-Standalone-ARM-ZeroHub.apk"
+          APKANALYZER="$(find "$ANDROID_HOME/cmdline-tools" -name apkanalyzer -type f 2>/dev/null | head -1)"
+          [ -n "$APKANALYZER" ] || { echo "apkanalyzer not found under $ANDROID_HOME"; exit 1; }
+          # Distinguish "the tool did not run" from "the APK is wrong": the first
+          # is an infrastructure problem that must not be reported as a bad build,
+          # and vice versa.
+          DEV_MANIFEST="$("$APKANALYZER" manifest print "$DEV_APK" 2>/dev/null)" || {
+            echo "apkanalyzer failed to read $DEV_APK (tool problem, not a build problem)"; exit 1; }
+          [ -n "$DEV_MANIFEST" ] || {
+            echo "apkanalyzer produced no manifest for $DEV_APK (tool problem)"; exit 1; }
+          echo "$DEV_MANIFEST" | grep -q 'package="com.thecat.messenger.dev"' \
+            || { echo "dev APK has the wrong applicationId"; exit 1; }
+          echo "$DEV_MANIFEST" | grep -q 'permission.READ_CALL_LOG' \
+            || { echo "dev APK lacks the standalone manifest (READ_CALL_LOG) — wrong build type"; exit 1; }
+
           ls -la dist/
 
       - name: Keep build outputs

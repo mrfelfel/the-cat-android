@@ -21,11 +21,10 @@
     public org.telegram.messenger.billing.StoreBillingBridge getStoreBillingBridge();
 }
 
-# R8's "missing classes" check false-positives on this TL schema class: it IS
-# compiled into the :TMessagesProj library (TLRPC$TL_payments_assignBazaarTransaction
-# is present in the release output) and is referenced directly by
-# BazaarReceiptQueue / BazaarBillingBridge, so it is kept and shipped. Only the
-# standalone flavour never references it (nothing there uses the Bazaar receipt
-# path), which is why this surfaces only here. R8 itself generated this rule in
-# build/outputs/mapping/.../missing_rules.txt.
--dontwarn org.telegram.tgnet.TLRPC$TL_payments_assignBazaarTransaction
+# The Bazaar receipt RPC needs no rule HERE -- it is defined in the :TMessagesProj
+# library, and only the library's own R8 pass can strip it, so the keep lives in
+# TMessagesProj/proguard-rules.pro. There used to be a `-dontwarn` for it in this
+# file claiming R8 false-positived; it did not. R8 was reporting the class as
+# genuinely missing from the library's output, and suppressing the warning let
+# the Bazaar build ship and crash with NoClassDefFoundError on the first receipt.
+# Do not reintroduce it.

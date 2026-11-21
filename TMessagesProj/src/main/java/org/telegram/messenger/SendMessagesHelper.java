@@ -1705,6 +1705,14 @@ public class SendMessagesHelper extends BaseController implements NotificationCe
     }
 
     public boolean retrySendMessage(MessageObject messageObject, boolean unsent, long payStars) {
+        // canalyze: a send that is retried is a network or server problem the
+        // user felt. Counting it here catches the retries the user triggered
+        // and the ones the app triggered on its own, which is the difference
+        // between "the user tapped again" and "the client is stuck".
+        try {
+            io.canalyze.sdk.Diagnostics.retry("sendMessage", unsent ? 2 : 1);
+        } catch (Throwable ignored) {
+        }
         if (messageObject.getId() >= 0) {
             if (messageObject.isEditing()) {
                 editMessage(messageObject, null, null, null, null, null, null, true, messageObject.hasMediaSpoilers(), messageObject);

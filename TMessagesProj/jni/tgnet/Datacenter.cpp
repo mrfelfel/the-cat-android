@@ -334,7 +334,7 @@ int32_t Datacenter::getCurrentPort(uint32_t flags) {
     }
     TcpAddress *address = &((*addresses) [currentAddressNum]);
     int32_t port;
-    if (!address->secret.empty()) {
+    if (!address->secret.empty() || !probePortsEnabled) {
         port = -1;
     } else {
         port = defaultPorts[currentPortNum];
@@ -404,7 +404,9 @@ void Datacenter::nextAddressOrPort(uint32_t flags) {
     }
 
     bool tryNextPort = true;
-    if ((flags & TcpAddressFlagStatic) == 0 && currentAddressNum < addresses->size()) {
+    if (!probePortsEnabled) {
+        tryNextPort = false;
+    } else if ((flags & TcpAddressFlagStatic) == 0 && currentAddressNum < addresses->size()) {
         TcpAddress *currentAddress = &((*addresses)[currentAddressNum]);
         tryNextPort = (currentAddress->flags & TcpAddressFlagStatic) == 0;
     }
@@ -439,6 +441,10 @@ void Datacenter::nextAddressOrPort(uint32_t flags) {
             currentAddressNumIpv4 = currentAddressNum;
         }
     }
+}
+
+void Datacenter::setProbePortsEnabled(bool enabled) {
+    probePortsEnabled = enabled;
 }
 
 bool Datacenter::isCustomPort(uint32_t flags) {

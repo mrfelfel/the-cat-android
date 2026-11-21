@@ -19,6 +19,7 @@
 #include "Datacenter.h"
 #include "NativeByteBuffer.h"
 #include "ByteArray.h"
+#include "NetPolicy.h"
 
 thread_local static uint32_t lastConnectionToken = 1;
 
@@ -141,7 +142,20 @@ void Connection::onReceivedData(NativeByteBuffer *buffer) {
             } else if (connectionType == ConnectionTypeDownload) {
                 setTimeout(25);
             } else {
-                setTimeout(currentTimeout);
+                // First byte of the reply is in, but the MTProto handshake may
+                // still be running. While it is, the budget has to stay
+                // generous — this is the timer that used to fire at 4 s and
+                // restart the handshake forever on a slow link.
+                ConnectionsManager *manager = &ConnectionsManager::getInstance(currentDatacenter->instanceNum);
+                if (currentDatacenter->isHandshakingAny()) {
+                    setTimeout(NetPolicy::handshakeTimeout(manager->networkProfile));
+                } else if (wasConnected) {
+                    setTimeout(NetPolicy::establishedTimeout(manager->networkProfile, reconnectAttempts));
+                } else {
+                    // No handshake and never connected: still pre-establishment,
+                    // so use the generous budget rather than the short one.
+                    setTimeout(NetPolicy::handshakeTimeout(manager->networkProfile));
+                }
             }
         }
         hasSomeDataSinceLastConnect = true;
@@ -380,11 +394,9 @@ void Connection::connect() {
             setTimeout(25);
         }
     } else {
-        if (isTryingNextPort) {
-            setTimeout(8);
-        } else {
-            setTimeout(12);
-        }
+        setTimeout(NetPolicy::connectTimeout(
+                ConnectionsManager::getInstance(currentDatacenter->instanceNum).networkProfile,
+                isTryingNextPort));
     }
     connectionInProcess = false;
 }
@@ -714,7 +726,16 @@ void Connection::onDisconnectedInternal(int32_t reason, int32_t error) {
             waitForReconnectTimer = false;
             if (connectionType == ConnectionTypeGenericMedia && currentDatacenter->isHandshaking(true) || connectionType == ConnectionTypeGeneric && (currentDatacenter->isHandshaking(false) || datacenterId == ConnectionsManager::getInstance(currentDatacenter->instanceNum).currentDatacenterId || datacenterId == ConnectionsManager::getInstance(currentDatacenter->instanceNum).movingToDatacenterId)) {
                 if (LOGS_ENABLED) DEBUG_D("connection(%p, account%u, dc%u, type %d) reconnect %s:%hu", this, currentDatacenter->instanceNum, currentDatacenter->getDatacenterId(), connectionType, hostAddress.c_str(), hostPort);
-                reconnectTimer->setTimeout(1000, false);
+                ConnectionsManager *manager = &ConnectionsManager::getInstance(currentDatacenter->instanceNum);
+                // Backs off instead of retrying every second forever, and
+                // jitters so a carrier-wide drop does not bring every client
+                // back at the same instant. fast profile: 1 s, unchanged.
+                uint8_t noise;
+                RAND_bytes(&noise, 1);
+                reconnectTimer->setTimeout(
+                        NetPolicy::reconnectDelay(manager->networkProfile, reconnectAttempts, noise % 41),
+                        false);
+                reconnectAttempts++;
                 reconnectTimer->start();
             }
         }
@@ -736,8 +757,22 @@ void Connection::onConnected() {
     connectionState = TcpConnectionStageConnected;
     connectionToken = lastConnectionToken++;
     wasConnected = true;
+    // The link works again, so the next drop starts its backoff from the bottom.
+    reconnectAttempts = 1;
     if (LOGS_ENABLED) DEBUG_D("connection(%p, account%u, dc%u, type %d) connected to %s:%hu", this, currentDatacenter->instanceNum, currentDatacenter->getDatacenterId(), connectionType, hostAddress.c_str(), hostPort);
     ConnectionsManager::getInstance(currentDatacenter->instanceNum).onConnectionConnected(this);
+}
+
+void Connection::onNetworkProfileChanged(int32_t profile) {
+    // Budget the old link earned does not carry over; start the backoff from
+    // the bottom so a move to a better link recovers immediately instead of
+    // waiting out a delay the worse link had accumulated.
+    reconnectAttempts = 1;
+    if (connectionState == TcpConnectionStageConnected && currentDatacenter->isHandshakingAny()) {
+        setTimeout(NetPolicy::handshakeTimeout(profile));
+    } else if (connectionState == TcpConnectionStageConnecting) {
+        setTimeout(NetPolicy::connectTimeout(profile, isTryingNextPort));
+    }
 }
 
 bool Connection::hasPendingRequests() {

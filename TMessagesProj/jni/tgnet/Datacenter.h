@@ -36,6 +36,12 @@ public:
     void addAddressAndPort(std::string address, uint32_t port, uint32_t flags, std::string secret);
     void nextAddressOrPort(uint32_t flags);
     bool isCustomPort(uint32_t flags);
+    // Non-dev builds rotate through defaultPorts (index 1 == 2398) so a hardcoded
+    // client port does not stall the first connect. The dev flavor must never
+    // probe it: prod listens on that same host:2398, so a dev client whose own
+    // endpoint is down would reach prod, get AUTH_KEY_UNREGISTERED and log
+    // itself out. Set once from ConnectionsManager::applyServerConfig.
+    void setProbePortsEnabled(bool enabled);
     void storeCurrentAddressAndPortNum();
     void replaceAddresses(std::vector<TcpAddress> &newAddresses, uint32_t flags);
     void serializeToStream(NativeByteBuffer *stream);
@@ -82,6 +88,7 @@ private:
     ByteArray *getAuthKey(ConnectionType connectionType, bool perm, int64_t *authKeyId, int32_t allowPendingKey);
 
     const int32_t *defaultPorts = new int32_t[4] {-1, 2398, -1, -1};
+    bool probePortsEnabled = true;
 
     int32_t instanceNum;
     uint32_t datacenterId;

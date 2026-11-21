@@ -34,6 +34,12 @@ dependencies {
     // gomobile address-resolver from the-cat-network-base (network-base/); see
     // org.telegram.thecat.CatNetResolver. `api` so it reaches the APK too.
     api files('libs/catnet.aar')
+    // canalyze: install/identity analytics and client diagnostics. Declared
+    // here, in the library every flavor depends on, so all five app modules
+    // (App, AppBazaar, AppHuawei, AppHockeyApp, AppStandalone) get it without
+    // each one repeating the dependency. `api` so the app modules can call
+    // Canalyze directly.
+    api files('libs/canalyze-sdk.aar')
     implementation 'androidx.core:core:1.16.0'
     implementation 'androidx.palette:palette:1.0.0'
     implementation 'androidx.exifinterface:exifinterface:1.3.6'

@@ -63,7 +63,7 @@ public:
     //  - Telegram (isTelegram=true): restore real Telegram DC 1..5, leave options unlocked
     // Sets the per-instance RSA key, switches the current DC, optionally resets auth keys,
     // then reconnects. Runs on the network thread.
-    void applyServerConfig(std::string host, uint32_t port, bool isTelegram, uint32_t mainDcId, std::string pemKey, uint64_t fingerprint, bool resetKeys);
+    void applyServerConfig(std::string host, uint32_t port, bool isTelegram, uint32_t mainDcId, std::string pemKey, uint64_t fingerprint, bool resetKeys, bool probePorts);
     void setDelegate(ConnectiosManagerDelegate *connectiosManagerDelegate);
     ConnectionState getConnectionState();
     void setUserId(int64_t userId);
@@ -72,8 +72,9 @@ public:
     void resumeNetwork(bool partial);
     void pauseNetwork();
     void setNetworkAvailable(bool value, int32_t type, bool slow);
+    void setNetworkProfile(int32_t profile);
     void setIpStrategy(uint8_t value);
-    void init(uint32_t version, int32_t layer, int32_t apiId, std::string deviceModel, std::string systemVersion, std::string appVersion, std::string langCode, std::string systemLangCode, std::string configPath, std::string logPath, std::string regId, std::string cFingerprint, std::string installerId, std::string packageId, int32_t timezoneOffset, int64_t userId, bool userPremium, bool isPaused, bool enablePushConnection, bool hasNetwork, int32_t networkType, int32_t performanceClass);
+    void init(uint32_t version, int32_t layer, int32_t apiId, std::string deviceModel, std::string systemVersion, std::string appVersion, std::string langCode, std::string systemLangCode, std::string configPath, std::string logPath, std::string regId, std::string cFingerprint, std::string installerId, std::string packageId, int32_t timezoneOffset, int64_t userId, bool userPremium, bool isPaused, bool enablePushConnection, bool hasNetwork, int32_t networkType, int32_t performanceClass, bool probePorts);
     void setProxySettings(std::string address, uint16_t port, std::string username, std::string password, std::string secret);
     void setLangCode(std::string langCode);
     void setRegId(std::string regId);
@@ -157,6 +158,10 @@ private:
     // When true (single-server backend), help.getConfig must not overwrite the
     // locked DC 1..5 -> host:port mapping. Mirrors desktop DcOptions::optionsLocked.
     bool serverOptionsLocked = false;
+    // Applied to every Datacenter this manager creates or re-maps, including the
+    // prod-seed from initDatacenters that runs before applyServerConfig. See
+    // Datacenter::setProbePortsEnabled for why the dev flavor turns it off.
+    bool probePortsEnabled = true;
     bool clientBlocked = true;
     std::string lastInitSystemLangcode = "";
     std::atomic<uint32_t> lastRequestToken{50000000};
@@ -214,6 +219,13 @@ private:
     int64_t lastOutgoingMessageId = 0;
     bool networkAvailable = true;
     bool networkSlow = false;
+    // How slow the current link is, from NetworkProfile on the Java side:
+    // 0 unknown, 1 2G, 2 3G, 3 fast. Drives the handshake and reconnect
+    // timers; 3 (and unknown 0) keep the values every earlier release used.
+    int32_t networkProfile = NETWORK_PROFILE_UNKNOWN;
+    // Connections this manager owns are told to re-read the profile after it
+    // changes, so an in-flight handshake is judged by the new link's budget.
+    void applyNetworkProfileToConnections();
     uint8_t ipStrategy = USE_IPV4_ONLY;
     bool lastProtocolIsIpv6 = false;
     bool lastProtocolUsefullData = false;

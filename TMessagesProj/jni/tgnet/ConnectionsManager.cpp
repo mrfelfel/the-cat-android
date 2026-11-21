@@ -552,6 +552,7 @@ void ConnectionsManager::loadConfig() {
                 count = buffer->readUint32(nullptr);
                 for (uint32_t a = 0; a < count; a++) {
                     auto datacenter = new Datacenter(instanceNum, buffer);
+                    datacenter->setProbePortsEnabled(probePortsEnabled);
                     datacenters[datacenter->getDatacenterId()] = datacenter;
                     if (LOGS_ENABLED) DEBUG_D("datacenter(%p) %u loaded (hasAuthKey = %d, 0x%" PRIx64 ")", datacenter, datacenter->getDatacenterId(), (int) datacenter->hasPermanentAuthKey(), datacenter->getPermanentAuthKeyId());
                     if (datacenter->isCdnDatacenter && !datacenter->hasPermanentAuthKey()) {
@@ -1970,14 +1971,15 @@ void ConnectionsManager::initDatacenters() {
     for (int dcId = 1; dcId <= 5; dcId++) {
         if (datacenters.find(dcId) == datacenters.end()) {
             Datacenter *datacenter = new Datacenter(instanceNum, dcId);
+            datacenter->setProbePortsEnabled(probePortsEnabled);
             datacenter->addAddressAndPort(seedIp, seedPort, 0, "");
             datacenters[dcId] = datacenter;
         }
     }
 }
 
-void ConnectionsManager::applyServerConfig(std::string host, uint32_t port, bool isTelegram, uint32_t mainDcId, std::string pemKey, uint64_t fingerprint, bool resetKeys) {
-    scheduleTask([&, host, port, mainDcId, pemKey, fingerprint, resetKeys] {
+void ConnectionsManager::applyServerConfig(std::string host, uint32_t port, bool isTelegram, uint32_t mainDcId, std::string pemKey, uint64_t fingerprint, bool resetKeys, bool probePorts) {
+    scheduleTask([&, host, port, mainDcId, pemKey, fingerprint, resetKeys, probePorts] {
         // 1. Per-instance RSA key. Cleared thread_local cache so the next handshake
         //    reloads it (Handshake::serverPublicKeys is shared across accounts).
         //    fingerprint == 0 means the caller doesn't know it (custom server with
@@ -1995,12 +1997,14 @@ void ConnectionsManager::applyServerConfig(std::string host, uint32_t port, bool
         //    build (or by the old DNS-config path) cannot survive, and the
         //    lock stops help.getConfig from overriding the endpoint.
         serverOptionsLocked = true;
+        probePortsEnabled = probePorts;
         for (int dcId = 1; dcId <= 5; dcId++) {
             Datacenter *dc = getDatacenterWithId(dcId);
             if (dc == nullptr) {
                 dc = new Datacenter(instanceNum, dcId);
                 datacenters[dcId] = dc;
             }
+            dc->setProbePortsEnabled(probePortsEnabled);
             std::vector<TcpAddress> addrs;
             addrs.emplace_back(host, port, 0, "");
             std::vector<TcpAddress> downloadAddrs;
@@ -3595,6 +3599,7 @@ void ConnectionsManager::updateDcSettings(uint32_t dcNum, bool workaround, bool 
                     DatacenterInfo *info = iter.second.get();
                     if (datacenter == nullptr) {
                         datacenter = new Datacenter(instanceNum, iter.first);
+                        datacenter->setProbePortsEnabled(probePortsEnabled);
                         datacenters[iter.first] = datacenter;
                     }
                     datacenter->replaceAddresses(info->addressesIpv4, info->isCdn ? 8 : 0);
@@ -3718,7 +3723,11 @@ void ConnectionsManager::setPushConnectionEnabled(bool value) {
     }
 }
 
-void ConnectionsManager::init(uint32_t version, int32_t layer, int32_t apiId, std::string deviceModel, std::string systemVersion, std::string appVersion, std::string langCode, std::string systemLangCode, std::string configPath, std::string logPath, std::string regId, std::string cFingerpting, std::string installerId, std::string packageId, int32_t timezoneOffset, int64_t userId, bool userPremium, bool isPaused, bool enablePushConnection, bool hasNetwork, int32_t networkType, int32_t performanceClass) {
+void ConnectionsManager::init(uint32_t version, int32_t layer, int32_t apiId, std::string deviceModel, std::string systemVersion, std::string appVersion, std::string langCode, std::string systemLangCode, std::string configPath, std::string logPath, std::string regId, std::string cFingerpting, std::string installerId, std::string packageId, int32_t timezoneOffset, int64_t userId, bool userPremium, bool isPaused, bool enablePushConnection, bool hasNetwork, int32_t networkType, int32_t performanceClass, bool probePorts) {
+    // Set before loadConfig(): that call starts the network thread and creates
+    // the datacenters, so a dev build has to be probe-free from its first
+    // native instruction rather than from the later applyServerConfig.
+    probePortsEnabled = probePorts;
     currentVersion = version;
     currentLayer = layer;
     currentApiId = apiId;
@@ -3928,6 +3937,33 @@ void ConnectionsManager::setNetworkAvailable(bool value, int32_t type, bool slow
             delegate->onConnectionStateChanged(connectionState, instanceNum);
         }
     });
+}
+
+void ConnectionsManager::setNetworkProfile(int32_t profile) {
+    scheduleTask([&, profile] {
+        if (networkProfile == profile) {
+            return;
+        }
+        if (LOGS_ENABLED) DEBUG_D("network profile %d -> %d", networkProfile, profile);
+        networkProfile = profile;
+        // The link changed class. Whatever budget the old link earned does not
+        // apply to the new one, so every connection re-derives its timer and
+        // the address/port index goes back to the first entry the server
+        // advertised — the point that failed on 2G may be the only one that
+        // works on WiFi, and vice versa.
+        for (auto &datacenter : datacenters) {
+            datacenter.second->resetAddressAndPortNum();
+        }
+        applyNetworkProfileToConnections();
+    });
+}
+
+void ConnectionsManager::applyNetworkProfileToConnections() {
+    for (ConnectionSocket *socket : activeConnections) {
+        if (socket != nullptr) {
+            socket->onNetworkProfileChanged(networkProfile);
+        }
+    }
 }
 
 void ConnectionsManager::setIpStrategy(uint8_t value) {

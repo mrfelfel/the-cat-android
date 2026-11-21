@@ -30,6 +30,10 @@ public:
     void openConnection(std::string address, uint16_t port, std::string secret, bool ipv6, int32_t networkType);
     void setTimeout(time_t timeout);
     time_t getTimeout();
+    // Called when the link class changes, so an in-flight connection is judged
+    // by the new link's budget instead of the one it started under. No-op on
+    // the base class; Connection overrides it.
+    virtual void onNetworkProfileChanged(int32_t profile) {}
     bool isDisconnected();
     void dropConnection();
     void setOverrideProxy(std::string address, uint16_t port, std::string username, std::string password, std::string secret);

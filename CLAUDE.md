@@ -32,4 +32,24 @@ The Bazaar store bridge is a lazily-created virtual override: `ApplicationLoader
 
 **Keep rules for this chain live in the LIBRARY's `TMessagesProj/proguard-rules.pro`** — the library runs its own R8 pass (`minifyReleaseWithR8`) that cannot see app-module subclasses, and has twice constant-folded unkept variants of this chain to null/false (isAvailable() hardcoded false → every store purchase silently fell through to the invoice WebView). App-module keep rules never reach that pass. Do not move or delete the library-side rules.
 
+## canalyze SDK (R8-sensitive, same failure mode)
+
+`TMessagesProj/libs/canalyze-sdk.aar` is an `api` dependency of the library, and
+`ApplicationLoader.initCanalyze()` starts it. Its keep rules are in the
+**library's** `proguard-rules.pro` for the same reason as the billing bridge: the
+library's own R8 pass cannot see app-module rules, and the crash handler is
+installed on a thread R8 cannot see. Without them a release build strips the
+handler and every crash goes unreported while debug looks fine.
+
+Verify on any release APK:
+
+```bash
+unzip -p app.apk classes.dex | strings | grep -c installCrashHandler   # must be >= 1
+unzip -p app.apk classes.dex | strings | grep -c io/canalyze/sdk       # must be >= 1
+```
+
+`BuildVars.CANALYZE_APP_KEYS` is an array on purpose — the SDK tries the keys in
+order and stops at the first that is not 401, so a rotation never cuts off a
+build that carries both. Full details in `docs/CANALYZE_INTEGRATION.md`.
+
 Verify any billing change on the built APK before shipping: `apkanalyzer dex code --class org.telegram.messenger.billing.StoreBilling <apk>` — `get()` must end in `invoke-virtual ... getStoreBillingBridge` + `move-result`/`areturn`, not a constant null. Also check `javap` on `TMessagesProj/build/intermediates/shrunk_classes/release/minifyReleaseWithR8/shrunkClasses.jar`.

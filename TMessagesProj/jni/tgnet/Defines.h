@@ -43,6 +43,13 @@
 #define NETWORK_TYPE_WIFI 1
 #define NETWORK_TYPE_ROAMING 2
 
+// Mirrors NetworkProfile on the Java side. UNKNOWN deliberately keeps the
+// historical timings: a link we could not measure must not change behaviour.
+#define NETWORK_PROFILE_UNKNOWN 0
+#define NETWORK_PROFILE_2G 1
+#define NETWORK_PROFILE_3G 2
+#define NETWORK_PROFILE_FAST 3
+
 class TLObject;
 class TL_error;
 class Request;
