@@ -246,6 +246,10 @@
     const size = version * 4 + 17;
     const m = Array.from({ length: size }, () => new Array(size).fill(null));
     const reserved = Array.from({ length: size }, () => new Array(size).fill(false));
+    // Which data bit lands in which module. The panel needs this to tell how
+    // many Reed-Solomon codewords a degraded image actually damaged, which is
+    // the only honest way to say whether a code still decodes.
+    const bitIndex = Array.from({ length: size }, () => new Array(size).fill(-1));
 
     const set = (x, y, v) => { if (x >= 0 && y >= 0 && x < size && y < size) { m[y][x] = v; reserved[y][x] = true; } };
 
@@ -308,13 +312,14 @@
             bit = (codewords[bitIdx >> 3] >> (7 - (bitIdx & 7))) & 1;
           }
           m[y][x] = bit;
+          bitIndex[y][x] = bitIdx;
           bitIdx++;
         }
       }
       upward = !upward;
     }
 
-    return { m, size };
+    return { m, size, bitIndex };
   }
 
   const MASKS = [
@@ -441,7 +446,7 @@
     const data = encodeData(bytes, version, ecc);
     if (!data) throw new Error("data too long for a QR code");
     const codewords = interleave(data, version, ecc);
-    const { m, size } = buildMatrix(version, ecc, codewords);
+    const { m, size, bitIndex } = buildMatrix(version, ecc, codewords);
 
     // Choose the mask with the lowest penalty.
     let best = null, bestScore = Infinity;
@@ -457,8 +462,13 @@
       const s = penalty(trial, size);
       if (s < bestScore) { bestScore = s; best = trial; }
     }
-    return { modules: best, size };
+    return { modules: best, size, bitIndex, version, ecc };
   }
 
-  global.QR = { encode };
+  global.QR = {
+    encode,
+    // [ecCodewordsPerBlock, group1Blocks, group2Blocks]
+    blockSchema: (version, ecc) => BLOCKS[version][ECC[ecc]],
+    dataCodewords: (version, ecc) => dataCapacity(version, ecc),
+  };
 })(window);

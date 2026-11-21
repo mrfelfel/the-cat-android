@@ -112,6 +112,12 @@
         <span><b>مقاوم (QR)</b> — خروجی PNG/JPEG/WebP، کیفیت قابل کاهش، متن روی عکس دیده می‌شود.</span>
       </label>
     </div>
+    <div class="row" style="gap:10px">
+      <label for="finalWidth" style="margin:0;color:var(--text);font-size:13px;white-space:nowrap">عرض نهایی هنگام رسیدن</label>
+      <input type="number" id="finalWidth" value="1280" min="480" max="4096" step="40"
+             style="width:110px;background:#10131a;color:var(--text);border:1px solid var(--line);border-radius:8px;padding:8px 10px;font:inherit">
+      <span style="color:var(--dim);font-size:12.5px">پیکسل — عکس روی این عرض کوچک می‌شود، پس کد باید در همین اندازه خوانا بماند</span>
+    </div>
     <div class="note" id="modeNote">
       اگر قرار است عکس از توییتر، اینستاگرام یا هر جایی رد شود که خودش دوباره فشرده می‌کند، حالت <b>QR</b> را انتخاب کنید. JPEG هیچ داده‌ی پنهانی را نگه نمی‌دارد — حتی با کیفیت ۱۰۰٪.
     </div>
@@ -120,12 +126,18 @@
   <div class="panel">
     <div class="row">
       <button id="build" disabled>ساختن عکس</button>
-      <button class="ghost" id="download" disabled>ذخیره خروجی</button>
+      <button class="ghost" id="download" disabled>ذخیره PNG</button>
+      <button class="ghost" id="downloadJpeg" disabled>ذخیره JPEG برای ایتا</button>
     </div>
     <div class="status" id="status"></div>
+    <div class="note" id="testNote" style="display:none">
+      تصویر پایین همان چیزی است که <b>پس از</b> کوچک‌شدن و بازفشرده‌سازی به دست کاربر می‌رسد. اگر کد در آن خوانا دیده شود، در اپ هم خوانده می‌شود.
+    </div>
+    <canvas id="arrived"></canvas>
     <div class="note">
-      خروجی همیشه <b>PNG</b> است. JPEG بیت‌های کم‌ارزش را بازنویسی می‌کند و داده را از بین می‌برد؛
-      WebP تنها اگر بدون اتلاف ذخیره شود امن است. عکس را هرگز دوباره فشرده نکنید.
+      برای حالت <b>نامرئی</b> فقط PNG بردارید: JPEG بیت‌های کم‌ارزش را بازنویسی می‌کند و داده را از بین می‌برد.
+      برای حالت <b>QR</b>، فایل JPEG برای ایتا جدا ساخته می‌شود — چون ایتا تصویر بدون سگمنت JFIF را
+      قبول می‌کند ولی خراب نشان می‌دهد.
     </div>
   </div>
 </div>
@@ -141,6 +153,8 @@ const el = (id) => document.getElementById(id);
 let carrier = null;         // { canvas, imageData, w, h }
 let lastBlob = null;
 let lastUrl = null;
+let lastJpegBlob = null;
+let lastJpegUrl = null;
 
 function say(kind, text) {
   const s = el("status");
@@ -304,6 +318,159 @@ async function build() {
 // The trade is visibility. An LSB carrier looks like a photograph; a QR
 // carrier looks like a photograph with a QR code on it. For a picture that
 // will be re-compressed by a third party, that is the only option that works.
+//
+// Two things decide survival, and neither is a percentage:
+//
+//   - The code must be big enough *in the pixels that arrive*, not in the
+//     pixels we export. A 3000px export downscaled to 1280 loses 57% of every
+//     module, so a code sized against the export can be borderline while the
+//     delivered one is unreadable.
+//   - The code must sit on a flat card. Over a textured photo, the black
+//     modules and the bright background blur together at exactly the moment
+//     JPEG discards high frequencies.
+//
+// So this builds at the delivery width, keeps every module at an integer
+// pixel count, places it on a white card, and then measures the result by
+// pushing it back through the same downscale-plus-JPEG path a chat app applies
+// — and counting Reed-Solomon codewords that actually got corrupted.
+
+const QUIET = 4;        // quiet-zone modules, per the spec's minimum
+const MIN_CELL = 3;     // pixels per module at delivery; below this JPEG wins
+
+// Mirrors interleave() in qr-encode.js, so a corrupted module can be traced
+// back to the block that has to repair it.
+function qrCodewordBlocks(version, ecc) {
+  const [ecPerBlock, g1, g2] = QR.blockSchema(version, ecc);
+  const totalData = QR.dataCodewords(version, ecc);
+  const numBlocks = g1 + g2;
+  const shortLen = Math.floor(totalData / numBlocks);
+  const numLong = totalData % numBlocks;
+  const owner = [];
+  for (let i = 0; i < shortLen + (numLong ? 1 : 0); i++) {
+    for (let b = 0; b < numBlocks; b++) {
+      const len = shortLen + (b >= numBlocks - numLong ? 1 : 0);
+      if (i < len) owner.push(b);
+    }
+  }
+  for (let i = 0; i < ecPerBlock; i++) {
+    for (let b = 0; b < numBlocks; b++) owner.push(b);
+  }
+  return { owner, numBlocks, perBlock: Math.floor(ecPerBlock / 2) };
+}
+
+// render draws the picture at the delivery size with the code on a white card,
+// and returns the canvas plus the geometry needed to sample it back.
+function render(qr, cell, outW, outH, carrierImgData) {
+  const canvas = document.createElement("canvas");
+  canvas.width = outW; canvas.height = outH;
+  const ctx = canvas.getContext("2d");
+
+  const src = document.createElement("canvas");
+  src.width = carrier.w; src.height = carrier.h;
+  src.getContext("2d").putImageData(
+    new ImageData(new Uint8ClampedArray(carrierImgData.data), carrier.w, carrier.h), 0, 0);
+  ctx.imageSmoothingEnabled = true;
+  ctx.imageSmoothingQuality = "high";
+  ctx.drawImage(src, 0, 0, outW, outH);
+
+  const card = cell * (qr.size + QUIET * 2);
+  const short = Math.min(outW, outH);
+  const margin = Math.round(short * 0.025);
+  const originX = outW - card - margin;
+  const originY = outH - card - margin;
+
+  // The card is flat white and extends past the quiet zone by half a module.
+  // JPEG ringing needs somewhere to die, and black-on-photo gives it nowhere.
+  ctx.fillStyle = "#ffffff";
+  ctx.fillRect(originX - cell / 2, originY - cell / 2, card + cell, card + cell);
+
+  ctx.fillStyle = "#000000";
+  for (let y = 0; y < qr.size; y++) {
+    for (let x = 0; x < qr.size; x++) {
+      if (!qr.modules[y][x]) continue;
+      ctx.fillRect(originX + (x + QUIET) * cell, originY + (y + QUIET) * cell, cell, cell);
+    }
+  }
+  return { canvas, geo: { originX, originY, cell, outW } };
+}
+
+// simulateArrival is the honest part: downscale to the size the image will be
+// shown at, then re-encode as JPEG at a chat app's quality. Whatever survives
+// this is what the app's decoder sees.
+async function simulateArrival(canvas, width, quality) {
+  const w = Math.min(width, canvas.width);
+  const h = Math.max(1, Math.round(canvas.height * (w / canvas.width)));
+  const scaled = document.createElement("canvas");
+  scaled.width = w; scaled.height = h;
+  const sg = scaled.getContext("2d");
+  sg.imageSmoothingEnabled = true;
+  sg.imageSmoothingQuality = "high";
+  sg.drawImage(canvas, 0, 0, w, h);
+
+  const blob = await new Promise((r) => scaled.toBlob(r, "image/jpeg", quality));
+  if (!blob) return null;
+  const url = URL.createObjectURL(blob);
+  const img = await new Promise((res, rej) => {
+    const i = new Image();
+    i.onload = () => res(i);
+    i.onerror = () => rej(new Error("تصویر شبیه‌سازی‌شده خوانده نشد"));
+    i.src = url;
+  });
+  const out = document.createElement("canvas");
+  out.width = img.naturalWidth; out.height = img.naturalHeight;
+  out.getContext("2d").drawImage(img, 0, 0);
+  URL.revokeObjectURL(url);
+  return out;
+}
+
+// measureArrival samples every module centre in the delivered image and counts
+// how many came out wrong. That is deliberately the blunt measure: this panel
+// cannot decode a QR, so it must not claim to. What it *can* say is whether the
+// pixels that arrived are still the pixels that were drawn, which is the part
+// the panel is responsible for. A module that flipped is a module the decoder
+// never had a clean look at.
+//
+// `clean` is the number that matters. ECC can absorb damage, but how much of
+// the budget a given frame actually needed is something only a real decoder
+// knows — gozxing's own detector drops readable codes at unpredictable widths
+// regardless of how few modules are wrong. So the panel reports survival and
+// leaves the verdict to the pictures shown below it.
+function measureArrival(canvas, geo, qr) {
+  const { owner } = qrCodewordBlocks(qr.version, qr.ecc);
+  const k = canvas.width / geo.outW;
+  const img = canvas.getContext("2d").getImageData(0, 0, canvas.width, canvas.height);
+  const W = img.width, H = img.height, px = img.data;
+  const cellPx = geo.cell * k;
+  const r = Math.min(1, Math.floor(cellPx / 6));
+
+  let wrong = 0, total = 0;
+  const badCodewords = new Set();
+  for (let y = 0; y < qr.size; y++) {
+    for (let x = 0; x < qr.size; x++) {
+      const bitIdx = qr.bitIndex[y][x];
+      if (bitIdx < 0) continue;
+      total++;
+      const cx = Math.round((geo.originX + (x + QUIET + 0.5) * geo.cell) * k);
+      const cy = Math.round((geo.originY + (y + QUIET + 0.5) * geo.cell) * k);
+      let sum = 0, n = 0;
+      for (let dy = -r; dy <= r; dy++) {
+        for (let dx = -r; dx <= r; dx++) {
+          const sx = Math.max(0, Math.min(W - 1, cx + dx));
+          const sy = Math.max(0, Math.min(H - 1, cy + dy));
+          const p = (sy * W + sx) * 4;
+          sum += 0.299 * px[p] + 0.587 * px[p + 1] + 0.114 * px[p + 2];
+          n++;
+        }
+      }
+      if ((sum / n < 128) !== !!qr.modules[y][x]) {
+        wrong++;
+        const cw = bitIdx >> 3;
+        if (cw < owner.length) badCodewords.add(cw);
+      }
+    }
+  }
+  return { wrong, total, badCodewords: badCodewords.size, cellPx, cleanPct: total ? 1 - wrong / total : 0 };
+}
 
 async function buildQR() {
   const docBytes = bytesOf(el("doc").value);
@@ -320,59 +487,144 @@ async function buildQR() {
     return;
   }
 
-  let qr;
-  try {
-    qr = QR.encode(bytesOf(payload), "L");
-  } catch (e) {
-    say("bad", "ساخت QR ناموفق: " + e.message);
+  // Build at the delivery width. Exporting larger and letting the host shrink
+  // it is what breaks the code, so the export *is* the delivered size.
+  const asked = parseInt(el("finalWidth").value, 10);
+  const deliveryW = Math.max(480, Math.min(4096, isNaN(asked) ? 1280 : asked));
+  const outW = Math.min(carrier.w, deliveryW);
+  const outH = Math.max(1, Math.round(carrier.h * (outW / carrier.w)));
+  const short = Math.min(outW, outH);
+  const maxCard = Math.floor(short * 0.92);
+
+  el("preview").style.display = "block";
+  el("testNote").style.display = "none";
+  say("warn", "در حال ساخت و آزمون…");
+
+  const candidates = [];
+  for (const ecc of ["Q", "M", "L"]) {
+    let qr;
+    try { qr = QR.encode(bytesOf(payload), ecc); } catch { continue; }
+    const cell = Math.floor(maxCard / (qr.size + QUIET * 2));
+    if (cell < MIN_CELL) continue;
+    const { canvas, geo } = render(qr, cell, outW, outH, carrier.imageData);
+    const arrived = await simulateArrival(canvas, outW, 0.82);
+    if (!arrived) continue;
+    const m = measureArrival(arrived, geo, qr);
+    candidates.push({ qr, cell, canvas, geo, arrived, m, ecc });
+  }
+
+  if (candidates.length === 0) {
+    const smallest = QR.encode(bytesOf(payload), "L");
+    const need = smallest.size + QUIET * 2;
+    say("bad",
+      `در عرض ${outW} پیکسل جای کد نیست: سند ${payload.length.toLocaleString("fa")} کاراکتر ` +
+      `base64 می‌شود و کوچک‌ترین کد ${smallest.size} خانه است، که با ${MIN_CELL} پیکسل هر خانه ` +
+      `${(need * MIN_CELL).toLocaleString("fa")} پیکسل عرض می‌خواهد. ` +
+      `عرض نهایی را بالا ببرید یا سند کوتاه‌تری بدهید.`);
     return;
   }
 
-  // Place the code in the lower-right corner at about 38% of the short side,
-  // with a white quiet zone so a decoder can find it.
-  const { modules, size } = qr;
+  // Prefer the largest modules, then the cleanest arrival, then the strongest
+  // ECC. Module size comes first on purpose: after a JPEG re-encode every tier
+  // measured 100% clean, so cleanliness cannot separate them — but a code with
+  // 5px modules decodes where a denser one at 4px does not, because gozxing's
+  // finder-pattern detector gives up on fine grids. Bigger is simply safer.
+  const rank = (c) => [
+    -(c.m.cellPx),
+    -c.m.cleanPct,
+    -"LMQ".indexOf(c.ecc),
+  ];
+  candidates.sort((a, b) => {
+    const ra = rank(a), rb = rank(b);
+    for (let i = 0; i < ra.length; i++) if (ra[i] !== rb[i]) return ra[i] - rb[i];
+    return 0;
+  });
+  const win = candidates[0];
+
   const canvas = el("preview");
-  canvas.width = carrier.w;
-  canvas.height = carrier.h;
-  canvas.style.display = "block";
-  const ctx = canvas.getContext("2d");
+  canvas.width = outW; canvas.height = outH;
+  canvas.getContext("2d").drawImage(win.canvas, 0, 0);
 
-  const src = carrier.imageData;
-  const tmp = document.createElement("canvas");
-  tmp.width = carrier.w; tmp.height = carrier.h;
-  tmp.getContext("2d").putImageData(new ImageData(new Uint8ClampedArray(src.data), carrier.w, carrier.h), 0, 0);
-  ctx.drawImage(tmp, 0, 0);
+  const shown = el("arrived");
+  shown.style.display = "block";
+  shown.width = win.arrived.width;
+  shown.height = win.arrived.height;
+  shown.getContext("2d").drawImage(win.arrived, 0, 0);
+  el("testNote").style.display = "block";
 
-  const side = Math.min(carrier.w, carrier.h);
-  const target = Math.round(side * 0.38);
-  const quiet = 4;
-  const cell = target / (size + quiet * 2);
-  const originX = carrier.w - target - Math.round(side * 0.02);
-  const originY = carrier.h - target - Math.round(side * 0.02);
-
-  ctx.fillStyle = "#ffffff";
-  ctx.fillRect(originX, originY, target, target);
-  ctx.fillStyle = "#000000";
-  for (let y = 0; y < size; y++) {
-    for (let x = 0; x < size; x++) {
-      if (!modules[y][x]) continue;
-      const px = originX + (x + quiet) * cell;
-      const py = originY + (y + quiet) * cell;
-      ctx.fillRect(Math.floor(px), Math.floor(py), Math.ceil(cell), Math.ceil(cell));
-    }
-  }
-
-  canvas.toBlob((blob) => {
+  win.canvas.toBlob(async (blob) => {
     if (!blob) { say("bad", "ساخت خروجی ناموفق بود."); return; }
     if (lastUrl) URL.revokeObjectURL(lastUrl);
     lastBlob = blob;
     lastUrl = URL.createObjectURL(blob);
     el("download").disabled = false;
-    say("ok",
-      `ساخته شد — QR نسخه ${(size - 17) / 4} (${size}×${size} خانه) روی عکس، ` +
-      `خروجی ${(blob.size / 1024).toFixed(0)} کیلوبایت. ` +
-      `این نسخه از فشرده‌سازی دوباره سالم می‌ماند.`);
+
+    const head = `QR نسخه ${(win.qr.size - 17) / 4} (${win.qr.size}×${win.qr.size}، ECC ${win.ecc})، ` +
+                 `${outW}×${outH} پیکسل، ${(blob.size / 1024).toFixed(0)} کیلوبایت، ` +
+                 `${win.cell} پیکسل هر خانه.`;
+    const pct = Math.round(win.m.cleanPct * 100);
+    const flipped = win.m.wrong.toLocaleString("fa");
+
+    // The JPEG that goes to Eitaa, produced here rather than by "save as" in an
+    // image app, so its header is known-good before it is ever uploaded.
+    try {
+      const jpegBlob = await jpegForUpload(win.canvas, 0.92);
+      if (lastJpegUrl) URL.revokeObjectURL(lastJpegUrl);
+      lastJpegBlob = jpegBlob;
+      lastJpegUrl = URL.createObjectURL(jpegBlob);
+      el("downloadJpeg").disabled = false;
+    } catch (e) {
+      el("downloadJpeg").disabled = true;
+    }
+
+    if (win.m.cleanPct >= 0.995) {
+      say("ok", `ساخته شد — ${head} پس از کوچک‌شدن و بازفشرده‌سازی تقریباً بی‌تغییر ماند ` +
+                `(${pct}٪ خانه‌ها سالم). برای ایتا دکمه‌ی «ذخیره JPEG برای ایتا» را بزنید.`);
+    } else if (win.m.cleanPct >= 0.97) {
+      say("warn", `ساخته شد — ${head} ولی ${flipped} خانه پس از بازفشرده‌سازی عوض شد ` +
+                  `(${pct}٪ سالم). معمولاً خوانده می‌شود، ولی اگر خوانده نشد عرض نهایی را بالاتر ببرید.`);
+    } else {
+      say("bad", `ساخته شد ولی آزمون رد شد — ${head} ${flipped} خانه پس از بازفشرده‌سازی عوض شد ` +
+                 `(فقط ${pct}٪ سالم). کد در این عرض به این بزرگی جا نمی‌شود؛ ` +
+                 `عرض نهایی را بالاتر ببرید یا سند را کوتاه کنید.`);
+    }
   }, "image/png");
+}
+
+// jpegForUpload encodes the canvas as JPEG with an explicit JFIF APP0 segment.
+//
+// This is not optional politeness. Canvas.toBlob("image/jpeg") emits a bare
+// SOI followed straight by the quantisation table — no APP0 at all — and Eitaa
+// accepts such a file, stores it, then renders it as a black rectangle. The
+// image is fine on disk and broken in the channel, which is a confusing way to
+// lose an afternoon. FFD8 FFE0 0010 "JFIF" 00 is the 18-byte header every
+// ordinary encoder writes, and inserting it is all that is needed.
+async function jpegForUpload(canvas, quality) {
+  const blob = await new Promise((r) => canvas.toBlob(r, "image/jpeg", quality));
+  if (!blob) throw new Error("JPEG encoding failed");
+  const bytes = new Uint8Array(await blob.arrayBuffer());
+
+  // Already has APP0? Leave it alone.
+  if (bytes[0] === 0xff && bytes[1] === 0xd8 && bytes[2] === 0xff && bytes[3] === 0xe0) {
+    return blob;
+  }
+  if (!(bytes[0] === 0xff && bytes[1] === 0xd8)) {
+    throw new Error("not a JPEG");
+  }
+
+  const app0 = new Uint8Array([
+    0xff, 0xe0, 0x00, 0x10,
+    0x4a, 0x46, 0x49, 0x46, 0x00,  // "JFIF\0"
+    0x01, 0x01,                    // version 1.01
+    0x00,                          // aspect-ratio units
+    0x00, 0x01, 0x00, 0x01,        // density 1x1
+    0x00, 0x00                     // no thumbnail
+  ]);
+  const out = new Uint8Array(2 + app0.length + bytes.length - 2);
+  out.set(bytes.subarray(0, 2), 0);
+  out.set(app0, 2);
+  out.set(bytes.subarray(2), 2 + app0.length);
+  return new Blob([out], { type: "image/jpeg" });
 }
 
 async function loadImage(file) {
@@ -436,6 +688,13 @@ el("download").addEventListener("click", () => {
   const a = document.createElement("a");
   a.href = lastUrl;
   a.download = "catnet-carrier.png";
+  a.click();
+});
+el("downloadJpeg").addEventListener("click", () => {
+  if (!lastJpegBlob) return;
+  const a = document.createElement("a");
+  a.href = lastJpegUrl;
+  a.download = "catnet-carrier.jpg";
   a.click();
 });
 
