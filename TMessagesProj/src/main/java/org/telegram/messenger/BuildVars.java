@@ -145,12 +145,35 @@ public class BuildVars {
      * and thus {@code help.getAppConfig} — is unreachable, which is exactly
      * when an operator needs to turn payments off. Defaults to true when the
      * document says nothing, so a client with no config behaves as before.
+     *
+     * <p>The document states which authority it claims:
+     *
+     * <ul>
+     *   <li>{@code server} — it imposes nothing; the server's own answer decides
+     *       (this is also what a client with no config gets, preserving the
+     *       behaviour every build had before).
+     *   <li>{@code config} — the document decides; a server that allows
+     *       purchases cannot enable ones the document disables.
+     *   <li>{@code off} — off everywhere, whatever the server says.
+     * </ul>
+     *
+     * <p>A server answer is "the server has not blocked purchases", which is
+     * what {@code premium_purchase_blocked} reports and is applied separately
+     * at each entry point.
      */
     private static boolean remotePaymentsEnabled() {
         try {
             org.telegram.thecat.CatNetResolver r = org.telegram.thecat.CatNetResolver.getInstance();
-            Boolean v = r.paymentsEnabled(buildName());
-            return v == null || v;
+            String mode = r.paymentMode();
+            if (mode == null || "server".equals(mode)) {
+                // The document defers, or we have not read one yet.
+                return true;
+            }
+            if ("off".equals(mode)) {
+                return false;
+            }
+            Boolean enabled = r.paymentsEnabled(buildName());
+            return enabled == null || enabled;
         } catch (Throwable t) {
             return true;
         }

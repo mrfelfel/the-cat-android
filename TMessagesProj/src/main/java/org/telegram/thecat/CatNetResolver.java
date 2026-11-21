@@ -106,6 +106,22 @@ public final class CatNetResolver {
      * rules live with the data they interpret, so changing a rule does not
      * need a client release.
      */
+    /**
+     * Which authority the document claims over payments: "server", "config" or
+     * "off", or null before any document has been read.
+     */
+    public synchronized String paymentMode() {
+        if (client == null) {
+            return null;
+        }
+        try {
+            return client.paymentMode();
+        } catch (Throwable t) {
+            FileLog.e(t);
+            return null;
+        }
+    }
+
     public synchronized Boolean paymentsEnabled(String build) {
         if (client == null) {
             return null;
