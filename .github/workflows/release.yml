@@ -161,7 +161,8 @@ jobs:
             :TMessagesProj_AppBazaar:assembleAarmStoreBazaar \
             :TMessagesProj_AppBazaar:assembleAfatStoreBazaar \
             :TMessagesProj_AppBazaar:bundleAfatStoreBazaar \
-            :TMessagesProj_App:bundleAfatRelease
+            :TMessagesProj_App:bundleAfatRelease \
+            :TMessagesProj_App:assembleAarmRelease
 
       - name: Collect and verify artifacts
         id: meta
@@ -175,6 +176,7 @@ jobs:
 
           echo "=== outputs tree ==="
           find TMessagesProj_AppStandalone/build/outputs TMessagesProj_AppBazaar/build/outputs \
+            TMessagesProj_App/build/outputs \
             -type f \( -name '*.apk' -o -name '*.aab' \) | sort
 
           # discover outputs instead of hardcoding AGP's directory layout
@@ -200,13 +202,18 @@ jobs:
           # instead of Play Billing, which an Iranian merchant cannot use.
           PLAY_AAB="$(pick TMessagesProj_App/build/outputs/bundle app.aab)"
           [ -n "$PLAY_AAB" ] || PLAY_AAB="$(pick TMessagesProj_App/build/outputs '*.aab')"
+          # ARM-only APK of the same Play build, for the listing's APK upload
+          # path and for anyone sideloading from it. Same applicationId and
+          # keystore as the standalone build, so it installs over one in place.
+          PLAY_ARM="$(pick TMessagesProj_App/build/outputs/apk app.apk aarmRelease)"
+          [ -n "$PLAY_ARM" ] || PLAY_ARM="$(pick TMessagesProj_App/build/outputs/apk '*.apk' aarm)"
           # Dev ships in the release too. Its name carries "DEV" so it can never
           # be mistaken for the store APK; the applicationId differs
           # (com.thecat.messenger.dev, installs side by side) and it talks to the
           # dev backend on :30098, not production on :30001.
           DEV_ARM="$(pick TMessagesProj_AppStandalone/build/outputs/apk app.apk aarmDev)"
 
-          for f in "$STAND_ARM" "$STAND_FAT" "$STAND_AAB" "$PLAY_AAB" "$BAZAAR_ARM" "$BAZAAR_FAT" "$BAZAAR_AAB" "$DEV_ARM"; do
+          for f in "$STAND_ARM" "$STAND_FAT" "$STAND_AAB" "$PLAY_AAB" "$PLAY_ARM" "$BAZAAR_ARM" "$BAZAAR_FAT" "$BAZAAR_AAB" "$DEV_ARM"; do
             [ -n "$f" ] && [ -f "$f" ] || { echo "ERROR: artifact not found (see tree above)"; exit 1; }
           done
 
@@ -215,6 +222,7 @@ jobs:
           cp "$STAND_FAT"  "dist/TheCat-$VERSION-ZeroHub.apk"
           cp "$STAND_AAB"  "dist/TheCat-$VERSION-ZeroHub.aab"
           cp "$PLAY_AAB"   "dist/TheCat-$VERSION-Play-ZeroHub.aab"
+          cp "$PLAY_ARM"   "dist/TheCat-$VERSION-Play-ARM-ZeroHub.apk"
           cp "$BAZAAR_ARM" "dist/TheCat-$VERSION-Bazaar-ARM-ZeroHub.apk"
           cp "$BAZAAR_FAT" "dist/TheCat-$VERSION-Bazaar-ZeroHub.apk"
           cp "$BAZAAR_AAB" "dist/TheCat-$VERSION-Bazaar-ZeroHub.aab"
@@ -248,6 +256,20 @@ jobs:
           # here. Checks each ELF program header rather than trusting the flags
           # that were asked for, because gomobile's are silently droppable.
           bash scripts/check-16kb-align.sh "dist/TheCat-$VERSION-Play-ZeroHub.aab"
+
+          # Play refuses a bundle whose minSdk is below 24 ("automatic
+          # protection requires a minimum SDK version of 24 or higher"), and
+          # only at upload time. Read the value back out of the built manifest
+          # rather than trusting the gradle file, so a flavor that overrides
+          # minSdk cannot quietly reintroduce 21.
+          #
+          # apkanalyzer, not grep: the manifest inside an AAB is binary XML.
+          PLAY_AAB_MIN="$(find "$ANDROID_HOME/cmdline-tools" -name apkanalyzer -type f 2>/dev/null | head -1)"
+          [ -n "$PLAY_AAB_MIN" ] || { echo "apkanalyzer not found under $ANDROID_HOME"; exit 1; }
+          PLAY_MIN_SDK="$("$PLAY_AAB_MIN" manifest min-sdk "dist/TheCat-$VERSION-Play-ZeroHub.aab" 2>/dev/null)" || {
+            echo "apkanalyzer failed to read the Play AAB minSdk (tool problem, not a build problem)"; exit 1; }
+          [ "$PLAY_MIN_SDK" = "24" ] || { echo "Play AAB minSdk is '$PLAY_MIN_SDK', must be 24"; exit 1; }
+          echo "Play AAB minSdk: $PLAY_MIN_SDK"
 
           # Dev-specific checks, beyond the generic signature/catnet loop above
           # which already covered it as part of dist/*.apk. The failure this

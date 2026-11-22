@@ -153,6 +153,28 @@ android {
             }
             buildConfigField "boolean", "BUNDLE", "false"
         }
+        // ARM-only (no x86/x86_64) for the Play listing: ~19 MB smaller
+        // download for the phones that actually install it. Shares
+        // abiVersionCode with afat so both carry the same versionCode and
+        // either installs over the other in place.
+        aarm {
+            ndk {
+                abiFilters "armeabi-v7a", "arm64-v8a"
+            }
+            sourceSets.debug {
+                manifest.srcFile '../TMessagesProj/config/debug/AndroidManifest_SDK23.xml'
+            }
+            sourceSets.release {
+                manifest.srcFile '../TMessagesProj/config/release/AndroidManifest_SDK23.xml'
+            }
+            sourceSets.standalone {
+                manifest.srcFile '../TMessagesProj/config/release/AndroidManifest_standalone.xml'
+            }
+            ext {
+                abiVersionCode = 9
+            }
+            buildConfigField "boolean", "BUNDLE", "false"
+        }
     }
 
     defaultConfig.versionCode = Integer.parseInt(APP_VERSION_CODE)
@@ -172,7 +194,10 @@ android {
     }
 
     defaultConfig {
-        minSdkVersion 21
+        // 24, not the upstream 21: Play's automatic protection refuses bundles
+        // below 24 outright. This module is the Play distribution only — the
+        // direct/standalone, Bazaar and Huawei builds keep 21.
+        minSdkVersion 24
         targetSdkVersion 36
         versionName APP_VERSION_NAME
         ndkVersion "27.2.12479018"
