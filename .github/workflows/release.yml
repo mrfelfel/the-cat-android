@@ -259,17 +259,32 @@ jobs:
 
           # Play refuses a bundle whose minSdk is below 24 ("automatic
           # protection requires a minimum SDK version of 24 or higher"), and
-          # only at upload time. Read the value back out of the built manifest
-          # rather than trusting the gradle file, so a flavor that overrides
-          # minSdk cannot quietly reintroduce 21.
+          # only at upload time — an hour of native build later. Assert it here
+          # instead.
           #
-          # apkanalyzer, not grep: the manifest inside an AAB is binary XML.
-          PLAY_AAB_MIN="$(find "$ANDROID_HOME/cmdline-tools" -name apkanalyzer -type f 2>/dev/null | head -1)"
-          [ -n "$PLAY_AAB_MIN" ] || { echo "apkanalyzer not found under $ANDROID_HOME"; exit 1; }
-          PLAY_MIN_SDK="$("$PLAY_AAB_MIN" manifest min-sdk "dist/TheCat-$VERSION-Play-ZeroHub.aab" 2>/dev/null)" || {
-            echo "apkanalyzer failed to read the Play AAB minSdk (tool problem, not a build problem)"; exit 1; }
-          [ "$PLAY_MIN_SDK" = "24" ] || { echo "Play AAB minSdk is '$PLAY_MIN_SDK', must be 24"; exit 1; }
-          echo "Play AAB minSdk: $PLAY_MIN_SDK"
+          # Read it from the merged manifest gradle produced, not from the AAB:
+          # neither apkanalyzer nor aapt2 can read a bundle, and the manifest
+          # inside one is protobuf, so a grep finds the attribute name but not
+          # its integer value. The merged manifest is the same uses-sdk the
+          # bundle is built from, so it is the value Play will see.
+          PLAY_MANIFEST="TMessagesProj_App/build/intermediates/merged_manifest/afatRelease/processAfatReleaseMainManifest/AndroidManifest.xml"
+          [ -f "$PLAY_MANIFEST" ] || { echo "merged Play manifest not found at $PLAY_MANIFEST"; exit 1; }
+          PLAY_MIN_SDK="$(grep -o 'minSdkVersion="[0-9]*"' "$PLAY_MANIFEST" | head -1 | grep -o '[0-9]*')"
+          [ -n "$PLAY_MIN_SDK" ] || { echo "no minSdkVersion in $PLAY_MANIFEST"; exit 1; }
+          [ "$PLAY_MIN_SDK" = "24" ] || { echo "Play minSdk is '$PLAY_MIN_SDK', must be 24"; exit 1; }
+          echo "Play minSdk: $PLAY_MIN_SDK"
+
+          # The ARM APK is the one people sideload, so it must carry the same
+          # 24 — a standalone-style 21 here would be a silent divergence.
+          # aapt2 reads APKs directly (unlike bundles), but 36.0.0 is a
+          # prebuilt that does not run on every host, so the one installed
+          # with this SDK is found rather than hardcoded.
+          AAPT2="$(find "$ANDROID_HOME/build-tools" -name aapt2 -type f -perm -u+x 2>/dev/null | sort -Vr | head -1)"
+          [ -n "$AAPT2" ] || { echo "aapt2 not found under $ANDROID_HOME"; exit 1; }
+          PLAY_ARM_MIN="$("$AAPT2" dump badging "$PLAY_ARM" 2>/dev/null \
+            | grep -o "minSdkVersion:'[0-9]*'" | head -1 | grep -o '[0-9]*')"
+          [ "$PLAY_ARM_MIN" = "24" ] || { echo "Play ARM APK minSdk is '$PLAY_ARM_MIN', must be 24"; exit 1; }
+          echo "Play ARM APK minSdk: $PLAY_ARM_MIN"
 
           # Dev-specific checks, beyond the generic signature/catnet loop above
           # which already covered it as part of dist/*.apk. The failure this
