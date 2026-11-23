@@ -2692,6 +2692,7 @@ public class MessagesController extends BaseController implements NotificationCe
         int transcribeAudioTrialWeeklyNumber = 0;
         int transcribeAudioTrialCooldownUntil = 0;
         boolean sawTheCat = false;
+        boolean sawStarsLock = false;
 
         changed = config.apply(editor, object);
 
@@ -2900,6 +2901,7 @@ public class MessagesController extends BaseController implements NotificationCe
                 }
                 case "stars_purchase_blocked": {
                     if (value.value instanceof TLRPC.TL_jsonBool) {
+                        sawStarsLock = true;
                         if (starsLocked != ((TLRPC.TL_jsonBool) value.value).value) {
                             starsLocked = ((TLRPC.TL_jsonBool) value.value).value;
                             editor.putBoolean("starsLocked", starsLocked);
@@ -5067,6 +5069,24 @@ public class MessagesController extends BaseController implements NotificationCe
             changed = true;
         }
 
+        // A Cat server that says nothing about Stars must not leave them
+        // locked. resetAppConfig() starts every fetch with starsLocked = true,
+        // waiting for a stars_purchase_blocked answer that a Cat server does
+        // not send — so every fetch re-locked Stars and the Settings row
+        // stayed hidden for Iranian users who had a balance. Silence from a
+        // server we own means "not blocked", the same reading
+        // arePaymentsAvailable already gives to a document that says nothing.
+        //
+        // Keyed on the account having a Cat server assigned, not on the
+        // server-sent `thecat` marker: that marker is another thing the server
+        // may or may not advertise, and a fix that depends on it would silently
+        // do nothing against exactly the server this is written for.
+        if (!sawStarsLock && starsLocked && hasCatServerAssigned()) {
+            starsLocked = false;
+            editor.putBoolean("starsLocked", false);
+            changed = true;
+        }
+
         if (transcribeAudioTrialWeeklyNumber != this.transcribeAudioTrialWeeklyNumber) {
             this.transcribeAudioTrialWeeklyNumber = transcribeAudioTrialWeeklyNumber;
             editor.putInt("transcribeAudioTrialWeeklyNumber", transcribeAudioTrialWeeklyNumber);
@@ -5620,6 +5640,14 @@ public class MessagesController extends BaseController implements NotificationCe
                 FileLog.e(e);
             }
             return null;
+        }
+    }
+
+    private boolean hasCatServerAssigned() {
+        try {
+            return org.telegram.thecat.TheCatServers.hasServerForAccount(currentAccount);
+        } catch (Throwable t) {
+            return false;
         }
     }
 
