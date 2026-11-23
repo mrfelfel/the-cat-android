@@ -2030,7 +2030,18 @@ public class ContactsController extends BaseController {
             }
             final ContentResolver contentResolver = ApplicationLoader.applicationContext.getContentResolver();
             Uri rawContactUri = ContactsContract.RawContacts.CONTENT_URI;
-            cursor = contentResolver.query(rawContactUri, new String[]{BaseColumns._ID, ContactsContract.RawContacts.SYNC2}, null, null, null);
+            // Scope to this app's own account, exactly as the delete below does.
+            // Unfiltered, this read returned every raw contact on the device —
+            // including the ones the real Telegram app creates, which store its
+            // user ids in the same SYNC2 column. Telegram's user #12345 then
+            // looked like "already present" to The Cat, so The Cat skipped
+            // creating its own contact #12345 and the phonebook showed Telegram's
+            // entry instead (or none). User ids are small integers from the same
+            // sequence on both servers, so the collision is routine, not rare.
+            final String rawContactSelection = ContactsContract.RawContacts.ACCOUNT_TYPE + " = ? AND "
+                    + ContactsContract.RawContacts.ACCOUNT_NAME + " = ?";
+            cursor = contentResolver.query(rawContactUri, new String[]{BaseColumns._ID, ContactsContract.RawContacts.SYNC2},
+                    rawContactSelection, new String[]{account.type, account.name}, null);
             LongSparseArray<Long> bookContacts = new LongSparseArray<>();
             if (cursor != null) {
                 while (cursor.moveToNext()) {
