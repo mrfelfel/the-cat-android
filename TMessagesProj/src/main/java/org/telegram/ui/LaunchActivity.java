@@ -2357,6 +2357,13 @@ public class LaunchActivity extends BasePermissionsActivity implements INavigati
                                     }
                                     break;
                                 }
+                                case "cat": {
+                                    // The registered scheme; see AndroidManifest. Rewritten
+                                    // to the tg:// form this block already parses, so every
+                                    // link shape works without a second parser.
+                                    data = data.buildUpon().scheme("tg").build();
+                                }
+                                // fall through to case "tg"
                                 case "tg": {
                                     String url = data.toString();
                                     if (url.startsWith("tg:premium_offer") || url.startsWith("tg://premium_offer")) {

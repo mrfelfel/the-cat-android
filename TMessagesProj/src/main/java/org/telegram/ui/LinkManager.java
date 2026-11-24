@@ -92,6 +92,13 @@ public class LinkManager {
         if ("tg".equalsIgnoreCase(scheme))
             return handleTg(uri);
 
+        // cat:// is the registered scheme (see AndroidManifest): tg:// belongs to
+        // the real Telegram app, and registering it here made both apps compete
+        // for the same links. Every tg:// form is served by the same parser, so
+        // the scheme is rewritten rather than the parser duplicated.
+        if ("cat".equalsIgnoreCase(scheme))
+            return handleTg(uri.buildUpon().scheme("tg").build());
+
         if ("thecat".equalsIgnoreCase(scheme))
             return handleOwpg(uri);
 

@@ -274,9 +274,15 @@
                 <action android:name="android.intent.action.VIEW" />
                 <category android:name="android.intent.category.BROWSABLE" />
                 <category android:name="android.intent.category.DEFAULT" />
-                <data android:scheme="tg" />
+                <!-- cat://, not tg://. Registering tg:// made this app a
+                     candidate handler for the real Telegram app's links, so a
+                     tg:// link could open The Cat (or present a chooser for
+                     every link the user tapped). cat:// cannot collide with any
+                     other installed app. LinkManager.handle() maps it onto the
+                     existing tg parser, so every tg:// form still works. -->
+                <data android:scheme="cat" />
             </intent-filter>
-            <!-- The Cat self-hosted link scheme, registered alongside tg:// so
+            <!-- The Cat self-hosted link scheme, registered alongside cat:// so
                  thecat://<host>/<rest> links open the app for ANY prefix host (no
                  per-host manifest entry). Handled in LaunchActivity (case "thecat"). -->
             <intent-filter android:icon="@mipmap/ic_launcher" android:roundIcon="@mipmap/ic_launcher_round" android:priority="1">
