@@ -2024,9 +2024,15 @@ public class ContactsController extends BaseController {
                 return;
             }
             final SharedPreferences settings = MessagesController.getMainSettings(currentAccount);
-            final boolean forceUpdate = !settings.getBoolean("contacts_updated_v7", false);
+            // v8: one full rewrite after the SYNC2 scoping fix. Before it, the
+            // unfiltered read made every contact whose user id happened to match
+            // a Telegram one look already-present, so those were never written;
+            // v7 was consumed long before, leaving forceUpdate false and the
+            // skip in place forever. Bumping the key repairs those installs once,
+            // and stays a one-time cost rather than a rewrite on every launch.
+            final boolean forceUpdate = !settings.getBoolean("contacts_updated_v8", false);
             if (forceUpdate) {
-                settings.edit().putBoolean("contacts_updated_v7", true).commit();
+                settings.edit().putBoolean("contacts_updated_v8", true).commit();
             }
             final ContentResolver contentResolver = ApplicationLoader.applicationContext.getContentResolver();
             Uri rawContactUri = ContactsContract.RawContacts.CONTENT_URI;
